@@ -119,7 +119,7 @@ erDiagram
     }
 
     ShiftBooks {
-        int shift_id PK_FK
+        int shift_id PK
         string barcode PK
         string scan_type PK "open or close"
         int start_at_scan
