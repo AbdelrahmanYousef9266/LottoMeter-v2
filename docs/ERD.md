@@ -14,44 +14,136 @@ LottoMeter v2.0 uses 8 models. Every non-Store table carries `store_id` for mult
 
 ## Diagram
 
-```
-┌──────────────────────────────┐
-│            Store             │
-│ store_id (PK)                │
-│ store_name                   │
-│ store_code (UQ)              │
-│ store_pin_hash (nullable)    │
-│ created_at                   │
-└──────┬───────────────────────┘
-       │ 1
-       │
-       │ ∞ (to every other table via store_id)
-       │
-       ├────────────┬────────────┬────────────┬────────────────────┐
-       ▼            ▼            ▼            ▼                    ▼
-   ┌───────┐   ┌────────┐   ┌────────┐   ┌──────────────┐   ┌──────────────┐
-   │ User  │   │  Slot  │   │  Book  │   │ ShiftDetails │   │ ShiftExtra   │
-   │       │   │        │   │        │   │              │   │   Sales      │
-   └───┬───┘   └───┬────┘   └───┬────┘   └──────┬───────┘   └──────────────┘
-       │           │            │               │
-       │ opened/   │            │               │ main_shift_id (self-ref)
-       │ closed/   │            │               │
-       │ scanned   │            │               │ 1
-       │ by        │            │               │
-       │           │            │               │ ∞
-       │           │            │               ▼
-       │           │            │        ┌──────────────┐
-       │           │            │        │ ShiftBooks   │
-       │           │            │        └──────────────┘
-       │           │            │
-       │           │            │ 1
-       │           │            │
-       │           │            ▼ ∞
-       │           │      ┌──────────────────────────┐
-       │           │      │ BookAssignmentHistory    │
-       │           │      └──────────────────────────┘
-       │           │
-       │           └─────(assigned to) books have slot_id
+```mermaid
+erDiagram
+    Store ||--o{ User : has
+    Store ||--o{ Slot : has
+    Store ||--o{ Book : has
+    Store ||--o{ ShiftDetails : has
+    Store ||--o{ ShiftBooks : has
+    Store ||--o{ ShiftExtraSales : has
+    Store ||--o{ BookAssignmentHistory : has
+
+    Slot ||--o{ Book : "holds (0..1 active)"
+    Slot ||--o{ BookAssignmentHistory : "referenced by"
+    Slot ||--o{ ShiftBooks : "scan location"
+
+    Book ||--o{ BookAssignmentHistory : "history"
+
+    ShiftDetails ||--o{ ShiftDetails : "main has sub-shifts"
+    ShiftDetails ||--o{ ShiftBooks : "contains scans"
+    ShiftDetails ||--o{ ShiftExtraSales : "contains whole-book sales"
+
+    User ||--o{ ShiftDetails : "opens/closes/voids"
+    User ||--o{ ShiftBooks : "scans"
+    User ||--o{ ShiftExtraSales : "creates"
+    User ||--o{ BookAssignmentHistory : "assigns/unassigns"
+    User ||--o{ Book : "returns"
+
+    Store {
+        int store_id PK
+        string store_name
+        string store_code UK
+        string store_pin_hash "nullable"
+        datetime created_at
+    }
+
+    User {
+        int user_id PK
+        string username
+        string password_hash
+        string role "admin or employee"
+        int store_id FK
+        datetime created_at
+    }
+
+    Slot {
+        int slot_id PK
+        string slot_name
+        decimal ticket_price
+        datetime deleted_at "soft delete"
+        int store_id FK
+        datetime created_at
+    }
+
+    Book {
+        int book_id PK
+        string book_name "nullable"
+        string barcode
+        string static_code "indexed"
+        int start_position
+        decimal ticket_price
+        int slot_id FK "nullable"
+        int store_id FK
+        boolean is_active
+        boolean is_sold
+        datetime returned_at "nullable"
+        int returned_by_user_id FK "nullable"
+        datetime created_at
+    }
+
+    BookAssignmentHistory {
+        int assignment_id PK
+        int book_id FK
+        int slot_id FK
+        decimal ticket_price
+        datetime assigned_at
+        datetime unassigned_at "nullable"
+        int assigned_by_user_id FK
+        int unassigned_by_user_id FK "nullable"
+        string unassign_reason
+        int store_id FK
+    }
+
+    ShiftDetails {
+        int shift_id PK
+        datetime shift_start_time
+        datetime shift_end_time "nullable"
+        decimal cash_in_hand "nullable"
+        decimal gross_sales "nullable"
+        decimal cash_out "nullable"
+        decimal tickets_total "nullable"
+        decimal expected_cash "nullable"
+        decimal difference "nullable"
+        string shift_status "correct/over/short"
+        boolean is_shift_open
+        int main_shift_id FK "nullable self-ref"
+        int shift_number
+        int opened_by_user_id FK
+        int closed_by_user_id FK "nullable"
+        boolean voided
+        datetime voided_at "nullable"
+        int voided_by_user_id FK "nullable"
+        string void_reason "nullable"
+        int store_id FK
+    }
+
+    ShiftBooks {
+        int shift_id PK_FK
+        string barcode PK
+        string scan_type PK "open or close"
+        int start_at_scan
+        boolean is_last_ticket
+        string scan_source
+        int slot_id FK
+        int store_id FK
+        datetime scanned_at
+        int scanned_by_user_id FK
+    }
+
+    ShiftExtraSales {
+        int extra_sale_id PK
+        int shift_id FK
+        string sale_type "whole_book"
+        string scanned_barcode
+        decimal ticket_price
+        int ticket_count
+        decimal value
+        string note "nullable"
+        int created_by_user_id FK
+        datetime created_at
+        int store_id FK
+    }
 ```
 
 ---
