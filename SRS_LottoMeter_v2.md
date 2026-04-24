@@ -553,6 +553,7 @@ State transitions:
 
 ### 7.3 Scan Screen
 - Camera barcode scanner (Expo Camera)
+- Hardware barcode scanner support (Zebra, Honeywell, etc. via keystroke wedge mode)
 - Manual text input fallback
 - Success sound + green flash on success
 - Error sound + red flash on failure
