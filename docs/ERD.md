@@ -1,8 +1,8 @@
 # Entity Relationship Diagram — LottoMeter v2.0
 
-This document defines the database schema for LottoMeter v2.0, translated from the original C# Entity Framework Core models to SQLAlchemy.
+---
 
-> **v2.0 Note:** `store_id` and `role` have been added to the schema now to protect future multi-tenancy and role-based access without requiring a painful migration later. In v2.0 only one store and one role (employee) will be active — but the columns are in place.
+> **Last Updated:** April 2026 — reflects final verified business logic
 
 ---
 
@@ -29,6 +29,7 @@ erDiagram
   Slot {
     int slot_id PK
     string slot_name
+    decimal ticket_price
     int store_id FK
   }
 
@@ -36,14 +37,15 @@ erDiagram
     int book_id PK
     string book_name
     string barcode
-    decimal amount
     int start
     int end
+    decimal ticket_price
     decimal total
     string static_code
     int slot_id FK
     int store_id FK
-    bool is_scanned
+    bool is_active
+    bool is_sold
   }
 
   ShiftDetails {
@@ -51,10 +53,12 @@ erDiagram
     datetime shift_start_time
     datetime shift_end_time
     decimal cash_in_hand
-    decimal cash_out
     decimal gross_sales
-    decimal cancels
+    decimal cash_out
     decimal tickets_total
+    decimal expected_cash
+    decimal difference
+    string shift_status
     bool is_shift_open
     int main_shift_id FK
     int shift_number
@@ -64,12 +68,11 @@ erDiagram
   ShiftBooks {
     int shift_id FK
     string barcode FK
+    string scan_type
+    int start_at_scan
+    bool is_last_ticket
     int slot_id FK
     int store_id FK
-    int start
-    int end
-    decimal amount
-    decimal total
   }
 
   Store ||--o{ User : "has"
@@ -84,34 +87,92 @@ erDiagram
 
 ---
 
-## Relationships Explained
+## Model Descriptions
 
-| Relationship | Type | Description |
-|---|---|---|
-| Store → User | One-to-Many | Each user belongs to one store. |
-| Store → Slot | One-to-Many | Each slot belongs to one store. |
-| Store → Book | One-to-Many | Each book belongs to one store. |
-| Store → ShiftDetails | One-to-Many | Each shift belongs to one store. |
-| Slot → Book | One-to-Many | One slot holds many books. Each book belongs to exactly one slot. |
-| Book → ShiftBooks | One-to-Many | A book can appear in many shift scan records across different shifts. |
-| ShiftDetails → ShiftBooks | One-to-Many | A shift contains many scanned book records. |
-| ShiftDetails → ShiftDetails | Self-referencing One-to-Many | A main shift can have multiple sub-shifts via `main_shift_id`. If `main_shift_id` is NULL it is a main shift. |
+### Store
+Root tenant entity. Every piece of data belongs to a store via `store_id`.
+
+### User
+Store employees and admins. `role` is `employee` or `admin`. In v2.0 only `employee` is enforced.
+
+### Slot
+A physical location in the store that holds lottery books. Has a `ticket_price` that serves as the default price for all books assigned to it.
+
+### Book
+A lottery ticket book. Key fields:
+- `start` / `end` — physical ticket numbers, used to locate the book and calculate tickets sold
+- `ticket_price` — copied from slot at assignment, can be overridden per book, stored permanently for accurate historical reports
+- `total` — (end - start) × ticket_price, stored for reports
+- `static_code` — extracted from barcode, used for matching during scan
+- `is_active` — True when assigned to a slot
+- `is_sold` — True when last ticket barcode is scanned during shift
+
+### ShiftDetails
+Represents both main shifts and sub-shifts.
+- `main_shift_id` = NULL → this is a main shift (container only, no direct scans)
+- `main_shift_id` = FK → this is a sub-shift (has scans, manual inputs, and calculated totals)
+
+**Every main shift has at least one sub-shift.** Scanning and closing always happens on sub-shifts.
+
+**Sub-shift closing fields (entered manually by employee):**
+- `cash_in_hand` — physical cash at closing
+- `gross_sales` — from the register
+- `cash_out` — manually entered
+
+**Sub-shift closing fields (calculated automatically):**
+- `tickets_total` — sum of sold book values for this sub-shift
+- `expected_cash` — gross_sales + tickets_total - cash_out
+- `difference` — cash_in_hand - expected_cash
+- `shift_status` — `correct` (diff=0), `over` (diff>0), `short` (diff<0)
+
+**Main shift totals** = sum of all sub-shifts. No manual inputs on main shift.
+
+### ShiftBooks
+Records every book scan during a shift.
+- `scan_type` — `open` (scanned at shift open) or `close` (scanned at shift close)
+- `start_at_scan` — book's ticket position at time of scan
+- `is_last_ticket` — True when barcode ends in `029`, `149`, `059`, or `099`
 
 ---
 
-## Key Design Decisions
+## Last Ticket Detection — Fixed Suffixes
 
-**store_id on every table** — added now to support multi-tenancy in the future. In v2.0 only one store exists, but every query will filter by `store_id` so the pattern is established from day one. This avoids a costly migration later.
+```python
+LAST_TICKET_SUFFIXES = ['029', '149', '059', '099']
 
-**User.role** — a string column with values `employee` or `admin`. In v2.0 only `employee` is active. The `admin` role unlocks the manager dashboard in v2.1.
+def is_last_ticket(barcode):
+    return any(barcode.endswith(suffix) for suffix in LAST_TICKET_SUFFIXES)
+```
 
-**ShiftBooks composite key** — `shift_id + barcode` together form the primary key. This enforces that the same book cannot be scanned twice within the same shift.
+These suffixes are fixed and cannot be configured.
 
-**Book.static_code** — extracted from the scanned barcode at scan time, used to match the barcode to the correct book record. This mirrors the logic from LottoMeter v1.
+---
 
-**Book.total** — computed as `(end - start) * amount`. Stored in the database for reporting purposes.
+## Shift Validation Formula
 
-**ShiftDetails.main_shift_id** — NULL means this is a main shift. A non-NULL value links this record as a sub-shift under its parent.
+```
+expected_cash = gross_sales + tickets_total - cash_out
+difference    = cash_in_hand - expected_cash
+
+difference = 0  → correct
+difference > 0  → over  (employee has more cash than expected)
+difference < 0  → short (employee has less cash than expected)
+```
+
+---
+
+## Ticket Price Breakdown (Every Report)
+
+Calculated at closing for both sub-shifts and main shift:
+
+```python
+breakdown = {}
+for book in sold_books:
+    price = book.ticket_price
+    tickets_sold = book.end - book.start
+    breakdown[price]["tickets"] += tickets_sold
+    breakdown[price]["value"]   += tickets_sold * price
+```
 
 ---
 
@@ -133,7 +194,7 @@ erDiagram
 | Role | v2.0 | v2.1+ |
 |---|---|---|
 | `employee` | ✅ Active | ✅ Active |
-| `admin` | ⏳ Column exists, not enforced | ✅ Active — unlocks manager dashboard |
+| `admin` | ⏳ Column exists, not enforced | ✅ Active |
 
 ---
 

@@ -10,11 +10,14 @@ LottoMeter v2.0 is a full rebuild of the original [LottoMeter desktop app](https
 
 Stores that sell lottery tickets traditionally rely on manual paperwork to track ticket books during shift opening and closing. LottoMeter replaces that with a fast, barcode-based digital workflow:
 
-- Open a shift and record starting cash
-- Scan lottery ticket books by barcode
-- Automatically match books to records and calculate totals
-- Close the shift with a full summary
-- View shift history anytime
+- Admin sets up slots with ticket prices and assigns books to slots
+- Employee opens a shift — system auto-creates Sub-shift 1
+- Employee scans lottery ticket books at shift open
+- During shift, employee scans last ticket barcodes when a book is fully sold
+- Employee closes sub-shift by scanning remaining books and entering cash in hand, gross sales, and cash out
+- System calculates tickets total, expected cash, difference, and shift status (correct / over / short)
+- Full report shows combined totals + ticket price breakdown + each sub-shift separately
+- Admin refills empty slots with new books for the next shift
 
 ---
 
@@ -29,9 +32,9 @@ Stores that sell lottery tickets traditionally rely on manual paperwork to track
 | Database (Prod) | PostgreSQL |
 | Auth | JWT (Flask-JWT-Extended) |
 | Serialization | Marshmallow |
+| i18n | i18next + react-i18next |
 | Containerization | Docker |
 | CI/CD | GitHub Actions |
-| i18n | i18next + react-i18next |
 
 ---
 
@@ -45,59 +48,79 @@ Stores that sell lottery tickets traditionally rely on manual paperwork to track
                                                                 │
                                                      ┌──────────▼───────────┐
                                                      │   PostgreSQL / SQLite │
-                                                     │   Database            │
                                                      └──────────────────────┘
 ```
 
 ---
 
-## Database Overview
+## Database — 6 Models
 
 | Model | Description |
 |---|---|
-| `Store` | Root tenant — every store is isolated by store_id |
-| `User` | Store employees and admins with role-based access |
-| `Slot` | Physical or logical location that holds lottery books |
-| `Book` | A lottery ticket book with barcode, amount, and slot assignment |
-| `ShiftDetails` | A shift record with financials, open/close state, and sub-shift support |
-| `ShiftBooks` | Junction table — books scanned during a specific shift |
+| `Store` | Root tenant — all data isolated by store_id |
+| `User` | Employees and admins with role-based access |
+| `Slot` | Physical location holding books — has default ticket price |
+| `Book` | Lottery ticket book — start/end numbers, ticket price, barcode |
+| `ShiftDetails` | Main shift (container) or sub-shift (has scans + financials) |
+| `ShiftBooks` | Books scanned during a shift — open or close scan type |
+
+---
+
+## Shift Validation Formula
+
+```
+expected_cash = gross_sales + tickets_total - cash_out
+difference    = cash_in_hand - expected_cash
+
+difference = 0  → ✅ correct
+difference > 0  → ⚠️ over  (more cash than expected)
+difference < 0  → ❌ short (less cash than expected)
+```
 
 ---
 
 ## Features
 
-### v2.0 — Core Release
-**Shift Management:** Open/close shifts, sub-shifts, financials tracking
-**Barcode Scanning:** Camera scanner, manual fallback, duplicate protection
-**Book & Slot Management:** Full CRUD, auto-calculated totals
-**Authentication:** JWT login/logout, first-run setup
-**UI:** Light/dark mode, English + Arabic, RTL support, bottom tab navigation, splash screen, onboarding, live shift totals, scan feedback, search & filter, loading skeletons, toast notifications, offline banner, confirmation dialogs
+### v2.0 — Core
+- Admin slot + book management with ticket pricing
+- Shift management (main shift + sub-shifts)
+- Barcode scanning — open and close scan types
+- Last ticket detection via fixed suffixes (029, 149, 059, 099)
+- Auto-calculated tickets total, expected cash, difference, shift status
+- Ticket price breakdown on every report
+- Light/dark mode, English + Arabic, RTL support
+- Bottom tab navigation, splash, onboarding, live totals, scan feedback
 
-### v2.1 — Growth Release
-Admin role, manager analytics dashboard, Stripe billing, print layout customization, Bluetooth thermal printer, Hindi/Spanish/French/Urdu languages, PDF & Excel export, font size preference
+### v2.1 — Growth
+- Admin role enforcement, manager analytics dashboard
+- Stripe subscription billing
+- Print layout customization, Bluetooth thermal printer
+- Hindi, Spanish, French, Urdu languages
+- PDF & Excel export, font size preference
 
-### v2.2 — Expansion Release
-Push notifications, Bengali, Portuguese, Punjabi, Tamil languages
+### v2.2 — Expansion
+- Push notifications
+- Bengali, Portuguese, Punjabi, Tamil languages
 
-### v3.0 — Platform Release
-Multi-store admin, POS integration, offline sync
+### v3.0 — Platform
+- Multi-store admin, POS integration, offline sync
 
 ---
 
 ## Supported Languages
 
-| Language | Version |
-|---|---|
-| English | v2.0 |
-| Arabic (RTL) | v2.0 |
-| Hindi | v2.1 |
-| Spanish | v2.1 |
-| French | v2.1 |
-| Urdu (RTL) | v2.1 |
-| Bengali | v2.2 |
-| Portuguese | v2.2 |
-| Punjabi | v2.2 |
-| Tamil | v2.2 |
+| Language | RTL | Version |
+|---|---|---|
+| English | No | v2.0 |
+| Arabic | Yes | v2.0 |
+| Hindi | No | v2.1 |
+| Spanish | No | v2.1 |
+| French | No | v2.1 |
+| Urdu | Yes | v2.1 |
+| Bengali | No | v2.2 |
+| Portuguese | No | v2.2 |
+| Punjabi | No | v2.2 |
+| Tamil | No | v2.2 |
 
 ---
 
@@ -106,9 +129,9 @@ Multi-store admin, POS integration, offline sync
 | Phase | Status |
 |---|---|
 | Planning | ✅ Complete |
-| Requirements (SRS) | ✅ Complete |
+| Requirements (SRS v4.0) | ✅ Complete — Verified |
 | System Design (ERD, API Contract) | ✅ Complete |
-| Implementation | ⏳ Pending |
+| Implementation | ⏳ Next |
 | Testing | ⏳ Pending |
 | Deployment | ⏳ Pending |
 | Maintenance | ⏳ Pending |
@@ -120,27 +143,10 @@ Multi-store admin, POS integration, offline sync
 
 | Document | Description |
 |---|---|
-| [SRS.md](./SRS_LottoMeter_v2.md) | Software Requirements Specification |
-| [SDLC.md](./SDLC.md) | SDLC phase tracker and commercialization roadmap |
+| [SRS_LottoMeter_v2.md](./SRS_LottoMeter_v2.md) | Software Requirements Specification v4.0 |
+| [SDLC.md](./SDLC.md) | SDLC phase tracker + commercialization roadmap |
 | [docs/ERD.md](./docs/ERD.md) | Entity Relationship Diagram |
 | [docs/API_Contract.md](./docs/API_Contract.md) | Full API endpoint and JSON contract |
-
----
-
-## Repository Structure
-
-```
-LottoMeter-v2/
-├── README.md
-├── SRS_LottoMeter_v2.md
-├── SDLC.md
-├── .gitignore
-├── docs/
-│   ├── ERD.md
-│   └── API_Contract.md
-├── lottometer-api/          ← Flask backend (Phase 4)
-└── lottometer-mobile/       ← React Native app (Phase 4)
-```
 
 ---
 
