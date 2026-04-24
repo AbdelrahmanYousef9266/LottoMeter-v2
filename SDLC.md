@@ -40,14 +40,15 @@ The original LottoMeter v1 was a Windows-only desktop app. Store employees are l
 **Status:** Complete | **Date:** April 2026
 
 ### Deliverables
-- [x] SRS v4.0 — final verified document
+- [x] SRS v4.0 — initial verified document
+- [x] SRS v5.0 — updated after design review (see Phase 3)
 - [x] Business logic verified with product owner
-- [x] Functional requirements (Store, Auth, Slot, Book, Shift, Scan modules)
-- [x] UI & UX requirements (all 9 screens)
+- [x] Functional requirements (Store, Auth, Slot, Book, Shift, Scan, Whole-book-sale, Return-to-vendor, Void modules)
+- [x] UI & UX requirements (all screens)
 - [x] Multilingual & RTL requirements (10 languages across v2.0–v2.2)
 - [x] Accessibility requirements
 - [x] Non-functional requirements
-- [x] Use cases (UC-01 through UC-07)
+- [x] Use cases (UC-01 through UC-13)
 - [x] Commercialization requirements
 
 ---
@@ -56,44 +57,66 @@ The original LottoMeter v1 was a Windows-only desktop app. Store employees are l
 
 **Status:** Complete | **Date:** April 2026
 
+### Design Review Outcome
+
+A complete design review was conducted between SRS v4.0 and v5.0. Twenty-two design decisions were made during review; all are documented in SRS §18.
+
 ### Key Design Decisions
 
 **Schema decisions made for scalability:**
 - `store_id` on every table — enables multi-tenancy without future migration
-- `role` on User — enables RBAC in v2.1
+- `role` on User — enforced from v2.0 (moved up from v2.1 scope)
 - `Store` table as root tenant entity
+- Composite unique constraints `(store_id, X)` for barcode, static_code, slot_name, username
+- Partial unique index ensuring only one open main shift per store (DB-level)
 
 **Business logic decisions verified with product owner:**
 - Every main shift auto-creates Sub-shift 1 on open
 - Scanning and closing always happens on sub-shifts, never directly on main shift
-- Main shift totals = sum of all sub-shifts
+- Main shift totals = sum of non-voided sub-shifts
 - Main shift always has at least one sub-shift
-- Last ticket suffixes fixed at: 029, 149, 059, 099 — non-configurable
-- `Slot.ticket_price` = default price, copied to `Book.ticket_price` at assignment (overridable)
-- Book price stored permanently on book for accurate historical reports
-- Closing inputs (cash_in_hand, gross_sales, cash_out) are all manually entered by employee
-- tickets_total auto-calculated from sold books
+- Book lengths are fixed by ticket price: $1/$2 → 150, $3 → 100, $5 → 60, $10/$20 → 30
+- `static_code` is globally unique per lottery book (manufacturer guarantee)
+- `Slot.ticket_price` = fixed price; `Book.ticket_price` copied at assignment (overridable)
+- One book per slot at a time (slot capacity = 1)
+- Book assignment and creation unified into one admin action (scan → assign)
+- Reassignment allowed anytime, even during open sub-shifts; requires `confirm_reassign: true`
+- Admin "delete book" = unassign (book row preserved for history)
+- Slot soft-delete only; `slot_name` editable anytime, `ticket_price` only when empty
+- Closing inputs (cash_in_hand, gross_sales, cash_out) entered manually at close
+- tickets_total = scanned sales + whole-book sales + return partials
 - expected_cash = gross_sales + tickets_total - cash_out
 - difference = cash_in_hand - expected_cash
-- shift_status = correct (0), over (>0), short (<0)
-- Ticket price breakdown shown on every sub-shift and main shift report
-- Main shift report shows combined breakdown + each sub-shift separately
+- shift_status: correct / over / short
+- Trust-based carry-forward: only after 'correct' close; 'short'/'over' forces rescan
+- Pending-scans blocking: sub-shift cannot accept sales until initialization complete
+- Whole-book sale: separate flow, no Book row created, PIN-authorized
+- Return-to-vendor: preserves pre-return revenue, unassigns book, PIN-authorized
+- Single store PIN reused for whole-book-sale and return-to-vendor
+- Store PIN mandatory at initial setup
+- Void = flag + audit, never deletion; does not modify downstream carried data
+- Reports show open_position, close_position, scan_source, slot-at-scan-time per book
+- Ticket breakdown on reports separates scanned from whole_book by price
 
 **Mobile structure finalized:**
-- 9 screens including Splash, Onboarding, Settings
-- Reusable components: SkeletonLoader, ToastNotification, ConfirmDialog, OfflineBanner
+- Screens including Splash, Onboarding, Settings, Shift, Scan, Books (admin slots view), History
+- Reusable components: SkeletonLoader, ToastNotification, ConfirmDialog, PinDialog, OfflineBanner
 - locales/ folder with translation files per language
 - utils/rtl.js for RTL layout management
 
 ### Deliverables
-- [x] ERD — final verified with all 6 models
-- [x] Full API Contract — all endpoints with correct request/response
+- [x] SRS v5.0 — final, with decision log
+- [x] ERD v2.0 — all 8 models with constraints, relationships, partial indexes
+- [x] API Contract v2.0 — all endpoints with request/response shapes and error codes
+- [x] Updated README.md reflecting v2.0 design
 - [x] Flask folder structure finalized
 - [x] React Native folder structure finalized
 - [x] Shift validation formula documented
-- [x] Last ticket detection logic documented
+- [x] Last ticket detection logic documented (price-indexed)
 - [x] Ticket price breakdown logic documented
 - [x] Report structure documented
+- [x] PIN rate-limiting contract documented
+- [x] Barcode parsing contract documented
 
 ---
 
@@ -121,18 +144,26 @@ feature/*     ← one branch per feature
 - `refactor:` restructure, no behavior change
 
 ### Flask API Build Order
-- [ ] Project scaffold (app factory, config, extensions)
+- [ ] Project scaffold (app factory, config, extensions, constants.py)
+- [ ] Error handlers + APIError hierarchy
 - [ ] Store model + schema + service + routes
-- [ ] Auth module (login, logout, setup)
-- [ ] Slot model + schema + service + routes
-- [ ] Book model + schema + service + routes
-- [ ] ShiftDetails model + schema + service + routes
-- [ ] ShiftBooks model + schema
-- [ ] Scan service + routes (with last ticket detection)
-- [ ] Shift closing logic (tickets_total, expected_cash, difference, shift_status)
-- [ ] Ticket price breakdown calculation
-- [ ] Main shift auto-totaling from sub-shifts
-- [ ] Reports endpoint
+- [ ] User model + auth module (setup, login, logout) + JWT wiring + role decorator
+- [ ] Store settings (PIN) module
+- [ ] Slot model + schema + service + routes (with soft-delete)
+- [ ] Book model + BookAssignmentHistory model
+- [ ] Slot assignment endpoint (scan-to-assign with reassignment)
+- [ ] Book unassign + return-to-vendor endpoints
+- [ ] ShiftDetails model + schema
+- [ ] Shift open / handover / close service + routes
+- [ ] Pending-scans computation
+- [ ] Carry-forward logic (correct-status only)
+- [ ] ShiftBooks model + scan service + routes
+- [ ] Last-ticket detection via LENGTH_BY_PRICE
+- [ ] Scan validation rules 1-8
+- [ ] ShiftExtraSales model + whole-book-sale endpoint
+- [ ] PIN rate-limiting
+- [ ] Void endpoints (sub-shift + main shift)
+- [ ] Reports service + endpoint
 - [ ] Docker + docker-compose setup
 
 ### React Native Build Order
@@ -142,12 +173,14 @@ feature/*     ← one branch per feature
 - [ ] Splash screen
 - [ ] Onboarding screen
 - [ ] Bottom tab navigation
-- [ ] Home / Shift screen (live totals, shift timer, scanned books list)
+- [ ] Home / Shift screen (live totals, shift timer, scanned books list, pending banner)
 - [ ] Scan screen (camera + manual fallback, feedback sounds, scan counter)
-- [ ] Books screen (search, filter by slot, scanned badges, pull to refresh)
+- [ ] Books screen (admin slots grid, bulk assignment flow)
 - [ ] Shift history screen (date filter, shift cards, detail view with report)
-- [ ] Settings screen (language, theme, store info, logout)
-- [ ] Reusable components (SkeletonLoader, ToastNotification, ConfirmDialog, OfflineBanner)
+- [ ] Settings screen (language, theme, store info, PIN change, logout)
+- [ ] Whole-book-sale modal + PIN dialog
+- [ ] Return-book modal + PIN dialog
+- [ ] Reusable components (SkeletonLoader, ToastNotification, ConfirmDialog, PinDialog, OfflineBanner)
 - [ ] English translation file
 - [ ] Arabic translation file + RTL layout
 
@@ -162,11 +195,18 @@ feature/*     ← one branch per feature
 |---|---|---|
 | Unit tests (API) | pytest | All service layer functions |
 | Integration tests | pytest-flask | All route handlers + DB |
-| API manual testing | Thunder Client | All 14+ endpoints |
+| API manual testing | Thunder Client | All endpoints |
 | Mobile component tests | Jest | React Native components |
 | Shift validation tests | pytest | expected_cash, difference, shift_status |
-| Last ticket detection tests | pytest | All 4 suffixes (029, 149, 059, 099) |
-| Ticket breakdown tests | pytest | Grouping by price, correct totals |
+| Last ticket detection tests | pytest | All 6 prices (1, 2, 3, 5, 10, 20) |
+| Ticket breakdown tests | pytest | Scanned + whole-book grouping |
+| Scan rule tests | pytest | All 8 scan validation rules |
+| PIN rate-limit tests | pytest | Lockout + reset |
+| Carry-forward tests | pytest | Correct-status carry, short/over rescan |
+| Pending-scans tests | pytest | Initial, handover, refill, resume |
+| Whole-book-sale tests | pytest | Valid + invalid prices, PIN flows |
+| Return-to-vendor tests | pytest | With/without open sub-shift, revenue preservation |
+| Void tests | pytest | Sub-shift void, main shift void, downstream unchanged |
 | i18n tests | Manual | Language switching, RTL layout flip |
 | End-to-end | Manual | Full: open shift → scan → last ticket → close sub-shift → close main shift |
 
@@ -227,7 +267,7 @@ feature/*     ← one branch per feature
 
 ### 8.2 Role-Based Access Control
 - `role` column on User ✅ already done
-- Admin role enforcement + route decorators (v2.1)
+- Admin role enforcement + route decorators ✅ **moved up to v2.0**
 - Admin unlocks: user management, analytics, store settings
 
 ### 8.3 Subscription & Billing
@@ -287,12 +327,31 @@ feature/*     ← one branch per feature
 | April 2026 | Enable RTL from v2.0 | Arabic required, cannot bolt on later |
 | April 2026 | Bottom tab navigation | Standard mobile UX pattern for this type of app |
 | April 2026 | Skeleton loaders over spinners | Better perceived performance on slow networks |
-| April 2026 | ticket_price on both Slot and Book | Slot = default, Book = permanent for historical reports |
+| April 2026 | `ticket_price` on both Slot and Book | Slot = default, Book = permanent for historical reports |
 | April 2026 | Main shift auto-creates Sub-shift 1 | Every main shift must have at least one sub-shift |
 | April 2026 | Scanning/closing on sub-shifts only | Main shift is container only, not a work unit |
-| April 2026 | Last ticket suffixes fixed (029,149,059,099) | Business rule — non-configurable by design |
+| April 2026 | Book lengths fixed by price | Business constant; $1/$2→150, $3→100, $5→60, $10/$20→30 |
 | April 2026 | cash_in_hand/gross_sales/cash_out manual at close | Employee enters from physical register and cash count |
-| April 2026 | expected_cash = gross_sales + tickets_total - cash_out | Verified shift validation formula with product owner |
+| April 2026 | expected_cash = gross_sales + tickets_total - cash_out | Verified formula with product owner |
 | April 2026 | shift_status: correct/over/short | Clear language for store employees to understand result |
 | April 2026 | Ticket breakdown on every report | Both sub-shift and main shift show price breakdown |
 | April 2026 | Main shift report = combined + each sub-shift separately | Managers need both summary and per-employee details |
+| April 2026 | Drop Book.end and Book.total columns | Derivable from LENGTH_BY_PRICE and scan history; avoids stale cache bugs |
+| April 2026 | static_code globally unique per book | Barcode manufacturer guarantee; removes suffix-price ambiguity |
+| April 2026 | Book assignment unified with creation | One admin action: scan-to-assign. No standalone book creation |
+| April 2026 | No hard-delete for Book | "Delete" in admin UI means unassign; preserves history |
+| April 2026 | ShiftBooks PK = (shift_id, barcode, scan_type) | Fix: same book scanned at open AND close of same sub-shift |
+| April 2026 | Slot soft-delete with partial unique index | Preserve historical references while allowing name reuse |
+| April 2026 | Carry-forward only after 'correct' status | Trust boundary; short/over forces full rescan |
+| April 2026 | Pending-scans blocking | Cannot accept sales until sub-shift initialized |
+| April 2026 | Scan rescan overwrites | Simpler error correction; no 409 on duplicate |
+| April 2026 | Rule 8: no open rescan after close started | Prevents mid-shift history rewriting |
+| April 2026 | Whole-book-sale as ShiftExtraSales (no Book row) | Stockroom books never enter inventory |
+| April 2026 | Single store PIN for both whole-book-sale and return | Simpler mental model for admin |
+| April 2026 | Store PIN mandatory at initial setup | No "configure later" path; avoids unusable state |
+| April 2026 | Return-to-vendor preserves pre-return revenue | Scan captures position, recorded as close scan |
+| April 2026 | Admin role enforced from v2.0 | Moved up from v2.1; too risky to defer |
+| April 2026 | Void preserves all data as flag | Audit integrity; downstream data unchanged |
+| April 2026 | Reassignment requires confirm_reassign | Protects against accidental double-scans |
+| April 2026 | Partial unique: one open main shift per store | DB-level enforcement of FR-SHIFT-02 |
+| April 2026 | Assignment history in dedicated table | Reports show which slot a book was in at each scan |
