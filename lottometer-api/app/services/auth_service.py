@@ -1,0 +1,106 @@
+"""Auth service — setup, login, logout business logic."""
+
+import bcrypt
+from flask_jwt_extended import create_access_token
+
+from app.extensions import db
+from app.models.store import Store
+from app.models.user import User
+from app.errors import ConflictError, InvalidCredentials
+
+
+def _hash_password(plain: str) -> str:
+    """Hash a password with bcrypt. Returns a UTF-8 string."""
+    return bcrypt.hashpw(plain.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def _check_password(plain: str, hashed: str) -> bool:
+    """Verify a password against its bcrypt hash."""
+    return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
+
+
+def _hash_pin(pin: str) -> str:
+    """Hash a 4-digit store PIN with bcrypt."""
+    return bcrypt.hashpw(pin.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+
+
+def setup_first_store(data: dict) -> dict:
+    """First-run setup. Creates store + first admin user + store PIN.
+
+    Rejected if any store already exists (one-store-per-deployment in v2.0).
+    """
+    if Store.query.first() is not None:
+        raise ConflictError(
+            "A store has already been set up. Setup is only allowed once.",
+            code="STORE_ALREADY_EXISTS",
+        )
+
+    # Create store
+    store = Store(
+        store_name=data["store_name"],
+        store_code=data["store_code"],
+        store_pin_hash=_hash_pin(data["store_pin"]),
+    )
+    db.session.add(store)
+    db.session.flush()  # populates store.store_id without committing
+
+    # Create first admin user
+    user = User(
+        username=data["admin_username"],
+        password_hash=_hash_password(data["admin_password"]),
+        role="admin",
+        store_id=store.store_id,
+    )
+    db.session.add(user)
+    db.session.commit()
+
+    # Issue JWT
+    token = create_access_token(
+        identity=str(user.user_id),
+        additional_claims={"role": user.role, "store_id": store.store_id},
+    )
+
+    return {
+        "store": {
+            "store_id": store.store_id,
+            "store_name": store.store_name,
+            "store_code": store.store_code,
+        },
+        "user": {
+            "user_id": user.user_id,
+            "username": user.username,
+            "role": user.role,
+        },
+        "token": token,
+    }
+
+
+def login(data: dict) -> dict:
+    """Authenticate by store_code + username + password. Returns JWT."""
+    store = Store.query.filter_by(store_code=data["store_code"]).first()
+
+    # Same error for unknown store and wrong password (don't leak existence)
+    if store is None:
+        raise InvalidCredentials("Invalid credentials.")
+
+    user = User.query.filter_by(
+        store_id=store.store_id, username=data["username"]
+    ).first()
+
+    if user is None or not _check_password(data["password"], user.password_hash):
+        raise InvalidCredentials("Invalid credentials.")
+
+    token = create_access_token(
+        identity=str(user.user_id),
+        additional_claims={"role": user.role, "store_id": store.store_id},
+    )
+
+    return {
+        "token": token,
+        "user": {
+            "user_id": user.user_id,
+            "username": user.username,
+            "role": user.role,
+            "store_id": store.store_id,
+        },
+    }

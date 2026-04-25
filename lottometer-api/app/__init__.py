@@ -5,7 +5,7 @@ from flask import Flask, jsonify
 
 from app.config import config_by_name
 from app.extensions import db, migrate, jwt, cors
-from app.errors import register_error_handlers, NotFoundError
+from app.errors import register_error_handlers
 
 
 def create_app(config_name: str = None) -> Flask:
@@ -22,17 +22,18 @@ def create_app(config_name: str = None) -> Flask:
     migrate.init_app(app, db)
     jwt.init_app(app)
     cors.init_app(app)
-    cors.init_app(app)
 
     # Import models so SQLAlchemy/Alembic can discover them
     from app import models  # noqa: F401
 
     # Register error handlers
     register_error_handlers(app)
-    # Register error handlers
-    register_error_handlers(app)
 
-    # Health-check endpoints (temporary — will move to a blueprint later)
+    # Register blueprints
+    from app.routes import register_blueprints
+    register_blueprints(app)
+
+    # Health-check endpoints
     @app.route("/")
     def index():
         return jsonify({
@@ -44,10 +45,5 @@ def create_app(config_name: str = None) -> Flask:
     @app.route("/api/health")
     def health():
         return jsonify({"status": "healthy"})
-
-    # Test endpoint to verify error handling works (we'll remove this later)
-    @app.route("/api/test/error")
-    def test_error():
-        raise NotFoundError("This is a test error", details={"hint": "This is intentional"})
 
     return app
