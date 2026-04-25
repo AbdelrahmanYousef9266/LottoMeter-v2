@@ -1,0 +1,122 @@
+"""Book routes — /api/books and /api/slots/{id}/assign-book."""
+
+from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required
+from marshmallow import ValidationError as MarshmallowValidationError
+
+from app.schemas.book_schema import (
+    AssignBookSchema,
+    serialize_book,
+    serialize_assignment_event,
+)
+from app.schemas.slot_schema import serialize_slot
+from app.services import book_service
+from app.errors import ValidationError
+from app.auth_helpers import admin_required, current_store_id, current_user_id
+from app.models.slot import Slot
+from app.models.user import User
+
+
+book_bp = Blueprint("book", __name__, url_prefix="/api")
+
+
+def _str_to_bool(v):
+    if v is None:
+        return None
+    if isinstance(v, bool):
+        return v
+    return str(v).lower() in ("true", "1", "yes")
+
+
+@book_bp.route("/books", methods=["GET"])
+@jwt_required()
+def list_books():
+    is_active = _str_to_bool(request.args.get("is_active"))
+    is_sold = _str_to_bool(request.args.get("is_sold"))
+    returned = _str_to_bool(request.args.get("returned"))
+    books = book_service.list_books(
+        current_store_id(), is_active=is_active, is_sold=is_sold, returned=returned
+    )
+
+    # Look up slot names for serialization
+    slot_ids = {b.slot_id for b in books if b.slot_id is not None}
+    slots = {
+        s.slot_id: s.slot_name
+        for s in Slot.query.filter(Slot.slot_id.in_(slot_ids)).all()
+    }
+
+    out = []
+    for b in books:
+        d = serialize_book(b)
+        d["slot_name"] = slots.get(b.slot_id)
+        out.append(d)
+    return jsonify({"books": out}), 200
+
+
+@book_bp.route("/books/<int:book_id>", methods=["GET"])
+@jwt_required()
+def get_book(book_id):
+    book = book_service.get_book(current_store_id(), book_id)
+    history = book_service.get_assignment_history(book)
+
+    # Look up slot names + usernames for the history
+    slot_ids = {h.slot_id for h in history}
+    slots = {
+        s.slot_id: s.slot_name
+        for s in Slot.query.filter(Slot.slot_id.in_(slot_ids)).all()
+    }
+    user_ids = {h.assigned_by_user_id for h in history}
+    users = {
+        u.user_id: u.username
+        for u in User.query.filter(User.user_id.in_(user_ids)).all()
+    }
+
+    return jsonify({
+        "book": serialize_book(book),
+        "assignment_history": [
+            serialize_assignment_event(
+                h, slot_name=slots.get(h.slot_id), assigned_by_username=users.get(h.assigned_by_user_id)
+            )
+            for h in history
+        ],
+    }), 200
+
+
+@book_bp.route("/slots/<int:slot_id>/assign-book", methods=["POST"])
+@admin_required
+def assign_book(slot_id):
+    """Admin-only: scan-to-assign a book to a slot."""
+    try:
+        data = AssignBookSchema().load(request.get_json() or {})
+    except MarshmallowValidationError as err:
+        raise ValidationError("Invalid request body.", details=err.messages)
+
+    book, slot = book_service.assign_book_to_slot(
+        store_id=current_store_id(),
+        slot_id=slot_id,
+        user_id=current_user_id(),
+        barcode=data["barcode"],
+        book_name=data.get("book_name"),
+        ticket_price_override=data.get("ticket_price_override"),
+        confirm_reassign=data.get("confirm_reassign", False),
+    )
+
+    next_slot = book_service.find_next_empty_slot(current_store_id())
+
+    return jsonify({
+        "book": serialize_book(book),
+        "slot": serialize_slot(slot),
+        "next_empty_slot": serialize_slot(next_slot) if next_slot else None,
+    }), 201
+
+
+@book_bp.route("/books/<int:book_id>/unassign", methods=["POST"])
+@admin_required
+def unassign_book(book_id):
+    """Admin-only: remove a book from its slot, preserve Book row."""
+    book = book_service.unassign_book(
+        store_id=current_store_id(),
+        book_id=book_id,
+        user_id=current_user_id(),
+    )
+    return jsonify({"book": serialize_book(book)}), 200

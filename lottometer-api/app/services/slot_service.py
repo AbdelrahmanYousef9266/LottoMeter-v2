@@ -49,6 +49,16 @@ def create_slot(store_id: int, slot_name: str, ticket_price: str) -> Slot:
         )
     return slot
 
+def _slot_has_active_book(store_id: int, slot_id: int) -> bool:
+    from app.models.book import Book
+    return (
+        Book.query
+        .filter_by(store_id=store_id, slot_id=slot_id, is_active=True)
+        .first()
+        is not None
+    )
+
+
 
 def update_slot(
     store_id: int,
@@ -56,18 +66,18 @@ def update_slot(
     slot_name: str | None = None,
     ticket_price: str | None = None,
 ) -> Slot:
-    """Update slot. slot_name editable anytime; ticket_price only when slot is empty.
-
-    Note: 'slot is empty' check requires the Book model — for now we allow any
-    ticket_price change. Will be enforced once Book is added.
-    """
+    """Update slot. slot_name editable anytime; ticket_price only when slot is empty."""
     slot = get_slot(store_id, slot_id)
 
     if slot_name is not None:
         slot.slot_name = slot_name
 
     if ticket_price is not None:
-        # TODO: Once Book model exists, raise BusinessRuleError if slot has active book
+        if _slot_has_active_book(store_id, slot_id):
+            raise BusinessRuleError(
+                "Cannot change ticket_price while a book is active in this slot.",
+                code="SLOT_OCCUPIED",
+            )
         slot.ticket_price = Decimal(ticket_price)
 
     try:
@@ -82,14 +92,14 @@ def update_slot(
 
 
 def soft_delete_slot(store_id: int, slot_id: int) -> None:
-    """Soft-delete a slot. Only allowed when slot is empty.
-
-    Note: 'slot is empty' check requires the Book model — for now we allow any
-    delete. Will be enforced once Book is added.
-    """
+    """Soft-delete a slot. Only allowed when slot is empty."""
     slot = get_slot(store_id, slot_id)
 
-    # TODO: Once Book model exists, raise BusinessRuleError if slot has active book
+    if _slot_has_active_book(store_id, slot_id):
+        raise BusinessRuleError(
+            "Cannot delete a slot that has an active book in it.",
+            code="SLOT_OCCUPIED",
+        )
 
     slot.deleted_at = datetime.now(timezone.utc)
     db.session.commit()
