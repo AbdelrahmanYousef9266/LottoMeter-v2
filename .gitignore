@@ -1,91 +1,53 @@
-# ========================
-# Python / Flask
-# ========================
+# Python
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
-env/
-venv/
-.venv/
-ENV/
 *.egg-info/
-dist/
-build/
-.eggs/
-pip-wheel-metadata/
 *.egg
 
-# Flask instance folder
-instance/
+# Virtual environments
+venv/
+env/
+.venv/
+ENV/
 
 # Environment variables
 .env
 .env.local
-.env.production
+.env.*.local
 
-# Database files
-*.db
-*.sqlite
-*.sqlite3
-
-# Flask-Migrate (keep migrations folder, ignore cache)
-migrations/__pycache__/
-
-# Pytest
-.pytest_cache/
-htmlcov/
-.coverage
-coverage.xml
-
-# mypy
-.mypy_cache/
-
-# ========================
-# React Native / Expo
-# ========================
-node_modules/
-.expo/
-.expo-shared/
-dist/
-npm-debug.*
-*.jks
-*.p8
-*.p12
-*.key
-*.mobileprovision
-*.orig.*
-web-build/
-.DS_Store
-
-# Expo local config
-app.config.local.js
-
-# ========================
-# VS Code
-# ========================
+# IDE
 .vscode/
-!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
 
-# ========================
-# OS Files
-# ========================
+# OS
 .DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
 Thumbs.db
 desktop.ini
 
-# ========================
-# Docker
-# ========================
-docker-compose.override.yml
+# Database
+*.db
+*.sqlite
+*.sqlite3
+instance/
 
-# ========================
-# Logs
-# ========================
+# Flask
 *.log
-logs/
+flask_session/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Build
+dist/
+build/
+
+# Migrations
+**/migrations/__pycache__/
