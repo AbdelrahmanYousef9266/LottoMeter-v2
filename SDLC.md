@@ -42,6 +42,7 @@ The original LottoMeter v1 was a Windows-only desktop app. Store employees are l
 ### Deliverables
 - [x] SRS v4.0 — initial verified document
 - [x] SRS v5.0 — updated after design review (see Phase 3)
+- [x] SRS v5.1 — clarified scan event model + hardware scanner support
 - [x] Business logic verified with product owner
 - [x] Functional requirements (Store, Auth, Slot, Book, Shift, Scan, Whole-book-sale, Return-to-vendor, Void modules)
 - [x] UI & UX requirements (all screens)
@@ -59,7 +60,7 @@ The original LottoMeter v1 was a Windows-only desktop app. Store employees are l
 
 ### Design Review Outcome
 
-A complete design review was conducted between SRS v4.0 and v5.0. Twenty-two design decisions were made during review; all are documented in SRS §18.
+A complete design review was conducted between SRS v4.0 and v5.0. Twenty-two design decisions were made during review; all are documented in SRS §18. Two additional decisions were added in v5.1 for the scan event model clarification and hardware scanner support.
 
 ### Key Design Decisions
 
@@ -97,6 +98,7 @@ A complete design review was conducted between SRS v4.0 and v5.0. Twenty-two des
 - Void = flag + audit, never deletion; does not modify downstream carried data
 - Reports show open_position, close_position, scan_source, slot-at-scan-time per book
 - Ticket breakdown on reports separates scanned from whole_book by price
+- Scans only at shift open, last-ticket of book, return-to-vendor, shift close (not per sale)
 
 **Mobile structure finalized:**
 - Screens including Splash, Onboarding, Settings, Shift, Scan, Books (admin slots view), History
@@ -105,8 +107,9 @@ A complete design review was conducted between SRS v4.0 and v5.0. Twenty-two des
 - utils/rtl.js for RTL layout management
 
 ### Deliverables
-- [x] SRS v5.0 — final, with decision log
+- [x] SRS v5.1 — final, with decision log
 - [x] ERD v2.0 — all 8 models with constraints, relationships, partial indexes
+- [x] ERD diagram converted to Mermaid for GitHub rendering
 - [x] API Contract v2.0 — all endpoints with request/response shapes and error codes
 - [x] Updated README.md reflecting v2.0 design
 - [x] Flask folder structure finalized
@@ -120,14 +123,49 @@ A complete design review was conducted between SRS v4.0 and v5.0. Twenty-two des
 
 ---
 
-## Phase 4 — Implementation ⏳
+## Phase 4 — Implementation
 
-**Status:** Pending — Next Phase
+### Backend (Flask API) ✅
 
-### Build Order
-1. Flask API — models first, then schemas, then services, then routes
-2. Tests written alongside each module
-3. React Native app built after API is stable and tested
+**Status:** Complete | **Date:** April 2026
+
+The complete REST API is implemented and tested end-to-end with Thunder Client. All 28 endpoints from the API Contract are functional. PostgreSQL-compatible. Containerized with Docker and docker-compose.
+
+**Build order completed in sequence:**
+
+- [x] Project scaffold (app factory, config, extensions, constants.py)
+- [x] Error handlers + APIError hierarchy
+- [x] Store model + schema + service + routes
+- [x] User model + auth module (setup, login, logout) + JWT wiring + role decorator
+- [x] Store settings (PIN) module
+- [x] Slot model + schema + service + routes (with soft-delete)
+- [x] Book model + BookAssignmentHistory model
+- [x] Slot assignment endpoint (scan-to-assign with reassignment)
+- [x] Book unassign + return-to-vendor endpoints
+- [x] ShiftDetails model + schema
+- [x] Shift open / handover / close service + routes
+- [x] Pending-scans computation
+- [x] Carry-forward logic (correct-status only)
+- [x] ShiftBooks model + scan service + routes
+- [x] Last-ticket detection via LENGTH_BY_PRICE
+- [x] Scan validation rules 1-8
+- [x] ShiftExtraSales model + whole-book-sale endpoint
+- [x] PIN rate-limiting
+- [x] Void endpoints (sub-shift + main shift)
+- [x] Reports service + endpoint
+- [x] Docker + docker-compose setup
+
+### Implementation Stats
+
+| Metric | Value |
+|---|---|
+| SQLAlchemy models | 8 |
+| API endpoints | 28 |
+| Flask blueprints | 8 |
+| Marshmallow schemas | 7 |
+| Services | 9 |
+| Database migrations | 6 |
+| Lines of Python (approx) | 2,500 |
 
 ### Branching Strategy
 ```
@@ -136,37 +174,28 @@ develop       ← integration branch
 feature/*     ← one branch per feature
 ```
 
-### Commit Convention
+For Phase 4 backend, all commits went directly to `main` since this was solo development before any deployment.
+
+### Commit Convention Used
 - `feat:` new feature
 - `fix:` bug fix
 - `docs:` documentation only
 - `test:` adding tests
 - `refactor:` restructure, no behavior change
+- `chore:` tooling, config, dependency updates
 
-### Flask API Build Order
-- [ ] Project scaffold (app factory, config, extensions, constants.py)
-- [ ] Error handlers + APIError hierarchy
-- [ ] Store model + schema + service + routes
-- [ ] User model + auth module (setup, login, logout) + JWT wiring + role decorator
-- [ ] Store settings (PIN) module
-- [ ] Slot model + schema + service + routes (with soft-delete)
-- [ ] Book model + BookAssignmentHistory model
-- [ ] Slot assignment endpoint (scan-to-assign with reassignment)
-- [ ] Book unassign + return-to-vendor endpoints
-- [ ] ShiftDetails model + schema
-- [ ] Shift open / handover / close service + routes
-- [ ] Pending-scans computation
-- [ ] Carry-forward logic (correct-status only)
-- [ ] ShiftBooks model + scan service + routes
-- [ ] Last-ticket detection via LENGTH_BY_PRICE
-- [ ] Scan validation rules 1-8
-- [ ] ShiftExtraSales model + whole-book-sale endpoint
-- [ ] PIN rate-limiting
-- [ ] Void endpoints (sub-shift + main shift)
-- [ ] Reports service + endpoint
-- [ ] Docker + docker-compose setup
+### Testing During Implementation
+Each module was end-to-end tested via Thunder Client immediately after implementation. Test sequences included:
+- Happy path validation
+- All error codes from the API Contract
+- Edge cases (out-of-range positions, duplicate names, soft-deleted name reuse, etc.)
+- Cross-feature interactions (slot guards triggered by book assignment, FR-CLOSE-01 blocking handover, carry-forward creating real ShiftBooks rows, return-to-vendor creating close scans)
 
-### React Native Build Order
+### Mobile App (React Native) ⏳
+
+**Status:** Pending — Next Phase
+
+### Build Order
 - [ ] Project scaffold (Expo, navigation, i18n, RTL)
 - [ ] Auth context + JWT storage
 - [ ] Login screen
@@ -174,7 +203,7 @@ feature/*     ← one branch per feature
 - [ ] Onboarding screen
 - [ ] Bottom tab navigation
 - [ ] Home / Shift screen (live totals, shift timer, scanned books list, pending banner)
-- [ ] Scan screen (camera + manual fallback, feedback sounds, scan counter)
+- [ ] Scan screen (camera + manual fallback, hardware scanner support, feedback sounds, scan counter)
 - [ ] Books screen (admin slots grid, bulk assignment flow)
 - [ ] Shift history screen (date filter, shift cards, detail view with report)
 - [ ] Settings screen (language, theme, store info, PIN change, logout)
@@ -195,7 +224,7 @@ feature/*     ← one branch per feature
 |---|---|---|
 | Unit tests (API) | pytest | All service layer functions |
 | Integration tests | pytest-flask | All route handlers + DB |
-| API manual testing | Thunder Client | All endpoints |
+| API manual testing | Thunder Client | All endpoints (✅ already done) |
 | Mobile component tests | Jest | React Native components |
 | Shift validation tests | pytest | expected_cash, difference, shift_status |
 | Last ticket detection tests | pytest | All 6 prices (1, 2, 3, 5, 10, 20) |
@@ -224,17 +253,17 @@ feature/*     ← one branch per feature
 **Status:** Pending
 
 ### Plan
-- Docker + docker-compose for local dev (Flask + PostgreSQL)
+- Docker + docker-compose for local dev (Flask + PostgreSQL) ✅ already done in Phase 4
 - Deploy to cloud (Railway / Render / VPS)
 - GitHub Actions CI/CD pipeline
 - Automated database backups
 
 ### Deliverables
-- [ ] Dockerfile for Flask API
-- [ ] docker-compose.yml
+- [x] Dockerfile for Flask API
+- [x] docker-compose.yml
 - [ ] GitHub Actions CI workflow
 - [ ] Deployment guide
-- [ ] .env.example with all required variables
+- [x] .env.example with all required variables
 - [ ] Production environment checklist
 
 ---
@@ -267,7 +296,7 @@ feature/*     ← one branch per feature
 
 ### 8.2 Role-Based Access Control
 - `role` column on User ✅ already done
-- Admin role enforcement + route decorators ✅ **moved up to v2.0**
+- Admin role enforcement + route decorators ✅ already done
 - Admin unlocks: user management, analytics, store settings
 
 ### 8.3 Subscription & Billing
@@ -355,3 +384,8 @@ feature/*     ← one branch per feature
 | April 2026 | Reassignment requires confirm_reassign | Protects against accidental double-scans |
 | April 2026 | Partial unique: one open main shift per store | DB-level enforcement of FR-SHIFT-02 |
 | April 2026 | Assignment history in dedicated table | Reports show which slot a book was in at each scan |
+| April 2026 | Boolean check constraints use `NOT col` syntax | PostgreSQL strict typing — `col = 0` doesn't work cross-dialect |
+| April 2026 | In-memory PIN rate limiter for v2.0 | Single-instance dev; Redis for production multi-instance |
+| April 2026 | In-memory JWT blocklist for v2.0 | Same reasoning as PIN limiter |
+| April 2026 | Gunicorn 2 workers in Docker | Reasonable default for small deployments |
+| April 2026 | Migrations run on container startup | `flask db upgrade` in docker-compose command |
