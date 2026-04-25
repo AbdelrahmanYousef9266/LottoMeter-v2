@@ -22,7 +22,13 @@ def create_app(config_name: str = None) -> Flask:
     migrate.init_app(app, db)
     jwt.init_app(app)
     cors.init_app(app)
+    cors.init_app(app)
 
+    # Import models so SQLAlchemy/Alembic can discover them
+    from app import models  # noqa: F401
+
+    # Register error handlers
+    register_error_handlers(app)
     # Register error handlers
     register_error_handlers(app)
 
