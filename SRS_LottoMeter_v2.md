@@ -6,7 +6,7 @@
 | Field | Value |
 |---|---|
 | **Project Name** | LottoMeter v2.0 |
-| **Document Version** | 5.0 |
+| **Document Version** | 5.1 |
 | **Author** | Abdelrahman Yousef |
 | **Date** | April 2026 |
 | **Status** | Final — Verified |
@@ -19,6 +19,7 @@
 |---|---|---|
 | 4.0 | April 2026 | Initial verified SRS |
 | 5.0 | April 2026 | Design review revisions — see §18 Decision Log |
+| 5.1 | April 2026 | Clarified scan event model — scans happen only at shift open, last ticket, return-to-vendor, and shift close (not on every sale) |
 
 ---
 
@@ -121,7 +122,7 @@ Role enforcement is active from v2.0 — protected endpoints check the `role` cl
 ### 4.2 Employee
 - Opens main shifts (triggers auto-creation of Sub-shift 1)
 - Scans books at open and close of each sub-shift
-- Scans tickets during shift — last-ticket detection marks books as sold
+- Scans the last ticket of each book as it finishes during the shift
 - Performs whole-book-sale (with store PIN)
 - Performs return-to-vendor when a lottery salesman removes a book (with store PIN)
 - Manually enters cash_in_hand, gross_sales, cash_out at sub-shift close
@@ -209,12 +210,22 @@ There is no concept of hard-deleting a Book record. "Delete book" in admin UI la
 2. System auto-creates Sub-shift 1 (employees never interact with main shift directly)
 3. Sub-shift 1 starts in "pending initialization" state
 4. All active books in all slots are added to the pending scans list
-5. Employee must scan every pending book (open scan) before any sale scans are accepted
-6. Once pending list is empty, employee can begin selling
+5. Employee must scan every pending book (open scan) before any mid-shift scan events are accepted
+6. Once pending list is empty, the sub-shift is initialized and sales proceed normally
 
-### 5.7 Mid-Shift Scan Rules
+### 5.7 Scan Events During a Sub-Shift
 
-During an open sub-shift, employees scan tickets as customers buy them. Every scan is validated against these rules:
+Once a sub-shift is initialized, scans occur **only at specific events** — not on every individual ticket sale. Routine ticket sales are tracked by the cash register; the app reconciles totals at close using open and close positions.
+
+**Scan events during an open sub-shift:**
+
+1. **Last-ticket scan** — when an employee sells the final ticket of a book, they scan it. Triggers last-ticket detection, marks the book as sold, and frees the slot.
+2. **Return-to-vendor scan** — when a lottery salesman removes a book mid-shift (PIN-authorized).
+3. **Pending open scan** — if admin assigns a new book to a slot during the shift, that book becomes a pending open scan before any further scan events can proceed.
+
+Between these events, employees sell tickets normally at the register without using the app. The app is not a point-of-sale — it is a shift reconciliation and book-lifecycle tool.
+
+**Every scan is validated against these rules:**
 
 1. Barcode's `static_code` must match an active book in this store
 2. The book must currently be in a slot (`is_active = true`)
@@ -229,6 +240,8 @@ Any violation returns a specific error code so the app can display clear feedbac
 
 ### 5.8 Last Ticket Detection
 
+Last-ticket detection runs whenever an employee scans the final ticket of a book during a sub-shift. This is the only routine in-shift scan event — employees do not scan every sale, only the last ticket of each finished book.
+
 When a ticket is scanned, the system checks whether this is the book's final ticket:
 
 ```
@@ -241,7 +254,7 @@ When true:
 - `Book.slot_id = null` (slot becomes empty)
 - `Book.is_active = false`
 - BookAssignmentHistory row gets `unassigned_at = now()`
-- If a new book is assigned to the now-empty slot later in this sub-shift, it becomes a pending scan that blocks further sales until scanned
+- If a new book is assigned to the now-empty slot later in this sub-shift, it becomes a pending scan that blocks further scan events until scanned
 
 ### 5.9 Sub-Shift Handover (Mid-Shift)
 
@@ -250,21 +263,21 @@ When the current employee's shift ends and the next begins, the current sub-shif
 **If the closed sub-shift's status is `correct`:**
 - Carry forward close positions from the closed sub-shift to the new sub-shift's open positions (skipping books marked `is_sold`)
 - `scan_source = 'carried_forward'` on these inherited open-scan rows
-- New sub-shift is ready to accept sales immediately (if no new pending scans)
+- New sub-shift is ready to accept mid-shift scan events immediately (if no new pending scans)
 
 **If the closed sub-shift's status is `short` or `over`:**
 - No carry-forward
 - Every active book becomes pending
-- New employee must scan all books before selling (same as Sub-shift 1)
+- New employee must scan all books before the sub-shift is initialized (same as Sub-shift 1)
 
-**In either case, if admin added new books to any slot during or since the previous sub-shift,** those new books become pending scans that must be completed before the new sub-shift can accept sales.
+**In either case, if admin added new books to any slot during or since the previous sub-shift,** those new books become pending scans that must be completed before the new sub-shift is fully initialized.
 
 **Resume after gap:** if a sub-shift is reopened after the app was closed or a break occurred, the pending-scans check re-runs. Books added by admin during the gap become pending.
 
 ### 5.10 Closing a Sub-Shift
 
 1. Employee initiates close
-2. Every book currently in a slot (`is_active = true`, not already `is_sold`) must have a close scan in this sub-shift
+2. Every book currently in a slot (`is_active = true`, not already sold mid-shift via last-ticket scan) must have a close scan recording its final position. Books that finished mid-shift are already accounted for and don't need a close scan.
 3. Employee manually enters:
    - `cash_in_hand` — physical cash counted at close
    - `gross_sales` — from the register
@@ -280,7 +293,7 @@ When the current employee's shift ends and the next begins, the current sub-shif
 
 ### 5.11 Per-Book Sales Calculation
 
-For each book scanned in a sub-shift:
+For each book with an open and close (or last-ticket) scan in a sub-shift:
 
 ```
 tickets_sold = close_position - open_position
@@ -289,6 +302,8 @@ value        = tickets_sold × book.ticket_price
 ```
 
 The `+1` accounts for the fact that scanning the last-ticket position means that position itself was sold.
+
+This calculation works regardless of whether the book finished mid-shift (last-ticket scan) or at close (regular close scan). Both cases use the same formula against the two known positions.
 
 ### 5.12 Ticket Price Breakdown
 
@@ -467,14 +482,14 @@ State transitions:
 | FR-PEND-02 | Sub-shift N+1 after 'correct' A: carry forward close positions (skip is_sold) | High |
 | FR-PEND-03 | Sub-shift N+1 after 'short'/'over' A: no carry-forward, all active books pending | High |
 | FR-PEND-04 | Any active book without an open scan in the current sub-shift is pending | High |
-| FR-PEND-05 | Sub-shift blocks sale scans while pending scans exist | High |
+| FR-PEND-05 | Sub-shift blocks mid-shift scan events while pending scans exist | High |
 | FR-PEND-06 | Pending check re-runs every time a sub-shift is resumed after a gap | High |
 
 ### 6.7 Sub-Shift Closing
 
 | ID | Requirement | Priority |
 |---|---|---|
-| FR-CLOSE-01 | All active books must have close scans before sub-shift close accepts submission | High |
+| FR-CLOSE-01 | All active books (not already sold mid-shift via last-ticket scan) must have close scans before sub-shift close accepts submission | High |
 | FR-CLOSE-02 | Employee manually enters cash_in_hand, gross_sales, cash_out | High |
 | FR-CLOSE-03 | System calculates tickets_total including scanned books, whole-book sales, and returns | High |
 | FR-CLOSE-04 | expected_cash = gross_sales + tickets_total - cash_out | High |
@@ -484,6 +499,8 @@ State transitions:
 | FR-CLOSE-08 | Main shift report = combined totals + each sub-shift separately | High |
 
 ### 6.8 Barcode Scanning (Shift)
+
+Scan events occur only at: shift open, last ticket of a book during shift, return-to-vendor, and shift close.
 
 | ID | Requirement | Priority |
 |---|---|---|
@@ -545,13 +562,16 @@ State transitions:
 
 ### 7.2 Shift Screen
 - Active shift indicator (green badge)
-- Live running totals updating as books scanned
+- Live running totals updating as scan events occur
 - Scrollable list of scanned books
 - Shift timer
 - Quick close button
 - Pending scans banner when initialization not complete
 
 ### 7.3 Scan Screen
+
+The scan screen is used at shift open, end-of-book (last ticket), return-to-vendor, and shift close — not for routine ticket sales, which are handled at the register.
+
 - Camera barcode scanner (Expo Camera)
 - Hardware barcode scanner support (Zebra, Honeywell, etc. via keystroke wedge mode)
 - Manual text input fallback
@@ -791,13 +811,13 @@ Admin opens slots screen, taps Slot 1, scans book barcode. App auto-advances to 
 Admin scans a book that's already active in another slot. App prompts to confirm move. On confirm, book moves to new slot; old slot becomes empty.
 
 ### UC-04: Open Shift
-Employee opens main shift. Sub-shift 1 auto-created, all active books pending. Employee scans each book's open position before selling.
+Employee opens main shift. Sub-shift 1 auto-created, all active books pending. Employee scans each book's open position before the sub-shift is initialized.
 
-### UC-05: Mid-Shift Ticket Sale
-Customer buys tickets. Employee scans. Last-ticket detection fires if final position reached. Book marked sold, slot becomes empty.
+### UC-05: Last-Ticket Scan Mid-Shift
+Employee sells the final ticket of a book. Scans the barcode. Last-ticket detection fires, book marked sold, slot becomes empty. Subsequent sales of the new (replacement) book — if any — continue normally.
 
 ### UC-06: Sub-Shift Handover (Correct Close)
-Previous sub-shift closed with difference=0. New sub-shift auto-inherits close positions. Employee can sell immediately unless admin added new books.
+Previous sub-shift closed with difference=0. New sub-shift auto-inherits close positions. Employee can continue immediately unless admin added new books.
 
 ### UC-07: Sub-Shift Handover (Short/Over Close)
 Previous sub-shift closed with difference ≠ 0. New sub-shift requires full rescan of all books.
@@ -809,7 +829,7 @@ Employee taps Sell Whole Book. Scans barcode, picks price, enters PIN. ShiftExtr
 Lottery salesman removes a book. Employee taps Return Book. Scans barcode, enters PIN. Book unassigned and marked returned. Pre-return revenue preserved in current sub-shift.
 
 ### UC-10: Close Final Sub-Shift
-Employee scans all remaining books. Enters cash_in_hand, gross_sales, cash_out. System calculates totals and status. Main shift closes.
+Employee scans the final position of each book still in a slot. Enters cash_in_hand, gross_sales, cash_out. System calculates totals and status. Main shift closes.
 
 ### UC-11: View Report
 Employee or admin opens history, taps a shift. Sees main shift totals + each sub-shift + ticket breakdown + whole-book sales + returns + voids.
@@ -848,6 +868,8 @@ Employee opens Settings, picks a language. App switches instantly, RTL applied i
 - Ticket prices are fixed to six values ($1, $2, $3, $5, $10, $20)
 - Book lengths by price are fixed business constants
 - static_code is globally unique per lottery book (barcode manufacturer guarantee)
+- The app is not a point-of-sale — routine ticket sales are handled at the register; the app handles book lifecycle and shift reconciliation
+- Supports both camera-based scanning and hardware barcode scanners (keystroke wedge mode)
 - Internet required for mobile app
 - Employees have iOS 14+ or Android 10+ devices
 
@@ -892,11 +914,12 @@ Employee opens Settings, picks a language. App switches instantly, RTL applied i
 | LENGTH_BY_PRICE | Mapping from ticket price to book length |
 | Main Shift | Container shift — totals are sum of non-voided sub-shifts |
 | Sub-shift | A work period within a main shift — has its own scans and financials |
+| scan event | A discrete moment requiring a scan: shift open, last ticket of a book, return-to-vendor, or shift close |
 | scan_type | open or close |
 | scan_source | scanned, carried_forward, whole_book_sale, or returned_to_vendor |
 | start_at_scan | The book's position at the time of the scan |
 | is_last_ticket | True when position == LENGTH_BY_PRICE[price] - 1 |
-| pending_scans | Books that must be scanned before sales can begin in the current sub-shift |
+| pending_scans | Books that must be scanned before the sub-shift is initialized |
 | tickets_total | Sum of sub-shift scanned sales + whole-book sales + return partials |
 | expected_cash | gross_sales + tickets_total - cash_out |
 | difference | cash_in_hand - expected_cash |
@@ -923,7 +946,7 @@ Key decisions made during SRS v5.0 design review (April 2026):
 6. **Slot edits split by field** — slot_name anytime, ticket_price only when empty.
 7. **Soft delete for slots** — preserves historical references.
 8. **Carry-forward is trust-based** — only after 'correct' status; 'short'/'over' forces full rescan.
-9. **Pending-scans blocking** — sub-shift cannot accept sales until initialization complete.
+9. **Pending-scans blocking** — sub-shift cannot complete initialization until all active books scanned.
 10. **Scan rescan overwrites** — no duplicate-scan error; simpler correction UX.
 11. **Rule 8: no open rescan after close started** — prevents mid-shift history rewriting.
 12. **Whole-book-sale doesn't create Book row** — new ShiftExtraSales table handles it.
@@ -938,6 +961,11 @@ Key decisions made during SRS v5.0 design review (April 2026):
 21. **Composite unique constraints** — (store_id, X) for barcode, static_code, slot_name, username.
 22. **Reassignment requires explicit confirmation** — `confirm_reassign: true` flag.
 
+### v5.1 revision (April 2026):
+
+23. **Scan event model clarified** — scans occur only at shift open, last-ticket of a book, return-to-vendor, and shift close. The app is not a point-of-sale; routine ticket sales are handled at the register. Per-book totals are reconciled at close from open/close positions.
+24. **Hardware barcode scanner support** — scan screen supports both camera (Expo Camera) and hardware scanners (Zebra, Honeywell, etc. via keystroke wedge mode).
+
 ---
 
-*Document end — LottoMeter v2.0 SRS v5.0 — Verified & Final*
+*Document end — LottoMeter v2.0 SRS v5.1 — Verified & Final*
