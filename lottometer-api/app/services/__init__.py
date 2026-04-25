@@ -8,6 +8,7 @@ from app.services import pin_rate_limiter
 from app.services import shift_service
 from app.services import scan_service
 from app.services import extra_sales_service
+from app.services import report_service
 
 
 __all__ = [
@@ -19,4 +20,5 @@ __all__ = [
     "shift_service",
     "scan_service",
     "extra_sales_service",
+    "report_service",
 ]
