@@ -185,3 +185,50 @@ def close_shift(shift_id):
             for s in subs
         ],
     }), 200
+
+
+@shift_bp.route("/<int:shift_id>/subshifts", methods=["POST"])
+@jwt_required()
+def handover_subshift(shift_id):
+    """Close current sub-shift, open the next one (handover)."""
+    try:
+        data = CloseShiftSchema().load(request.get_json() or {})
+    except MarshmallowValidationError as err:
+        raise ValidationError("Invalid request body.", details=err.messages)
+
+    closed_sub, new_sub, pending_books, carried_count = shift_service.handover_subshift(
+        store_id=current_store_id(),
+        main_shift_id=shift_id,
+        user_id=current_user_id(),
+        cash_in_hand=data["cash_in_hand"],
+        gross_sales=data["gross_sales"],
+        cash_out=data["cash_out"],
+    )
+
+    user_ids = {
+        closed_sub.opened_by_user_id, closed_sub.closed_by_user_id,
+        new_sub.opened_by_user_id,
+    }
+    user_ids.discard(None)
+    users = {u.user_id: u for u in User.query.filter(User.user_id.in_(user_ids)).all()}
+
+    slot_names = _slot_name_map_for_books(pending_books)
+
+    return jsonify({
+        "closed_subshift": serialize_subshift(
+            closed_sub,
+            opened_by=users.get(closed_sub.opened_by_user_id),
+            closed_by=users.get(closed_sub.closed_by_user_id),
+        ),
+        "new_subshift": {
+            **serialize_subshift(
+                new_sub, opened_by=users.get(new_sub.opened_by_user_id)
+            ),
+            "carried_forward_count": carried_count,
+            "pending_scans": [
+                serialize_pending_scan(b, slot_names.get(b.slot_id))
+                for b in pending_books
+            ],
+            "is_initialized": len(pending_books) == 0,
+        },
+    }), 200
