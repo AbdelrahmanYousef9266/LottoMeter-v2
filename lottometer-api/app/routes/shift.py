@@ -10,9 +10,10 @@ from app.schemas.shift_schema import (
     serialize_subshift,
     serialize_pending_scan,
 )
+from app.schemas.void_schema import VoidShiftSchema
 from app.services import shift_service
 from app.errors import ValidationError
-from app.auth_helpers import current_store_id, current_user_id
+from app.auth_helpers import admin_required, current_store_id, current_user_id
 from app.models.user import User
 from app.models.slot import Slot
 
@@ -231,4 +232,89 @@ def handover_subshift(shift_id):
             ],
             "is_initialized": len(pending_books) == 0,
         },
+    }), 200
+
+
+@shift_bp.route("/<int:shift_id>/void", methods=["POST"])
+@admin_required
+def void_main_shift(shift_id):
+    """Admin-only: void a main shift (cascades to all sub-shifts)."""
+    try:
+        data = VoidShiftSchema().load(request.get_json() or {})
+    except MarshmallowValidationError as err:
+        raise ValidationError("Invalid request body.", details=err.messages)
+
+    main = shift_service.void_main_shift(
+        store_id=current_store_id(),
+        main_shift_id=shift_id,
+        user_id=current_user_id(),
+        reason=data["reason"],
+    )
+
+    user_ids = {main.opened_by_user_id, main.voided_by_user_id}
+    user_ids.discard(None)
+    users = {u.user_id: u for u in User.query.filter(User.user_id.in_(user_ids)).all()}
+
+    return jsonify({
+        "main_shift": {
+            **serialize_main_shift_summary(
+                main, opened_by=users.get(main.opened_by_user_id)
+            ),
+            "void_reason": main.void_reason,
+            "voided_at": main.voided_at.isoformat() + "Z" if main.voided_at else None,
+            "voided_by": (
+                {
+                    "user_id": main.voided_by_user_id,
+                    "username": users.get(main.voided_by_user_id).username
+                    if users.get(main.voided_by_user_id) else None,
+                }
+                if main.voided_by_user_id else None
+            ),
+        }
+    }), 200
+
+
+@shift_bp.route("/<int:shift_id>/subshifts/<int:subshift_id>/void", methods=["POST"])
+@admin_required
+def void_subshift(shift_id, subshift_id):
+    """Admin-only: void a single sub-shift."""
+    try:
+        data = VoidShiftSchema().load(request.get_json() or {})
+    except MarshmallowValidationError as err:
+        raise ValidationError("Invalid request body.", details=err.messages)
+
+    sub = shift_service.void_subshift(
+        store_id=current_store_id(),
+        main_shift_id=shift_id,
+        subshift_id=subshift_id,
+        user_id=current_user_id(),
+        reason=data["reason"],
+    )
+
+    user_ids = {
+        sub.opened_by_user_id,
+        sub.closed_by_user_id,
+        sub.voided_by_user_id,
+    }
+    user_ids.discard(None)
+    users = {u.user_id: u for u in User.query.filter(User.user_id.in_(user_ids)).all()}
+
+    return jsonify({
+        "subshift": {
+            **serialize_subshift(
+                sub,
+                opened_by=users.get(sub.opened_by_user_id),
+                closed_by=users.get(sub.closed_by_user_id),
+            ),
+            "void_reason": sub.void_reason,
+            "voided_at": sub.voided_at.isoformat() + "Z" if sub.voided_at else None,
+            "voided_by": (
+                {
+                    "user_id": sub.voided_by_user_id,
+                    "username": users.get(sub.voided_by_user_id).username
+                    if users.get(sub.voided_by_user_id) else None,
+                }
+                if sub.voided_by_user_id else None
+            ),
+        }
     }), 200

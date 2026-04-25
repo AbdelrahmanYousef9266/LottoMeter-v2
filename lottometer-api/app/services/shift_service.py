@@ -409,3 +409,97 @@ def handover_subshift(
 
     pending_books = get_pending_scans_for_subshift(store_id, new_sub)
     return current, new_sub, pending_books, carried_count
+
+# ---------- Void ----------
+
+def void_subshift(
+    store_id: int,
+    main_shift_id: int,
+    subshift_id: int,
+    user_id: int,
+    reason: str,
+) -> ShiftDetails:
+    """Admin-only: void a single sub-shift.
+
+    Recomputes the main shift's totals after voiding (excludes this sub).
+    """
+    main = get_main_shift(store_id, main_shift_id)
+
+    sub = (
+        ShiftDetails.query
+        .filter_by(
+            shift_id=subshift_id,
+            store_id=store_id,
+            main_shift_id=main_shift_id,
+        )
+        .first()
+    )
+    if sub is None:
+        raise NotFoundError("Sub-shift not found.", code="SUBSHIFT_NOT_FOUND")
+
+    if sub.voided:
+        raise BusinessRuleError(
+            "Sub-shift is already voided.",
+            code="ALREADY_VOIDED",
+        )
+
+    now = datetime.now(timezone.utc)
+    sub.voided = True
+    sub.voided_at = now
+    sub.voided_by_user_id = user_id
+    sub.void_reason = reason
+    # Voiding implicitly closes a still-open sub-shift
+    if sub.is_shift_open:
+        sub.is_shift_open = False
+        sub.shift_end_time = now
+        sub.closed_by_user_id = user_id
+
+    # Recompute main shift totals from non-voided sub-shifts (only if main is closed)
+    if not main.is_shift_open:
+        _aggregate_main_shift_totals(main)
+
+    db.session.commit()
+    return sub
+
+
+def void_main_shift(
+    store_id: int,
+    main_shift_id: int,
+    user_id: int,
+    reason: str,
+) -> ShiftDetails:
+    """Admin-only: void a main shift. Cascades to all its sub-shifts."""
+    main = get_main_shift(store_id, main_shift_id)
+
+    if main.voided:
+        raise BusinessRuleError(
+            "Main shift is already voided.",
+            code="ALREADY_VOIDED",
+        )
+
+    now = datetime.now(timezone.utc)
+
+    # Cascade to all sub-shifts (skip already-voided ones)
+    subs = _get_subshifts_for(main_shift_id)
+    for s in subs:
+        if not s.voided:
+            s.voided = True
+            s.voided_at = now
+            s.voided_by_user_id = user_id
+            s.void_reason = f"Main shift voided: {reason}"
+            if s.is_shift_open:
+                s.is_shift_open = False
+                s.shift_end_time = now
+                s.closed_by_user_id = user_id
+
+    main.voided = True
+    main.voided_at = now
+    main.voided_by_user_id = user_id
+    main.void_reason = reason
+    if main.is_shift_open:
+        main.is_shift_open = False
+        main.shift_end_time = now
+        main.closed_by_user_id = user_id
+
+    db.session.commit()
+    return main
