@@ -285,49 +285,38 @@ def return_to_vendor(
     user_id: int,
     barcode: str,
     pin: str,
-) -> tuple[Book, int]:
+) -> tuple[Book, int, bool]:
     """Return a book to the lottery vendor (PIN-authorized).
 
-    Per SRS §5.15:
-    1. Verify PIN (rate-limited)
-    2. Find book; verify scanned barcode's static_code matches book.static_code
-    3. Verify book is active
-    4. Validate position in range
-    5. Unassign + mark returned_at + log history
-    6. (Future: when shifts exist, also create close ShiftBooks row preserving revenue)
+    Returns: (book, position, close_scan_recorded)
 
-    Returns: (book, position)
+    Per SRS §5.15:
+    - Verify PIN (rate-limited)
+    - Verify barcode's static_code matches the book
+    - Validate position
+    - If a sub-shift is open and book has an open scan in it, create a close
+      ShiftBooks row with scan_source='returned_to_vendor' (preserves revenue)
+    - Unassign + mark returned + log history
     """
     from app.services import auth_service
+    from app.models.shift_details import ShiftDetails
+    from app.models.shift_books import ShiftBooks
 
-    # 1. Verify PIN with rate-limiting
     auth_service.verify_store_pin(store_id, user_id, pin)
 
-    # 2. Find book
     book = get_book(store_id, book_id)
-
-    # 3. Parse and verify barcode matches
     static_code, position = parse_barcode(barcode)
+
     if book.static_code != static_code:
         raise ValidationError(
             "Scanned barcode does not match this book.",
             code="BARCODE_MISMATCH",
         )
-
-    # 4. Verify book is active
     if not book.is_active:
-        raise BusinessRuleError(
-            "Book is not currently active.",
-            code="BOOK_NOT_ACTIVE",
-        )
-
+        raise BusinessRuleError("Book is not currently active.", code="BOOK_NOT_ACTIVE")
     if book.is_sold:
-        raise BusinessRuleError(
-            "Book is already marked sold.",
-            code="BOOK_ALREADY_SOLD",
-        )
+        raise BusinessRuleError("Book is already marked sold.", code="BOOK_ALREADY_SOLD")
 
-    # 5. Validate position
     book_length = LENGTH_BY_PRICE[book.ticket_price]
     if not (0 <= position < book_length):
         raise ValidationError(
@@ -335,16 +324,78 @@ def return_to_vendor(
             code="INVALID_POSITION",
         )
 
-    # TODO: when ShiftBooks exists, validate position >= open scan position
-    # for this book in current open sub-shift, and create the close scan row.
+    close_scan_recorded = False
 
-    # 6. Unassign + mark returned
+    # If there is an open sub-shift with an open scan for this book, record close
+    open_main = (
+        ShiftDetails.query
+        .filter_by(
+            store_id=store_id,
+            main_shift_id=None,
+            is_shift_open=True,
+            voided=False,
+        )
+        .first()
+    )
+    if open_main is not None:
+        open_sub = (
+            ShiftDetails.query
+            .filter_by(main_shift_id=open_main.shift_id, is_shift_open=True)
+            .order_by(ShiftDetails.shift_number.desc())
+            .first()
+        )
+        if open_sub is not None:
+            open_scan = (
+                ShiftBooks.query
+                .filter_by(
+                    shift_id=open_sub.shift_id, barcode=book.barcode, scan_type="open"
+                )
+                .first()
+            )
+            if open_scan is not None:
+                if position < open_scan.start_at_scan:
+                    raise ValidationError(
+                        f"Return position ({position}) cannot be less than the open "
+                        f"scan position ({open_scan.start_at_scan}).",
+                        code="POSITION_BEFORE_OPEN",
+                    )
+
+                # Overwrite if a close already exists; else insert
+                existing_close = (
+                    ShiftBooks.query
+                    .filter_by(
+                        shift_id=open_sub.shift_id, barcode=book.barcode, scan_type="close"
+                    )
+                    .first()
+                )
+                if existing_close is not None:
+                    existing_close.start_at_scan = position
+                    existing_close.is_last_ticket = False
+                    existing_close.scan_source = "returned_to_vendor"
+                    existing_close.slot_id = book.slot_id
+                    existing_close.scanned_at = datetime.now(timezone.utc)
+                    existing_close.scanned_by_user_id = user_id
+                else:
+                    close_row = ShiftBooks(
+                        shift_id=open_sub.shift_id,
+                        barcode=book.barcode,
+                        scan_type="close",
+                        start_at_scan=position,
+                        is_last_ticket=False,
+                        scan_source="returned_to_vendor",
+                        slot_id=book.slot_id,
+                        store_id=store_id,
+                        scanned_by_user_id=user_id,
+                    )
+                    db.session.add(close_row)
+                close_scan_recorded = True
+
+    # Unassign + mark returned
     book.slot_id = None
     book.is_active = False
     book.returned_at = datetime.now(timezone.utc)
     book.returned_by_user_id = user_id
 
-    # Close any open assignment history row
     history = (
         BookAssignmentHistory.query
         .filter_by(book_id=book_id, unassigned_at=None)
@@ -357,4 +408,4 @@ def return_to_vendor(
         history.unassign_reason = "returned_to_vendor"
 
     db.session.commit()
-    return book, position
+    return book, position, close_scan_recorded

@@ -133,7 +133,7 @@ def return_to_vendor(book_id):
     except MarshmallowValidationError as err:
         raise ValidationError("Invalid request body.", details=err.messages)
 
-    book, position = book_service.return_to_vendor(
+    book, position, close_scan_recorded = book_service.return_to_vendor(
         store_id=current_store_id(),
         book_id=book_id,
         user_id=current_user_id(),
@@ -143,6 +143,6 @@ def return_to_vendor(book_id):
 
     return jsonify({
         "book": serialize_book(book),
-        "close_scan_recorded": False,  # will be True once shifts exist
+        "close_scan_recorded": close_scan_recorded,
         "position": position,
     }), 200

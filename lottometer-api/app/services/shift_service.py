@@ -9,6 +9,8 @@ from app.models.shift_details import ShiftDetails
 from app.models.book import Book
 from app.models.slot import Slot
 from app.models.user import User
+from app.models.shift_books import ShiftBooks
+from app.models.shift_extra_sales import ShiftExtraSales
 from app.errors import (
     NotFoundError,
     ConflictError,
@@ -71,16 +73,78 @@ def _all_active_books(store_id: int) -> list[Book]:
 def get_pending_scans_for_subshift(
     store_id: int,
     subshift: ShiftDetails,
-    skip_carried_forward_books: set[int] | None = None,
 ) -> list[Book]:
-    """List the books that need an open scan in this sub-shift.
+    """Books that are active and don't yet have an open scan in this sub-shift."""
+    open_barcodes = {
+        s.barcode for s in
+        ShiftBooks.query.filter_by(shift_id=subshift.shift_id, scan_type="open").all()
+    }
+    return [b for b in _all_active_books(store_id) if b.barcode not in open_barcodes]
 
-    Until ShiftBooks exists (Step 3), we compute pending = all active books,
-    optionally minus a set of book_ids that would have been carried forward
-    from a clean-close handover.
+
+# ---------- tickets_total computation ----------
+
+def _compute_subshift_tickets_total(subshift_id: int) -> Decimal:
+    """Sum of scanned-book values + whole-book sales + return partials.
+
+    Per SRS §5.10 + §5.11.
     """
-    skip = skip_carried_forward_books or set()
-    return [b for b in _all_active_books(store_id) if b.book_id not in skip]
+    total = Decimal("0.00")
+
+    # Scanned book sales: pair each open with its corresponding close
+    open_scans = {
+        s.barcode: s for s in
+        ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="open").all()
+    }
+    close_scans = {
+        s.barcode: s for s in
+        ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="close").all()
+    }
+
+    for barcode, close in close_scans.items():
+        open_scan = open_scans.get(barcode)
+        if open_scan is None:
+            continue  # unmatched close — skip (shouldn't happen with Rule 7 enforced)
+
+        # Look up book to get ticket_price
+        book = Book.query.filter_by(barcode=barcode).first()
+        if book is None or book.ticket_price is None:
+            continue
+
+        tickets_sold = close.start_at_scan - open_scan.start_at_scan
+        if close.is_last_ticket:
+            tickets_sold += 1
+        if tickets_sold > 0:
+            total += Decimal(tickets_sold) * book.ticket_price
+
+    # Whole-book sales
+    extras = ShiftExtraSales.query.filter_by(shift_id=subshift_id).all()
+    for e in extras:
+        total += e.value
+
+    return total.quantize(Decimal("0.01"))
+
+
+def _verify_all_active_books_have_close_scan(store_id: int, subshift_id: int) -> None:
+    """FR-CLOSE-01: every active book (not already sold mid-shift) must have a close scan.
+
+    Also requires every closed book to have a matching open scan.
+    """
+    active_books = _all_active_books(store_id)
+    if not active_books:
+        return
+
+    close_barcodes = {
+        s.barcode for s in
+        ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="close").all()
+    }
+    missing = [b for b in active_books if b.barcode not in close_barcodes]
+    if missing:
+        raise BusinessRuleError(
+            f"{len(missing)} active book(s) have no close scan. Scan them first.",
+            code="BOOKS_NOT_CLOSED",
+            details={"missing_book_ids": [b.book_id for b in missing]},
+        )
 
 
 # ---------- Internal: close a sub-shift in-place ----------
@@ -92,16 +156,11 @@ def _close_subshift_in_place(
     gross_sales: str,
     cash_out: str,
 ) -> None:
-    """Apply closing fields + status to the given sub-shift.
-
-    Step 3 will compute tickets_total from scans + whole-book sales + returns.
-    For now, tickets_total = 0.
-    """
     cash_in_hand_d = Decimal(cash_in_hand)
     gross_sales_d = Decimal(gross_sales)
     cash_out_d = Decimal(cash_out)
 
-    tickets_total = Decimal("0.00")  # TODO Step 3
+    tickets_total = _compute_subshift_tickets_total(sub.shift_id)
     expected_cash = gross_sales_d + tickets_total - cash_out_d
     difference = cash_in_hand_d - expected_cash
 
@@ -125,10 +184,7 @@ def _close_subshift_in_place(
 
 
 def _aggregate_main_shift_totals(main: ShiftDetails) -> None:
-    """Compute main shift totals as the sum of non-voided sub-shifts."""
-    subs = [
-        s for s in _get_subshifts_for(main.shift_id) if not s.voided
-    ]
+    subs = [s for s in _get_subshifts_for(main.shift_id) if not s.voided]
     main.tickets_total = sum((s.tickets_total or Decimal("0.00")) for s in subs)
     main.gross_sales = sum((s.gross_sales or Decimal("0.00")) for s in subs)
     main.cash_in_hand = sum((s.cash_in_hand or Decimal("0.00")) for s in subs)
@@ -143,10 +199,48 @@ def _aggregate_main_shift_totals(main: ShiftDetails) -> None:
         main.shift_status = "short"
 
 
+# ---------- Carry-forward ----------
+
+def _carry_forward_open_scans(
+    store_id: int, user_id: int, prev_subshift_id: int, new_subshift_id: int
+) -> int:
+    """Create open ShiftBooks rows on the new sub-shift using the previous
+    sub-shift's close positions. Skips books that are no longer active.
+
+    Returns: number of rows carried forward.
+    """
+    prev_close_scans = ShiftBooks.query.filter_by(
+        shift_id=prev_subshift_id, scan_type="close"
+    ).all()
+
+    count = 0
+    for close in prev_close_scans:
+        # Only carry if the book is still active and not sold
+        book = Book.query.filter_by(
+            store_id=store_id, barcode=close.barcode
+        ).first()
+        if book is None or not book.is_active or book.is_sold:
+            continue
+
+        carried = ShiftBooks(
+            shift_id=new_subshift_id,
+            barcode=close.barcode,
+            scan_type="open",
+            start_at_scan=close.start_at_scan,
+            is_last_ticket=False,
+            scan_source="carried_forward",
+            slot_id=book.slot_id,
+            store_id=store_id,
+            scanned_by_user_id=user_id,
+        )
+        db.session.add(carried)
+        count += 1
+    return count
+
+
 # ---------- Open ----------
 
 def open_main_shift(store_id: int, user_id: int) -> tuple[ShiftDetails, ShiftDetails]:
-    """Open a new main shift and auto-create Sub-shift 1."""
     if _get_open_main_shift(store_id) is not None:
         raise ConflictError(
             "A main shift is already open for this store.",
@@ -219,7 +313,7 @@ def get_main_shift(store_id: int, shift_id: int) -> ShiftDetails:
     return main
 
 
-# ---------- Close main shift (final close) ----------
+# ---------- Close main shift ----------
 
 def close_main_shift(
     store_id: int,
@@ -229,7 +323,6 @@ def close_main_shift(
     gross_sales: str,
     cash_out: str,
 ) -> ShiftDetails:
-    """Close the final sub-shift AND the main shift."""
     main = get_main_shift(store_id, main_shift_id)
 
     if not main.is_shift_open:
@@ -245,7 +338,8 @@ def close_main_shift(
             code="NO_OPEN_SUBSHIFT",
         )
 
-    # TODO Step 3: verify every active book has a close scan in this sub-shift
+    # FR-CLOSE-01
+    _verify_all_active_books_have_close_scan(store_id, sub.shift_id)
 
     _close_subshift_in_place(sub, user_id, cash_in_hand, gross_sales, cash_out)
     _aggregate_main_shift_totals(main)
@@ -267,18 +361,9 @@ def handover_subshift(
     gross_sales: str,
     cash_out: str,
 ) -> tuple[ShiftDetails, ShiftDetails, list[Book], int]:
-    """Close current sub-shift, open the next one within the same main shift.
+    """Close current sub-shift, open the next within the same main shift.
 
     Returns: (closed_subshift, new_subshift, pending_books, carried_forward_count)
-
-    Per SRS §5.9:
-    - If closed status == correct → carry forward close positions (Step 3 will
-      actually create the carried-forward ShiftBooks rows).
-    - If short/over → no carry-forward; every active book is pending.
-
-    For now (Step 2), we only count what *would* be carried forward and adjust
-    the new sub-shift's pending list accordingly. ShiftBooks creation lands in
-    Step 3.
     """
     main = get_main_shift(store_id, main_shift_id)
     if not main.is_shift_open:
@@ -294,22 +379,14 @@ def handover_subshift(
             code="NO_OPEN_SUBSHIFT",
         )
 
-    # TODO Step 3: verify every active book has a close scan before allowing close
+    # FR-CLOSE-01
+    _verify_all_active_books_have_close_scan(store_id, current.shift_id)
 
     _close_subshift_in_place(current, user_id, cash_in_hand, gross_sales, cash_out)
     db.session.flush()
 
-    # Decide carry-forward eligibility
+    # Decide carry-forward
     carry_forward = current.shift_status == "correct"
-    carried_forward_book_ids: set[int] = set()
-    carried_forward_count = 0
-
-    if carry_forward:
-        # Step 3 will create ShiftBooks rows with scan_source='carried_forward'.
-        # For now we just count active books — they'd all be carried.
-        active = _all_active_books(store_id)
-        carried_forward_book_ids = {b.book_id for b in active}
-        carried_forward_count = len(carried_forward_book_ids)
 
     # Open the next sub-shift
     new_sub = ShiftDetails(
@@ -320,10 +397,15 @@ def handover_subshift(
         shift_number=_next_subshift_number(main_shift_id),
     )
     db.session.add(new_sub)
+    db.session.flush()
+
+    carried_count = 0
+    if carry_forward:
+        carried_count = _carry_forward_open_scans(
+            store_id, user_id, current.shift_id, new_sub.shift_id
+        )
+
     db.session.commit()
 
-    pending_books = get_pending_scans_for_subshift(
-        store_id, new_sub, skip_carried_forward_books=carried_forward_book_ids
-    )
-
-    return current, new_sub, pending_books, carried_forward_count
+    pending_books = get_pending_scans_for_subshift(store_id, new_sub)
+    return current, new_sub, pending_books, carried_count
