@@ -81,7 +81,7 @@ class ShiftDetails(db.Model):
             name="ck_no_self_reference",
         ),
         db.CheckConstraint(
-            "voided = 0 OR void_reason IS NOT NULL",
+            "NOT voided OR void_reason IS NOT NULL",
             name="ck_void_requires_reason",
         ),
     )

@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+
+# Virtual envs
+venv/
+.venv/
+env/
+
+# Local DB
+*.db
+*.sqlite
+*.sqlite3
+
+# Env
+.env
+.env.local
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Docker
+Dockerfile
+docker-compose.yml
+.dockerignore
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Misc
+*.log
+*.json

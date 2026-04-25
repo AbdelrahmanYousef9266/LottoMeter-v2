@@ -40,7 +40,7 @@ def upgrade():
     sa.Column('void_reason', sa.String(length=500), nullable=True),
     sa.Column('store_id', sa.Integer(), nullable=False),
     sa.CheckConstraint('main_shift_id IS NULL OR main_shift_id != shift_id', name='ck_no_self_reference'),
-    sa.CheckConstraint('voided = 0 OR void_reason IS NOT NULL', name='ck_void_requires_reason'),
+    sa.CheckConstraint('NOT voided OR void_reason IS NOT NULL', name='ck_void_requires_reason'),
     sa.ForeignKeyConstraint(['closed_by_user_id'], ['users.user_id'], ),
     sa.ForeignKeyConstraint(['main_shift_id'], ['shift_details.shift_id'], ),
     sa.ForeignKeyConstraint(['opened_by_user_id'], ['users.user_id'], ),

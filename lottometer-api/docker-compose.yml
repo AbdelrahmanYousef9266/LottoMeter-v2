@@ -1,0 +1,38 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: lottometer
+      POSTGRES_PASSWORD: lottometer_dev_pw
+      POSTGRES_DB: lottometer
+    ports:
+      - "5432:5432"
+    volumes:
+      - lottometer_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lottometer -d lottometer"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      FLASK_ENV: development
+      DATABASE_URL: postgresql://lottometer:lottometer_dev_pw@db:5432/lottometer
+      SECRET_KEY: dev-secret-change-me
+      JWT_SECRET_KEY: jwt-dev-secret-change-me
+      JWT_ACCESS_TOKEN_EXPIRES_HOURS: 8
+    ports:
+      - "5000:5000"
+    # Run migrations on startup, then start gunicorn
+    command: >
+      sh -c "flask db upgrade && gunicorn --bind 0.0.0.0:5000 --workers 2 --access-logfile - run:app"
+    volumes:
+      - .:/app
+
+volumes:
+  lottometer_pg_data:
