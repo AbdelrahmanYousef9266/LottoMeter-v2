@@ -64,3 +64,12 @@ def serialize_assignment_event(event, slot_name: str = None, assigned_by_usernam
         ),
         "unassign_reason": event.unassign_reason,
     }
+
+class ReturnToVendorSchema(Schema):
+    """Validates POST /api/books/{id}/return-to-vendor."""
+
+    barcode = fields.Str(required=True, validate=validate.Length(min=4, max=100))
+    pin = fields.Str(
+        required=True,
+        validate=validate.Regexp(r"^\d{4}$", error="PIN must be exactly 4 digits."),
+    )

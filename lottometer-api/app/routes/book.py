@@ -6,6 +6,7 @@ from marshmallow import ValidationError as MarshmallowValidationError
 
 from app.schemas.book_schema import (
     AssignBookSchema,
+    ReturnToVendorSchema,
     serialize_book,
     serialize_assignment_event,
 )
@@ -120,3 +121,28 @@ def unassign_book(book_id):
         user_id=current_user_id(),
     )
     return jsonify({"book": serialize_book(book)}), 200
+
+
+
+@book_bp.route("/books/<int:book_id>/return-to-vendor", methods=["POST"])
+@jwt_required()
+def return_to_vendor(book_id):
+    """Any authenticated user (PIN-protected): return book to lottery vendor."""
+    try:
+        data = ReturnToVendorSchema().load(request.get_json() or {})
+    except MarshmallowValidationError as err:
+        raise ValidationError("Invalid request body.", details=err.messages)
+
+    book, position = book_service.return_to_vendor(
+        store_id=current_store_id(),
+        book_id=book_id,
+        user_id=current_user_id(),
+        barcode=data["barcode"],
+        pin=data["pin"],
+    )
+
+    return jsonify({
+        "book": serialize_book(book),
+        "close_scan_recorded": False,  # will be True once shifts exist
+        "position": position,
+    }), 200

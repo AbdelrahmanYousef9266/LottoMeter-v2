@@ -104,3 +104,38 @@ def login(data: dict) -> dict:
             "store_id": store.store_id,
         },
     }
+
+def verify_store_pin(store_id: int, user_id: int, pin: str) -> None:
+    """Verify a store PIN, with rate limiting.
+
+    Raises:
+        RateLimitError if user is currently locked out
+        InvalidPin if PIN is wrong (records failure)
+        BusinessRuleError if store has no PIN configured
+    """
+    from app.services import pin_rate_limiter
+    from app.models.store import Store
+    from app.errors import BusinessRuleError, RateLimitError, InvalidPin
+
+    # Check lockout first
+    remaining = pin_rate_limiter.check_locked(user_id, store_id)
+    if remaining > 0:
+        raise RateLimitError(
+            f"Too many failed PIN attempts. Try again in {remaining} seconds.",
+            retry_after=remaining,
+            code="PIN_LOCKOUT",
+        )
+
+    store = Store.query.filter_by(store_id=store_id).first()
+    if store is None or store.store_pin_hash is None:
+        raise BusinessRuleError(
+            "Store PIN has not been configured.",
+            code="PIN_NOT_CONFIGURED",
+        )
+
+    if not _check_password(pin, store.store_pin_hash):
+        pin_rate_limiter.record_failure(user_id, store_id)
+        raise InvalidPin("Invalid PIN.")
+
+    # Success — clear any prior failures
+    pin_rate_limiter.reset(user_id, store_id)

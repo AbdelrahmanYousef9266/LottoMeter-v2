@@ -93,13 +93,21 @@ class RateLimitError(APIError):
     status_code = 429
     code = "RATE_LIMITED"
 
+    def __init__(self, message: str = None, retry_after: int = None, code: str = None):
+        super().__init__(message=message, code=code)
+        self.retry_after = retry_after
+
 
 def register_error_handlers(app):
     """Wire all error handlers to the Flask app."""
 
     @app.errorhandler(APIError)
     def handle_api_error(err: APIError):
-        return jsonify(err.to_dict()), err.status_code
+        response = jsonify(err.to_dict())
+        response.status_code = err.status_code
+        if isinstance(err, RateLimitError) and err.retry_after is not None:
+            response.headers["Retry-After"] = str(err.retry_after)
+        return response
 
     @app.errorhandler(HTTPException)
     def handle_http_error(err: HTTPException):

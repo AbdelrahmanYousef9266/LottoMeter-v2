@@ -278,3 +278,83 @@ def unassign_book(store_id: int, book_id: int, user_id: int) -> Book:
 
     db.session.commit()
     return book
+
+def return_to_vendor(
+    store_id: int,
+    book_id: int,
+    user_id: int,
+    barcode: str,
+    pin: str,
+) -> tuple[Book, int]:
+    """Return a book to the lottery vendor (PIN-authorized).
+
+    Per SRS §5.15:
+    1. Verify PIN (rate-limited)
+    2. Find book; verify scanned barcode's static_code matches book.static_code
+    3. Verify book is active
+    4. Validate position in range
+    5. Unassign + mark returned_at + log history
+    6. (Future: when shifts exist, also create close ShiftBooks row preserving revenue)
+
+    Returns: (book, position)
+    """
+    from app.services import auth_service
+
+    # 1. Verify PIN with rate-limiting
+    auth_service.verify_store_pin(store_id, user_id, pin)
+
+    # 2. Find book
+    book = get_book(store_id, book_id)
+
+    # 3. Parse and verify barcode matches
+    static_code, position = parse_barcode(barcode)
+    if book.static_code != static_code:
+        raise ValidationError(
+            "Scanned barcode does not match this book.",
+            code="BARCODE_MISMATCH",
+        )
+
+    # 4. Verify book is active
+    if not book.is_active:
+        raise BusinessRuleError(
+            "Book is not currently active.",
+            code="BOOK_NOT_ACTIVE",
+        )
+
+    if book.is_sold:
+        raise BusinessRuleError(
+            "Book is already marked sold.",
+            code="BOOK_ALREADY_SOLD",
+        )
+
+    # 5. Validate position
+    book_length = LENGTH_BY_PRICE[book.ticket_price]
+    if not (0 <= position < book_length):
+        raise ValidationError(
+            f"Position {position} is out of range (0..{book_length - 1}).",
+            code="INVALID_POSITION",
+        )
+
+    # TODO: when ShiftBooks exists, validate position >= open scan position
+    # for this book in current open sub-shift, and create the close scan row.
+
+    # 6. Unassign + mark returned
+    book.slot_id = None
+    book.is_active = False
+    book.returned_at = datetime.now(timezone.utc)
+    book.returned_by_user_id = user_id
+
+    # Close any open assignment history row
+    history = (
+        BookAssignmentHistory.query
+        .filter_by(book_id=book_id, unassigned_at=None)
+        .order_by(BookAssignmentHistory.assigned_at.desc())
+        .first()
+    )
+    if history is not None:
+        history.unassigned_at = datetime.now(timezone.utc)
+        history.unassigned_by_user_id = user_id
+        history.unassign_reason = "returned_to_vendor"
+
+    db.session.commit()
+    return book, position
