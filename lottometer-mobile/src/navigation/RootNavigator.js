@@ -8,6 +8,7 @@ import LoginScreen from '../screens/LoginScreen';
 import MainTabs from './MainTabs';
 import CameraScannerScreen from '../screens/CameraScannerScreen';
 import SlotDetailScreen from '../screens/SlotDetailScreen';
+import ReportDetailScreen from '../screens/ReportDetailScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -29,6 +30,7 @@ export default function RootNavigator() {
           <>
             <Stack.Screen name="Main" component={MainTabs} />
             <Stack.Screen name="SlotDetail" component={SlotDetailScreen} />
+            <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
             <Stack.Screen
               name="CameraScanner"
               component={CameraScannerScreen}
