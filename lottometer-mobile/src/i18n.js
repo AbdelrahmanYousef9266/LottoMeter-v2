@@ -42,6 +42,11 @@ async function detectInitialLanguage() {
 
 export async function setStoredLanguage(lang) {
   await AsyncStorage.setItem(STORAGE_KEY, lang);
+  await i18n.changeLanguage(lang);
+}
+
+export function isRTL(lang) {
+  return ['ar', 'ur'].includes(lang);
 }
 
 export async function initI18n() {

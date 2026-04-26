@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -11,10 +11,17 @@ import { useTranslation } from 'react-i18next';
 
 import { logout } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
+import { setStoredLanguage } from '../i18n';
+
+const LANGUAGES = [
+  { code: 'en', label: 'English', native: 'English' },
+  { code: 'ar', label: 'Arabic', native: 'العربية' },
+];
 
 export default function SettingsScreen() {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const { user, setUser } = useAuth();
+  const [busy, setBusy] = useState(false);
 
   function confirmLogout() {
     Alert.alert(
@@ -32,6 +39,18 @@ export default function SettingsScreen() {
         },
       ]
     );
+  }
+
+  async function handleLanguageChange(lang) {
+    if (lang === i18n.language || busy) return;
+    setBusy(true);
+    try {
+      await setStoredLanguage(lang);
+    } catch (err) {
+      Alert.alert(t('common.error'), err.message || t('common.tryAgain'));
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -52,6 +71,31 @@ export default function SettingsScreen() {
           </Text>
         </View>
 
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t('settings.language')}</Text>
+          {LANGUAGES.map((lang) => {
+            const isActive = i18n.language === lang.code;
+            return (
+              <TouchableOpacity
+                key={lang.code}
+                style={[styles.langOption, isActive && styles.langOptionActive]}
+                onPress={() => handleLanguageChange(lang.code)}
+                disabled={busy}
+              >
+                <Text
+                  style={[
+                    styles.langText,
+                    isActive && styles.langTextActive,
+                  ]}
+                >
+                  {lang.native}
+                </Text>
+                {isActive && <Text style={styles.checkmark}>✓</Text>}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+
         <TouchableOpacity style={styles.logoutButton} onPress={confirmLogout}>
           <Text style={styles.logoutText}>{t('auth.logout')}</Text>
         </TouchableOpacity>
@@ -68,10 +112,27 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderRadius: 12,
     padding: 18,
-    marginBottom: 24,
+    marginBottom: 16,
   },
   cardTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
   text: { fontSize: 14, color: '#333', marginBottom: 6 },
+
+  langOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 4,
+  },
+  langOptionActive: {
+    backgroundColor: '#e8f0fe',
+  },
+  langText: { fontSize: 15, color: '#333', fontWeight: '500' },
+  langTextActive: { color: '#1a73e8', fontWeight: '700' },
+  checkmark: { color: '#1a73e8', fontSize: 18, fontWeight: '700' },
+
   logoutButton: {
     backgroundColor: '#dc3545',
     padding: 16,
