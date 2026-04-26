@@ -194,8 +194,11 @@
     "role": "Role",
     "store": "Store",
     "language": "Language",
+    "languageHint": "Switching to a right-to-left language requires an app restart.",
     "theme": "Theme",
-    "logoutSection": "Session"
+    "logoutSection": "Session",
+    "restartTitle": "Restart Required",
+    "restartMessage": "Layout direction has changed. Close the app completely and reopen it for the change to take effect."
   },
 
   "closeShift": {

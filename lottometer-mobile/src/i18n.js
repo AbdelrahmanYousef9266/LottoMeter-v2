@@ -62,10 +62,21 @@ export async function initI18n() {
       lng,
       fallbackLng: 'en',
       interpolation: {
-        escapeValue: false, // React already escapes
+        escapeValue: false,
       },
       compatibilityJSON: 'v4',
     });
+
+  // Apply RTL state for the loaded language (no reload here — at startup
+  // the app is already on first render, so I18nManager state takes effect
+  // naturally as components mount).
+  // We do NOT force a reload here — only when the user actively switches.
+  const { I18nManager } = await import('react-native');
+  const shouldBeRTL = isRTL(lng);
+  if (I18nManager.isRTL !== shouldBeRTL) {
+    I18nManager.allowRTL(shouldBeRTL);
+    I18nManager.forceRTL(shouldBeRTL);
+  }
 
   return i18n;
 }

@@ -5,6 +5,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Alert,
+  I18nManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
@@ -12,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 import { logout } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
 import { setStoredLanguage } from '../i18n';
+import { syncRTL } from '../utils/rtl';
 
 const LANGUAGES = [
   { code: 'en', label: 'English', native: 'English' },
@@ -46,6 +48,14 @@ export default function SettingsScreen() {
     setBusy(true);
     try {
       await setStoredLanguage(lang);
+      const reloadNeeded = syncRTL(lang);
+      if (reloadNeeded) {
+        Alert.alert(
+          t('settings.restartTitle'),
+          t('settings.restartMessage'),
+          [{ text: t('common.ok') }]
+        );
+      }
     } catch (err) {
       Alert.alert(t('common.error'), err.message || t('common.tryAgain'));
     } finally {
@@ -73,6 +83,7 @@ export default function SettingsScreen() {
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{t('settings.language')}</Text>
+          <Text style={styles.helperText}>{t('settings.languageHint')}</Text>
           {LANGUAGES.map((lang) => {
             const isActive = i18n.language === lang.code;
             return (
@@ -116,6 +127,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
   text: { fontSize: 14, color: '#333', marginBottom: 6 },
+  helperText: { fontSize: 12, color: '#888', marginBottom: 8 },
 
   langOption: {
     flexDirection: 'row',
