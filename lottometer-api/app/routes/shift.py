@@ -46,7 +46,7 @@ def open_shift():
     )
 
     pending_books = shift_service.get_pending_scans_for_subshift(
-        current_store_id(), sub.shift_id
+        current_store_id(), sub
     )
     slot_names = _slot_name_map_for_books(pending_books)
 
@@ -118,7 +118,7 @@ def get_shift(shift_id):
     pending_payload = None
     if open_sub is not None:
         pending_books = shift_service.get_pending_scans_for_subshift(
-            current_store_id(), open_sub.shift_id
+            current_store_id(), open_sub
         )
         slot_names = _slot_name_map_for_books(pending_books)
         pending_payload = {
