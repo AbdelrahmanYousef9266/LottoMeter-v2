@@ -21,6 +21,8 @@ import {
   closeMainShift,
 } from '../api/shifts';
 import CloseShiftModal from '../components/CloseShiftModal';
+import WholeBookSaleModal from '../components/WholeBookSaleModal';
+import ReturnBookModal from '../components/ReturnBookModal';
 
 export default function HomeScreen() {
   const { user } = useAuth();
@@ -29,8 +31,9 @@ export default function HomeScreen() {
   const [busy, setBusy] = useState(false);
   const [shiftDetail, setShiftDetail] = useState(null);
 
-  // Which close modal is open: null | 'handover' | 'final'
-  const [closeMode, setCloseMode] = useState(null);
+  const [closeMode, setCloseMode] = useState(null);   // null | 'handover' | 'final'
+  const [wbSaleOpen, setWbSaleOpen] = useState(false);
+  const [returnOpen, setReturnOpen] = useState(false);
 
   const loadCurrentShift = useCallback(async () => {
     try {
@@ -109,6 +112,26 @@ export default function HomeScreen() {
     }
   }
 
+  function handleWbSuccess(extraSale) {
+    setWbSaleOpen(false);
+    Alert.alert(
+      'Whole book sold',
+      `${extraSale.ticket_count} tickets at $${extraSale.ticket_price} → $${extraSale.value}`
+    );
+    loadCurrentShift();
+  }
+
+  function handleReturnSuccess(result) {
+    setReturnOpen(false);
+    Alert.alert(
+      'Book returned',
+      result.close_scan_recorded
+        ? `Pre-return revenue preserved at position ${result.position}.`
+        : 'Book unassigned and marked returned.'
+    );
+    loadCurrentShift();
+  }
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -140,6 +163,8 @@ export default function HomeScreen() {
             shiftDetail={shiftDetail}
             onHandover={() => setCloseMode('handover')}
             onFinalClose={() => setCloseMode('final')}
+            onSellWholeBook={() => setWbSaleOpen(true)}
+            onReturnBook={() => setReturnOpen(true)}
           />
         )}
       </ScrollView>
@@ -153,6 +178,20 @@ export default function HomeScreen() {
         onSubmit={
           closeMode === 'final' ? handleFinalCloseSubmit : handleHandoverSubmit
         }
+      />
+
+      <WholeBookSaleModal
+        visible={wbSaleOpen}
+        subshiftId={openSubshiftId}
+        onCancel={() => setWbSaleOpen(false)}
+        onSuccess={handleWbSuccess}
+      />
+
+      <ReturnBookModal
+        visible={returnOpen}
+        bookId={null}
+        onCancel={() => setReturnOpen(false)}
+        onSuccess={handleReturnSuccess}
       />
     </SafeAreaView>
   );
@@ -180,7 +219,13 @@ function NoShiftView({ onOpen, busy }) {
   );
 }
 
-function ActiveShiftView({ shiftDetail, onHandover, onFinalClose }) {
+function ActiveShiftView({
+  shiftDetail,
+  onHandover,
+  onFinalClose,
+  onSellWholeBook,
+  onReturnBook,
+}) {
   const main = shiftDetail.main_shift;
   const subs = shiftDetail.subshifts || [];
   const currentPending = shiftDetail.current_subshift_pending;
@@ -224,6 +269,19 @@ function ActiveShiftView({ shiftDetail, onHandover, onFinalClose }) {
         </View>
       )}
 
+      {/* Quick actions */}
+      <View style={styles.quickActions}>
+        <TouchableOpacity style={styles.quickAction} onPress={onSellWholeBook}>
+          <Text style={styles.quickActionEmoji}>📚</Text>
+          <Text style={styles.quickActionLabel}>Sell Whole Book</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.quickAction} onPress={onReturnBook}>
+          <Text style={styles.quickActionEmoji}>↩️</Text>
+          <Text style={styles.quickActionLabel}>Return Book</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* End shift actions */}
       <View style={styles.actions}>
         <TouchableOpacity style={styles.handoverButton} onPress={onHandover}>
           <Text style={styles.handoverText}>End Sub-shift (Handover)</Text>
@@ -254,12 +312,8 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f4f5f7' },
   scrollContent: { padding: 16, paddingBottom: 32 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  greeting: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#222',
-    marginBottom: 16,
-  },
+  greeting: { fontSize: 22, fontWeight: '700', color: '#222', marginBottom: 16 },
+
   card: {
     backgroundColor: '#fff',
     borderRadius: 12,
@@ -273,6 +327,7 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontSize: 18, fontWeight: '700', color: '#222', marginBottom: 8 },
   cardSubtitle: { fontSize: 14, color: '#666', marginBottom: 16 },
+
   shiftHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -286,6 +341,7 @@ const styles = StyleSheet.create({
   },
   activeBadgeText: { color: '#16a34a', fontSize: 12, fontWeight: '600' },
   shiftId: { marginLeft: 'auto', color: '#888', fontSize: 14 },
+
   kvRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -295,6 +351,7 @@ const styles = StyleSheet.create({
   },
   kvKey: { color: '#666', fontSize: 14 },
   kvValue: { color: '#222', fontSize: 14, fontWeight: '600' },
+
   banner: {
     backgroundColor: '#fef3c7',
     borderRadius: 8,
@@ -302,6 +359,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   bannerText: { color: '#92400e', fontSize: 13 },
+
   primaryButton: {
     backgroundColor: '#1a73e8',
     padding: 16,
@@ -310,6 +368,26 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   disabled: { opacity: 0.6 },
+
+  quickActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginBottom: 12,
+  },
+  quickAction: {
+    flex: 1,
+    backgroundColor: '#fff',
+    paddingVertical: 16,
+    borderRadius: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowOffset: { width: 0, height: 1 },
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  quickActionEmoji: { fontSize: 28, marginBottom: 4 },
+  quickActionLabel: { fontSize: 13, fontWeight: '600', color: '#333' },
 
   actions: { marginTop: 4 },
   handoverButton: {

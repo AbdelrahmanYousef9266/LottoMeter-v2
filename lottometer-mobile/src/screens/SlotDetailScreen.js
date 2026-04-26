@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from 'react';
+import ReturnBookModal from '../components/ReturnBookModal';
 import {
   View,
   Text,
@@ -24,7 +25,7 @@ export default function SlotDetailScreen({ route }) {
   const navigation = useNavigation();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-
+  const [returnOpen, setReturnOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [slot, setSlot] = useState(null);
@@ -136,6 +137,17 @@ export default function SlotDetailScreen({ route }) {
     }
   }
 
+  function handleReturnSuccess(result) {
+    setReturnOpen(false);
+    Alert.alert(
+      'Book returned',
+      result.close_scan_recorded
+        ? `Pre-return revenue preserved at position ${result.position}.`
+        : 'Book unassigned and marked returned.'
+    );
+    loadSlot();
+  }
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -199,41 +211,56 @@ export default function SlotDetailScreen({ route }) {
           )}
         </View>
 
-        {isAdmin && (
-          <View style={styles.actionsCard}>
-            <TouchableOpacity
-              style={[styles.actionButton, styles.primaryAction, busy && styles.disabled]}
-              onPress={handleScanToAssign}
-              disabled={busy}
-            >
-              <Text style={styles.actionButtonText}>
-                📷  {hasBook ? 'Replace Book (Scan)' : 'Assign Book (Scan)'}
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.actionButton, styles.secondaryAction, busy && styles.disabled]}
-              onPress={handleManualAssign}
-              disabled={busy}
-            >
-              <Text style={styles.secondaryActionText}>
-                ⌨  {hasBook ? 'Replace Book (Manual)' : 'Assign Book (Manual)'}
-              </Text>
-            </TouchableOpacity>
-
-            {hasBook && (
+        <View style={styles.actionsCard}>
+          {/* Admin-only: assign and unassign */}
+          {isAdmin && (
+            <>
               <TouchableOpacity
-                style={[styles.actionButton, styles.dangerAction, busy && styles.disabled]}
-                onPress={confirmUnassign}
+                style={[styles.actionButton, styles.primaryAction, busy && styles.disabled]}
+                onPress={handleScanToAssign}
                 disabled={busy}
               >
-                <Text style={styles.dangerActionText}>Unassign Book</Text>
+                <Text style={styles.actionButtonText}>
+                  📷  {hasBook ? 'Replace Book (Scan)' : 'Assign Book (Scan)'}
+                </Text>
               </TouchableOpacity>
-            )}
-          </View>
-        )}
 
-        {!isAdmin && (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.secondaryAction, busy && styles.disabled]}
+                onPress={handleManualAssign}
+                disabled={busy}
+              >
+                <Text style={styles.secondaryActionText}>
+                  ⌨  {hasBook ? 'Replace Book (Manual)' : 'Assign Book (Manual)'}
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {/* Available to any user when a book is present: Return */}
+          {hasBook && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.warningAction, busy && styles.disabled]}
+              onPress={() => setReturnOpen(true)}
+              disabled={busy}
+            >
+              <Text style={styles.warningActionText}>↩️  Return to Vendor</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Admin-only: unassign */}
+          {isAdmin && hasBook && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.dangerAction, busy && styles.disabled]}
+              onPress={confirmUnassign}
+              disabled={busy}
+            >
+              <Text style={styles.dangerActionText}>Unassign Book</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {!isAdmin && !hasBook && (
           <Text style={styles.adminHint}>
             Slot management is admin-only.
           </Text>
@@ -288,6 +315,14 @@ export default function SlotDetailScreen({ route }) {
             </View>
           </View>
         </KeyboardAvoidingView>
+
+        <ReturnBookModal
+        visible={returnOpen}
+        bookId={slot?.current_book?.book_id}
+        prefilledStaticCode={slot?.current_book?.static_code}
+        onCancel={() => setReturnOpen(false)}
+        onSuccess={handleReturnSuccess}
+      />
       </Modal>
     </SafeAreaView>
   );
@@ -366,7 +401,12 @@ const styles = StyleSheet.create({
   },
   dangerActionText: { color: '#dc3545', fontSize: 16, fontWeight: '600' },
   disabled: { opacity: 0.6 },
-
+  warningAction: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#d97706',
+  },
+  warningActionText: { color: '#d97706', fontSize: 16, fontWeight: '600' },
   adminHint: {
     textAlign: 'center',
     color: '#888',
