@@ -145,6 +145,14 @@ def get_shift(shift_id):
         "current_subshift_pending": pending_payload,
     }), 200
 
+@shift_bp.route("/<int:shift_id>/summary", methods=["GET"])
+@jwt_required()
+def get_subshift_summary(shift_id):
+    """Live-preview totals for an OPEN sub-shift."""
+    from app.services import shift_service as svc
+    summary = svc.get_running_summary(current_store_id(), shift_id)
+    return jsonify(summary), 200
+
 
 @shift_bp.route("/<int:shift_id>/close", methods=["PUT"])
 @jwt_required()

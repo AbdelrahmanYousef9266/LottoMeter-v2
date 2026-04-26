@@ -17,14 +17,20 @@ import {
   openShift,
   listShifts,
   getShift,
+  handoverSubshift,
+  closeMainShift,
 } from '../api/shifts';
+import CloseShiftModal from '../components/CloseShiftModal';
 
 export default function HomeScreen() {
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
-  const [shiftDetail, setShiftDetail] = useState(null); // full shift object or null
+  const [shiftDetail, setShiftDetail] = useState(null);
+
+  // Which close modal is open: null | 'handover' | 'final'
+  const [closeMode, setCloseMode] = useState(null);
 
   const loadCurrentShift = useCallback(async () => {
     try {
@@ -41,7 +47,6 @@ export default function HomeScreen() {
     }
   }, []);
 
-  // Refresh when screen comes into focus
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
@@ -67,6 +72,43 @@ export default function HomeScreen() {
     }
   }
 
+  async function handleHandoverSubmit(payload) {
+    if (!shiftDetail?.main_shift?.shift_id) return;
+    try {
+      await handoverSubshift(shiftDetail.main_shift.shift_id, payload);
+      setCloseMode(null);
+      await loadCurrentShift();
+      Alert.alert('Sub-shift ended', 'A new sub-shift has started.');
+    } catch (err) {
+      handleCloseError(err);
+      throw err;
+    }
+  }
+
+  async function handleFinalCloseSubmit(payload) {
+    if (!shiftDetail?.main_shift?.shift_id) return;
+    try {
+      await closeMainShift(shiftDetail.main_shift.shift_id, payload);
+      setCloseMode(null);
+      await loadCurrentShift();
+      Alert.alert('Main shift closed', 'View the report on the History tab.');
+    } catch (err) {
+      handleCloseError(err);
+      throw err;
+    }
+  }
+
+  function handleCloseError(err) {
+    if (err.code === 'BOOKS_NOT_CLOSED') {
+      Alert.alert(
+        'Books not closed',
+        err.message || 'Some active books still need close scans. Go to the Scan tab and record final positions.'
+      );
+    } else {
+      Alert.alert(err.code || 'Error', err.message || 'Could not close.');
+    }
+  }
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -76,6 +118,10 @@ export default function HomeScreen() {
       </SafeAreaView>
     );
   }
+
+  const openSubshiftId = shiftDetail
+    ? shiftDetail.subshifts?.find((s) => s.is_shift_open)?.shift_id
+    : null;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -90,9 +136,24 @@ export default function HomeScreen() {
         {!shiftDetail ? (
           <NoShiftView onOpen={handleOpenShift} busy={busy} />
         ) : (
-          <ActiveShiftView shiftDetail={shiftDetail} />
+          <ActiveShiftView
+            shiftDetail={shiftDetail}
+            onHandover={() => setCloseMode('handover')}
+            onFinalClose={() => setCloseMode('final')}
+          />
         )}
       </ScrollView>
+
+      <CloseShiftModal
+        visible={closeMode !== null}
+        mode={closeMode || 'handover'}
+        mainShiftId={shiftDetail?.main_shift?.shift_id}
+        subshiftId={openSubshiftId}
+        onCancel={() => setCloseMode(null)}
+        onSubmit={
+          closeMode === 'final' ? handleFinalCloseSubmit : handleHandoverSubmit
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -119,7 +180,7 @@ function NoShiftView({ onOpen, busy }) {
   );
 }
 
-function ActiveShiftView({ shiftDetail }) {
+function ActiveShiftView({ shiftDetail, onHandover, onFinalClose }) {
   const main = shiftDetail.main_shift;
   const subs = shiftDetail.subshifts || [];
   const currentPending = shiftDetail.current_subshift_pending;
@@ -162,6 +223,15 @@ function ActiveShiftView({ shiftDetail }) {
           )}
         </View>
       )}
+
+      <View style={styles.actions}>
+        <TouchableOpacity style={styles.handoverButton} onPress={onHandover}>
+          <Text style={styles.handoverText}>End Sub-shift (Handover)</Text>
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.endShiftButton} onPress={onFinalClose}>
+          <Text style={styles.endShiftText}>End Main Shift</Text>
+        </TouchableOpacity>
+      </View>
     </>
   );
 }
@@ -201,17 +271,8 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#222',
-    marginBottom: 8,
-  },
-  cardSubtitle: {
-    fontSize: 14,
-    color: '#666',
-    marginBottom: 16,
-  },
+  cardTitle: { fontSize: 18, fontWeight: '700', color: '#222', marginBottom: 8 },
+  cardSubtitle: { fontSize: 14, color: '#666', marginBottom: 16 },
   shiftHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -223,16 +284,8 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderRadius: 12,
   },
-  activeBadgeText: {
-    color: '#16a34a',
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  shiftId: {
-    marginLeft: 'auto',
-    color: '#888',
-    fontSize: 14,
-  },
+  activeBadgeText: { color: '#16a34a', fontSize: 12, fontWeight: '600' },
+  shiftId: { marginLeft: 'auto', color: '#888', fontSize: 14 },
   kvRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -257,4 +310,23 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   disabled: { opacity: 0.6 },
+
+  actions: { marginTop: 4 },
+  handoverButton: {
+    backgroundColor: '#fff',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 10,
+    borderWidth: 1,
+    borderColor: '#1a73e8',
+  },
+  handoverText: { color: '#1a73e8', fontSize: 16, fontWeight: '600' },
+  endShiftButton: {
+    backgroundColor: '#dc2626',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  endShiftText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });

@@ -84,46 +84,98 @@ def get_pending_scans_for_subshift(
 
 # ---------- tickets_total computation ----------
 
-def _compute_subshift_tickets_total(subshift_id: int) -> Decimal:
-    """Sum of scanned-book values + whole-book sales + return partials.
+def _compute_subshift_tickets_total(subshift_id: int, store_id: int) -> Decimal:
+    """Sum of (ticket_price × tickets_sold) across scanned book sales,
+    plus whole-book sales, plus return-to-vendor partials.
 
-    Per SRS §5.10 + §5.11.
+    Scoped to store_id for multi-tenancy.
     """
-    total = Decimal("0.00")
+    from app.models.book import Book
+    from app.models.shift_extra_sales import ShiftExtraSales
+    from decimal import Decimal
 
-    # Scanned book sales: pair each open with its corresponding close
+    total = Decimal("0")
+
     open_scans = {
         s.static_code: s for s in
-        ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="open").all()
+        ShiftBooks.query
+        .filter_by(shift_id=subshift_id, store_id=store_id, scan_type="open")
+        .all()
     }
     close_scans = {
         s.static_code: s for s in
-        ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="close").all()
+        ShiftBooks.query
+        .filter_by(shift_id=subshift_id, store_id=store_id, scan_type="close")
+        .all()
     }
 
     for static_code, close in close_scans.items():
         open_scan = open_scans.get(static_code)
         if open_scan is None:
-            continue  # unmatched close — skip (shouldn't happen with Rule 7 enforced)
-
-        # Look up book to get ticket_price
-        book = Book.query.filter_by(static_code=static_code).first()
+            continue
+        book = Book.query.filter_by(store_id=store_id, static_code=static_code).first()
         if book is None or book.ticket_price is None:
             continue
-
         tickets_sold = close.start_at_scan - open_scan.start_at_scan
         if close.is_last_ticket:
             tickets_sold += 1
         if tickets_sold > 0:
-            total += Decimal(tickets_sold) * book.ticket_price
+            total += book.ticket_price * tickets_sold
 
-    # Whole-book sales
-    extras = ShiftExtraSales.query.filter_by(shift_id=subshift_id).all()
+    extras = (
+        ShiftExtraSales.query
+        .filter_by(shift_id=subshift_id, store_id=store_id)
+        .all()
+    )
     for e in extras:
         total += e.value
 
-    return total.quantize(Decimal("0.01"))
+    return total
 
+def get_running_summary(store_id: int, subshift_id: int) -> dict:
+    """Compute live preview of what a sub-shift's totals would be if closed now.
+
+    Returns dict matching the close-time computed fields:
+      - tickets_total       (decimal as string)
+      - books_with_close    (int — how many active books have a close scan)
+      - books_total_active  (int — total active books needing closes)
+      - books_pending_close (int — books that still need close scans)
+      - whole_book_total    (decimal as string)
+      - return_total        (decimal as string)
+    """
+    from app.models.book import Book
+    from app.models.shift_extra_sales import ShiftExtraSales
+    from decimal import Decimal
+
+    tickets_total = _compute_subshift_tickets_total(subshift_id, store_id)
+
+    # Whole-book sales
+    extras = (
+        ShiftExtraSales.query
+        .filter_by(shift_id=subshift_id, store_id=store_id)
+        .all()
+    )
+    whole_book_total = sum((e.value for e in extras), Decimal("0"))
+
+    # Active books + count of those with close scans
+    active_books = (
+        Book.query
+        .filter_by(store_id=store_id, is_active=True, is_sold=False)
+        .all()
+    )
+    close_static_codes = {
+        s.static_code for s in
+        ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="close").all()
+    }
+    books_with_close = sum(1 for b in active_books if b.static_code in close_static_codes)
+
+    return {
+        "tickets_total": str(tickets_total),
+        "whole_book_total": str(whole_book_total),
+        "books_total_active": len(active_books),
+        "books_with_close": books_with_close,
+        "books_pending_close": len(active_books) - books_with_close,
+    }
 
 def _verify_all_active_books_have_close_scan(store_id: int, subshift_id: int) -> None:
     """FR-CLOSE-01: every active book (not already sold mid-shift) must have a close scan.
@@ -160,7 +212,7 @@ def _close_subshift_in_place(
     gross_sales_d = Decimal(gross_sales)
     cash_out_d = Decimal(cash_out)
 
-    tickets_total = _compute_subshift_tickets_total(sub.shift_id)
+    tickets_total = _compute_subshift_tickets_total(sub.shift_id, sub.store_id)
     expected_cash = gross_sales_d + tickets_total - cash_out_d
     difference = cash_in_hand_d - expected_cash
 

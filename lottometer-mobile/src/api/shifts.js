@@ -15,6 +15,11 @@ export async function getShift(shiftId) {
   return data;
 }
 
+export async function getSubshiftSummary(subshiftId) {
+  const { data } = await api.get(`/shifts/${subshiftId}/summary`);
+  return data;
+}
+
 export async function handoverSubshift(shiftId, payload) {
   const { data } = await api.post(`/shifts/${shiftId}/subshifts`, payload);
   return data;
