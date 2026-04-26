@@ -13,11 +13,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 
 import { getCurrentOpenShift } from '../api/shifts';
 import { recordScan } from '../api/scan';
 
 export default function ScanScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [shift, setShift] = useState(null);
@@ -30,12 +32,6 @@ export default function ScanScreen() {
   const [busy, setBusy] = useState(false);
   const [lastScan, setLastScan] = useState(null);
   const [scanCount, setScanCount] = useState(0);
-// Auto-switch scan_type based on sub-shift initialization state:
-  //   - Not initialized → force "open" (employee is opening books)
-  //   - Initialized     → force "close" (employee is recording sales)
-  useEffect(() => {
-    setScanType(isInitialized ? 'close' : 'open');
-  }, [isInitialized]);
 
   const inputRef = useRef(null);
 
@@ -60,9 +56,9 @@ export default function ScanScreen() {
         setIsInitialized(true);
       }
     } catch (err) {
-      Alert.alert('Error loading shift', err.message || 'Try again.');
+      Alert.alert(t('home.errorLoadingShift'), err.message || t('common.tryAgain'));
     }
-  }, []);
+  }, [t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -71,16 +67,19 @@ export default function ScanScreen() {
     }, [loadShift])
   );
 
-  // Submits a scan with the given barcode (used by both manual + camera)
+  useEffect(() => {
+    setScanType(isInitialized ? 'close' : 'open');
+  }, [isInitialized]);
+
   const submitScan = useCallback(
     async (rawBarcode) => {
       const code = (rawBarcode || '').trim();
       if (!code || code.length < 4) {
-        Alert.alert('Invalid barcode', 'Enter at least 4 characters.');
+        Alert.alert(t('scan.invalidBarcode'), t('scan.invalidBarcodeHint'));
         return;
       }
       if (!openSubId) {
-        Alert.alert('No open shift', 'Open a shift on the Home tab first.');
+        Alert.alert(t('scan.noOpenShift'), t('scan.noOpenShiftHint'));
         return;
       }
 
@@ -91,7 +90,7 @@ export default function ScanScreen() {
           barcode: code,
           scan_type: scanType,
         });
-      setLastScan({
+        setLastScan({
           scan: result.scan,
           book: result.book,
           running_totals: result.running_totals,
@@ -105,14 +104,14 @@ export default function ScanScreen() {
         setTimeout(() => inputRef.current?.focus(), 50);
       } catch (err) {
         Alert.alert(
-          err.code || 'Scan failed',
-          err.message || 'Could not record scan.'
+          err.code || t('scan.scanFailed'),
+          err.message || t('common.tryAgain')
         );
       } finally {
         setBusy(false);
       }
     },
-    [openSubId, scanType]
+    [openSubId, scanType, t]
   );
 
   function handleManualScan() {
@@ -121,7 +120,7 @@ export default function ScanScreen() {
 
   function handleOpenCamera() {
     if (!openSubId) {
-      Alert.alert('No open shift', 'Open a shift on the Home tab first.');
+      Alert.alert(t('scan.noOpenShift'), t('scan.noOpenShiftHint'));
       return;
     }
     navigation.navigate('CameraScanner', {
@@ -145,11 +144,9 @@ export default function ScanScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
-          <Text style={styles.title}>Scan</Text>
-          <Text style={styles.subtitle}>No open shift.</Text>
-          <Text style={styles.subtitle}>
-            Open a shift on the Home tab to start scanning.
-          </Text>
+          <Text style={styles.title}>{t('scan.title')}</Text>
+          <Text style={styles.subtitle}>{t('scan.noOpenShift')}</Text>
+          <Text style={styles.subtitle}>{t('scan.noOpenShiftHint')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -162,26 +159,23 @@ export default function ScanScreen() {
         style={styles.flex}
       >
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <Text style={styles.title}>Scan</Text>
+          <Text style={styles.title}>{t('scan.title')}</Text>
 
           {!isInitialized ? (
             <View style={[styles.banner, styles.bannerWarn]}>
               <Text style={styles.bannerText}>
-                ⚠ Sub-shift not initialized — {pendingCount} book(s) need open scans.
+                {t('scan.bannerNotInitialized', { count: pendingCount })}
               </Text>
             </View>
           ) : (
             <View style={[styles.banner, styles.bannerOk]}>
-              <Text style={styles.bannerText}>
-                ✓ Sub-shift initialized. Ready for sales / close scans.
-              </Text>
+              <Text style={styles.bannerText}>{t('scan.bannerInitialized')}</Text>
             </View>
           )}
 
           <View style={styles.card}>
-            {/* Scan type picker first */}
-            <Text style={styles.label}>Scan Type</Text>
-          <View style={styles.pickerRow}>
+            <Text style={styles.label}>{t('scan.scanType')}</Text>
+            <View style={styles.pickerRow}>
               <TouchableOpacity
                 style={[
                   styles.pickerOption,
@@ -198,7 +192,7 @@ export default function ScanScreen() {
                     isInitialized && styles.pickerTextDisabled,
                   ]}
                 >
-                  Open
+                  {t('scan.open')}
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
@@ -217,29 +211,28 @@ export default function ScanScreen() {
                     !isInitialized && styles.pickerTextDisabled,
                   ]}
                 >
-                  Close
+                  {t('scan.close')}
                 </Text>
               </TouchableOpacity>
             </View>
 
-            {/* Camera scan button */}
             <TouchableOpacity
               style={[styles.cameraButton, busy && styles.disabled]}
               onPress={handleOpenCamera}
               disabled={busy}
             >
-              <Text style={styles.cameraButtonText}>📷  Scan with Camera</Text>
+              <Text style={styles.cameraButtonText}>{t('scan.scanWithCamera')}</Text>
             </TouchableOpacity>
 
-            <Text style={styles.divider}>— or enter manually —</Text>
+            <Text style={styles.divider}>{t('scan.orEnterManually')}</Text>
 
-            <Text style={styles.label}>Barcode</Text>
+            <Text style={styles.label}>{t('scan.barcode')}</Text>
             <TextInput
               ref={inputRef}
               style={styles.input}
               value={barcode}
               onChangeText={setBarcode}
-              placeholder="Type or paste barcode"
+              placeholder={t('scan.barcodePlaceholder')}
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="default"
@@ -255,7 +248,7 @@ export default function ScanScreen() {
               {busy ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.scanButtonText}>Submit Scan</Text>
+                <Text style={styles.scanButtonText}>{t('scan.submitScan')}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -270,19 +263,21 @@ export default function ScanScreen() {
             >
               <Text style={styles.lastScanTitle}>
                 {lastScan.scan?.is_last_ticket
-                  ? '🎯 Last Ticket — Book Sold'
-                  : '✓ Scan Recorded'}
+                  ? t('scan.lastTicketSold')
+                  : t('scan.scanRecorded')}
               </Text>
-              <KV k="Type" v={lastScan.scan?.scan_type} />
-              <KV k="Position" v={lastScan.scan?.start_at_scan} />
-              <KV k="Book" v={lastScan.book?.static_code} />
-              <KV k="Price" v={lastScan.book?.ticket_price} />
-              <KV k="Source" v={lastScan.scan?.scan_source} />
+              <KV k={t('scan.fieldType')} v={lastScan.scan?.scan_type} />
+              <KV k={t('scan.fieldPosition')} v={lastScan.scan?.start_at_scan} />
+              <KV k={t('scan.fieldBook')} v={lastScan.book?.static_code} />
+              <KV k={t('scan.fieldPrice')} v={lastScan.book?.ticket_price} />
+              <KV k={t('scan.fieldSource')} v={lastScan.scan?.scan_source} />
             </View>
           )}
 
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Scans this session: {scanCount}</Text>
+            <Text style={styles.footerText}>
+              {t('scan.scansThisSession', { count: scanCount })}
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -348,7 +343,7 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     alignItems: 'center',
   },
- pickerOptionActive: {
+  pickerOptionActive: {
     borderColor: '#1a73e8',
     backgroundColor: '#e8f0fe',
   },

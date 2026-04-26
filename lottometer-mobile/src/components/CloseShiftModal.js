@@ -12,20 +12,10 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import { useTranslation } from 'react-i18next';
 
 import { getSubshiftSummary } from '../api/shifts';
 
-/**
- * Modal for closing a sub-shift (handover) or main shift (final close).
- *
- * Props:
- *   visible         — boolean
- *   mode            — 'handover' | 'final'
- *   mainShiftId     — id of the main shift
- *   subshiftId      — id of the open sub-shift (used for live preview)
- *   onCancel        — () => void
- *   onSubmit        — ({ cash_in_hand, gross_sales, cash_out }) => Promise
- */
 export default function CloseShiftModal({
   visible,
   mode,
@@ -34,15 +24,15 @@ export default function CloseShiftModal({
   onCancel,
   onSubmit,
 }) {
+  const { t } = useTranslation();
   const [cashInHand, setCashInHand] = useState('');
   const [grossSales, setGrossSales] = useState('');
   const [cashOut, setCashOut] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const [summary, setSummary] = useState(null); // { tickets_total, books_pending_close, ... }
+  const [summary, setSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
 
-  // Reset fields when modal opens
   useEffect(() => {
     if (visible) {
       setCashInHand('');
@@ -59,14 +49,12 @@ export default function CloseShiftModal({
       const data = await getSubshiftSummary(subshiftId);
       setSummary(data);
     } catch (err) {
-      // Non-fatal — show form without preview
       setSummary(null);
     } finally {
       setSummaryLoading(false);
     }
   }, [subshiftId]);
 
-  // Live computation of expected_cash + difference + status
   const ticketsTotal = parseFloat(summary?.tickets_total || '0') || 0;
   const grossSalesNum = parseFloat(grossSales) || 0;
   const cashOutNum = parseFloat(cashOut) || 0;
@@ -78,13 +66,13 @@ export default function CloseShiftModal({
   let statusColor = '#888';
   if (cashInHand) {
     if (Math.abs(difference) < 0.005) {
-      status = 'Correct';
+      status = t('closeShift.statusCorrect');
       statusColor = '#16a34a';
     } else if (difference > 0) {
-      status = 'Over';
+      status = t('closeShift.statusOver');
       statusColor = '#d97706';
     } else {
-      status = 'Short';
+      status = t('closeShift.statusShort');
       statusColor = '#dc2626';
     }
   }
@@ -93,17 +81,16 @@ export default function CloseShiftModal({
   const blockedByPendingCloses = booksPending > 0;
 
   const isHandover = mode === 'handover';
-  const titleText = isHandover ? 'End Sub-shift (Handover)' : 'End Main Shift';
-  const submitText = isHandover ? 'End Sub-shift' : 'End Main Shift';
+  const titleText = isHandover ? t('closeShift.handoverTitle') : t('closeShift.finalTitle');
+  const submitText = isHandover ? t('closeShift.endSubshift') : t('closeShift.endMainShift');
 
   async function handleSubmit() {
-    // Validation
     if (cashInHand === '' || grossSales === '' || cashOut === '') {
-      Alert.alert('Missing values', 'Fill in cash in hand, gross sales, and cash out.');
+      Alert.alert(t('closeShift.missingValues'), t('closeShift.missingValuesHint'));
       return;
     }
     if (cashInHandNum < 0 || grossSalesNum < 0 || cashOutNum < 0) {
-      Alert.alert('Invalid values', 'Cash values cannot be negative.');
+      Alert.alert(t('closeShift.invalidValues'), t('closeShift.invalidValuesHint'));
       return;
     }
 
@@ -115,8 +102,7 @@ export default function CloseShiftModal({
         cash_out: cashOut,
       });
     } catch (err) {
-      // Errors handled by parent (so it can show specific guidance)
-      // but make sure we stop spinning
+      // parent handles
     } finally {
       setBusy(false);
     }
@@ -137,7 +123,6 @@ export default function CloseShiftModal({
           <ScrollView keyboardShouldPersistTaps="handled">
             <Text style={styles.title}>{titleText}</Text>
 
-            {/* Pending close warning */}
             {summaryLoading ? (
               <View style={styles.banner}>
                 <ActivityIndicator />
@@ -145,22 +130,19 @@ export default function CloseShiftModal({
             ) : blockedByPendingCloses ? (
               <View style={[styles.banner, styles.bannerError]}>
                 <Text style={styles.bannerErrorText}>
-                  ⚠ {booksPending} book{booksPending === 1 ? '' : 's'} still need close scans.
+                  {t('closeShift.pendingClosesWarning', { count: booksPending })}
                 </Text>
                 <Text style={styles.bannerErrorHint}>
-                  Go to the Scan tab and record final positions before closing.
+                  {t('closeShift.pendingClosesHint')}
                 </Text>
               </View>
             ) : (
               <View style={[styles.banner, styles.bannerOk]}>
-                <Text style={styles.bannerOkText}>
-                  ✓ All books have close scans.
-                </Text>
+                <Text style={styles.bannerOkText}>{t('closeShift.allBooksClosed')}</Text>
               </View>
             )}
 
-            {/* Inputs */}
-            <Text style={styles.label}>Cash in Hand ($)</Text>
+            <Text style={styles.label}>{t('closeShift.cashInHand')}</Text>
             <TextInput
               style={styles.input}
               value={cashInHand}
@@ -169,7 +151,7 @@ export default function CloseShiftModal({
               keyboardType="decimal-pad"
             />
 
-            <Text style={styles.label}>Gross Sales ($)</Text>
+            <Text style={styles.label}>{t('closeShift.grossSales')}</Text>
             <TextInput
               style={styles.input}
               value={grossSales}
@@ -178,7 +160,7 @@ export default function CloseShiftModal({
               keyboardType="decimal-pad"
             />
 
-            <Text style={styles.label}>Cash Out ($)</Text>
+            <Text style={styles.label}>{t('closeShift.cashOut')}</Text>
             <TextInput
               style={styles.input}
               value={cashOut}
@@ -187,27 +169,25 @@ export default function CloseShiftModal({
               keyboardType="decimal-pad"
             />
 
-            {/* Live preview */}
             <View style={styles.previewCard}>
-              <Text style={styles.previewTitle}>Live Preview</Text>
-              <KV k="Tickets Total" v={`$${ticketsTotal.toFixed(2)}`} />
-              <KV k="Expected Cash" v={`$${expectedCash.toFixed(2)}`} />
+              <Text style={styles.previewTitle}>{t('closeShift.livePreview')}</Text>
+              <KV k={t('closeShift.ticketsTotal')} v={`$${ticketsTotal.toFixed(2)}`} />
+              <KV k={t('closeShift.expectedCash')} v={`$${expectedCash.toFixed(2)}`} />
               <KV
-                k="Difference"
+                k={t('closeShift.difference')}
                 v={`$${difference.toFixed(2)}`}
                 vColor={statusColor}
               />
-              <KV k="Status" v={status} vColor={statusColor} />
+              <KV k={t('closeShift.status')} v={status} vColor={statusColor} />
             </View>
 
-            {/* Actions */}
             <View style={styles.actions}>
               <TouchableOpacity
                 style={[styles.button, styles.cancelButton]}
                 onPress={onCancel}
                 disabled={busy}
               >
-                <Text style={styles.cancelText}>Cancel</Text>
+                <Text style={styles.cancelText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[

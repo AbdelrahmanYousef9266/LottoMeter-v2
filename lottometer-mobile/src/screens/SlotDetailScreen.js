@@ -1,5 +1,4 @@
 import React, { useState, useCallback } from 'react';
-import ReturnBookModal from '../components/ReturnBookModal';
 import {
   View,
   Text,
@@ -16,31 +15,35 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../context/AuthContext';
 import { getSlot, assignBook, unassignBook } from '../api/slots';
+import ReturnBookModal from '../components/ReturnBookModal';
 
 export default function SlotDetailScreen({ route }) {
+  const { t } = useTranslation();
   const { slotId } = route.params;
   const navigation = useNavigation();
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
-  const [returnOpen, setReturnOpen] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [slot, setSlot] = useState(null);
   const [busy, setBusy] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
   const [manualBarcode, setManualBarcode] = useState('');
+  const [returnOpen, setReturnOpen] = useState(false);
 
   const loadSlot = useCallback(async () => {
     try {
       const data = await getSlot(slotId);
       setSlot(data);
     } catch (err) {
-      Alert.alert('Error', err.message || 'Could not load slot.');
+      Alert.alert(t('common.error'), err.message || t('common.tryAgain'));
     }
-  }, [slotId]);
+  }, [slotId, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -74,19 +77,19 @@ export default function SlotDetailScreen({ route }) {
     } catch (err) {
       if (err.code === 'REASSIGN_CONFIRMATION_REQUIRED') {
         Alert.alert(
-          'Book is in another slot',
-          'This book is currently active in a different slot. Move it to this slot?',
+          t('slotDetail.reassignTitle'),
+          t('slotDetail.reassignMessage'),
           [
-            { text: 'Cancel', style: 'cancel' },
+            { text: t('common.cancel'), style: 'cancel' },
             {
-              text: 'Move it',
+              text: t('slotDetail.reassignMove'),
               style: 'destructive',
               onPress: () => doAssign(barcode, true),
             },
           ]
         );
       } else {
-        Alert.alert(err.code || 'Could not assign', err.message || 'Try again.');
+        Alert.alert(err.code || t('slotDetail.couldNotAssign'), err.message || t('common.tryAgain'));
       }
     } finally {
       setBusy(false);
@@ -100,7 +103,7 @@ export default function SlotDetailScreen({ route }) {
   async function submitManual() {
     const code = manualBarcode.trim();
     if (!code || code.length < 4) {
-      Alert.alert('Invalid barcode', 'Enter at least 4 characters.');
+      Alert.alert(t('scan.invalidBarcode'), t('scan.invalidBarcodeHint'));
       return;
     }
     setManualOpen(false);
@@ -111,12 +114,12 @@ export default function SlotDetailScreen({ route }) {
   function confirmUnassign() {
     if (!slot?.current_book) return;
     Alert.alert(
-      'Unassign book?',
-      `Remove "${slot.current_book.static_code}" from this slot?`,
+      t('slotDetail.unassignTitle'),
+      t('slotDetail.unassignMessage', { code: slot.current_book.static_code }),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Unassign',
+          text: t('slotDetail.unassign'),
           style: 'destructive',
           onPress: handleUnassign,
         },
@@ -131,7 +134,7 @@ export default function SlotDetailScreen({ route }) {
       await unassignBook(slot.current_book.book_id);
       await loadSlot();
     } catch (err) {
-      Alert.alert(err.code || 'Could not unassign', err.message || 'Try again.');
+      Alert.alert(err.code || t('slotDetail.couldNotUnassign'), err.message || t('common.tryAgain'));
     } finally {
       setBusy(false);
     }
@@ -140,10 +143,10 @@ export default function SlotDetailScreen({ route }) {
   function handleReturnSuccess(result) {
     setReturnOpen(false);
     Alert.alert(
-      'Book returned',
+      t('returnBook.bookReturned'),
       result.close_scan_recorded
-        ? `Pre-return revenue preserved at position ${result.position}.`
-        : 'Book unassigned and marked returned.'
+        ? t('returnBook.revenuePreserved', { position: result.position })
+        : t('returnBook.noRevenue')
     );
     loadSlot();
   }
@@ -162,7 +165,7 @@ export default function SlotDetailScreen({ route }) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
-          <Text>Slot not found.</Text>
+          <Text>{t('slotDetail.slotNotFound')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -174,7 +177,7 @@ export default function SlotDetailScreen({ route }) {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>← Slots</Text>
+          <Text style={styles.backText}>← {t('books.title')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -195,24 +198,21 @@ export default function SlotDetailScreen({ route }) {
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>
-            {hasBook ? 'Current Book' : 'Slot Empty'}
+            {hasBook ? t('slotDetail.currentBook') : t('slotDetail.slotEmpty')}
           </Text>
 
           {hasBook ? (
             <>
-              <KV k="Static Code" v={slot.current_book.static_code} />
-              <KV k="Start Position" v={slot.current_book.start_position} />
-              <KV k="Book Name" v={slot.current_book.book_name || '—'} />
+              <KV k={t('slotDetail.staticCode')} v={slot.current_book.static_code} />
+              <KV k={t('slotDetail.startPosition')} v={slot.current_book.start_position} />
+              <KV k={t('slotDetail.bookName')} v={slot.current_book.book_name || '—'} />
             </>
           ) : (
-            <Text style={styles.emptyText}>
-              No book assigned. Scan or type a barcode to assign one.
-            </Text>
+            <Text style={styles.emptyText}>{t('slotDetail.noBookHint')}</Text>
           )}
         </View>
 
         <View style={styles.actionsCard}>
-          {/* Admin-only: assign and unassign */}
           {isAdmin && (
             <>
               <TouchableOpacity
@@ -221,7 +221,7 @@ export default function SlotDetailScreen({ route }) {
                 disabled={busy}
               >
                 <Text style={styles.actionButtonText}>
-                  📷  {hasBook ? 'Replace Book (Scan)' : 'Assign Book (Scan)'}
+                  {hasBook ? t('slotDetail.replaceScan') : t('slotDetail.assignScan')}
                 </Text>
               </TouchableOpacity>
 
@@ -231,39 +231,35 @@ export default function SlotDetailScreen({ route }) {
                 disabled={busy}
               >
                 <Text style={styles.secondaryActionText}>
-                  ⌨  {hasBook ? 'Replace Book (Manual)' : 'Assign Book (Manual)'}
+                  {hasBook ? t('slotDetail.replaceManual') : t('slotDetail.assignManual')}
                 </Text>
               </TouchableOpacity>
             </>
           )}
 
-          {/* Available to any user when a book is present: Return */}
           {hasBook && (
             <TouchableOpacity
               style={[styles.actionButton, styles.warningAction, busy && styles.disabled]}
               onPress={() => setReturnOpen(true)}
               disabled={busy}
             >
-              <Text style={styles.warningActionText}>↩️  Return to Vendor</Text>
+              <Text style={styles.warningActionText}>{t('slotDetail.returnToVendor')}</Text>
             </TouchableOpacity>
           )}
 
-          {/* Admin-only: unassign */}
           {isAdmin && hasBook && (
             <TouchableOpacity
               style={[styles.actionButton, styles.dangerAction, busy && styles.disabled]}
               onPress={confirmUnassign}
               disabled={busy}
             >
-              <Text style={styles.dangerActionText}>Unassign Book</Text>
+              <Text style={styles.dangerActionText}>{t('slotDetail.unassignBook')}</Text>
             </TouchableOpacity>
           )}
         </View>
 
         {!isAdmin && !hasBook && (
-          <Text style={styles.adminHint}>
-            Slot management is admin-only.
-          </Text>
+          <Text style={styles.adminHint}>{t('slotDetail.adminOnly')}</Text>
         )}
       </ScrollView>
 
@@ -278,16 +274,14 @@ export default function SlotDetailScreen({ route }) {
           style={styles.modalBackdrop}
         >
           <View style={styles.modalCard}>
-            <Text style={styles.modalTitle}>Enter Barcode</Text>
-            <Text style={styles.modalHint}>
-              Type the full barcode including the 3-digit position at the end.
-            </Text>
+            <Text style={styles.modalTitle}>{t('slotDetail.manualEntryTitle')}</Text>
+            <Text style={styles.modalHint}>{t('slotDetail.manualEntryHint')}</Text>
 
             <TextInput
               style={styles.modalInput}
               value={manualBarcode}
               onChangeText={setManualBarcode}
-              placeholder="e.g. 1234567890000"
+              placeholder={t('slotDetail.manualEntryPlaceholder')}
               autoFocus
               autoCapitalize="none"
               autoCorrect={false}
@@ -304,26 +298,26 @@ export default function SlotDetailScreen({ route }) {
                   setManualBarcode('');
                 }}
               >
-                <Text style={styles.modalCancelText}>Cancel</Text>
+                <Text style={styles.modalCancelText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.modalButton, styles.modalConfirm]}
                 onPress={submitManual}
               >
-                <Text style={styles.modalConfirmText}>Assign</Text>
+                <Text style={styles.modalConfirmText}>{t('slotDetail.assign')}</Text>
               </TouchableOpacity>
             </View>
           </View>
         </KeyboardAvoidingView>
+      </Modal>
 
-        <ReturnBookModal
+      <ReturnBookModal
         visible={returnOpen}
         bookId={slot?.current_book?.book_id}
         prefilledStaticCode={slot?.current_book?.static_code}
         onCancel={() => setReturnOpen(false)}
         onSuccess={handleReturnSuccess}
       />
-      </Modal>
     </SafeAreaView>
   );
 }
@@ -394,6 +388,12 @@ const styles = StyleSheet.create({
     borderColor: '#1a73e8',
   },
   secondaryActionText: { color: '#1a73e8', fontSize: 16, fontWeight: '600' },
+  warningAction: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#d97706',
+  },
+  warningActionText: { color: '#d97706', fontSize: 16, fontWeight: '600' },
   dangerAction: {
     backgroundColor: '#fff',
     borderWidth: 1,
@@ -401,12 +401,7 @@ const styles = StyleSheet.create({
   },
   dangerActionText: { color: '#dc3545', fontSize: 16, fontWeight: '600' },
   disabled: { opacity: 0.6 },
-  warningAction: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#d97706',
-  },
-  warningActionText: { color: '#d97706', fontSize: 16, fontWeight: '600' },
+
   adminHint: {
     textAlign: 'center',
     color: '#888',
@@ -436,11 +431,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#fafafa',
   },
-  modalActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 20,
-  },
+  modalActions: { flexDirection: 'row', gap: 12, marginTop: 20 },
   modalButton: {
     flex: 1,
     padding: 14,

@@ -13,18 +13,11 @@ import {
   Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 
 import { returnBookToVendor } from '../api/wholeBookSale';
 import api from '../api/client';
 
-/**
- * Props:
- *   visible    — boolean
- *   bookId     — known book id (from SlotDetail). If null, modal will look up by barcode.
- *   prefilledStaticCode — optional, for prefilling input/visual context
- *   onCancel   — () => void
- *   onSuccess  — (result) => void
- */
 export default function ReturnBookModal({
   visible,
   bookId,
@@ -32,6 +25,7 @@ export default function ReturnBookModal({
   onCancel,
   onSuccess,
 }) {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const [barcode, setBarcode] = useState('');
   const [pin, setPin] = useState('');
@@ -53,7 +47,6 @@ export default function ReturnBookModal({
   async function resolveBookId(scannedBarcode) {
     if (bookId) return bookId;
 
-    // Look up book by static_code (barcode minus last 3 digits)
     const staticCode = scannedBarcode.slice(0, -3);
     if (staticCode.length < 1) {
       throw {
@@ -68,7 +61,7 @@ export default function ReturnBookModal({
     if (!match) {
       throw {
         code: 'BOOK_NOT_FOUND',
-        message: 'No active book matches this barcode.',
+        message: t('returnBook.notFoundHint'),
       };
     }
     return match.book_id;
@@ -76,11 +69,11 @@ export default function ReturnBookModal({
 
   async function handleSubmit() {
     if (!barcode.trim()) {
-      Alert.alert('Missing barcode', 'Scan or type the book barcode.');
+      Alert.alert(t('returnBook.missingBarcode'), t('returnBook.missingBarcodeHint'));
       return;
     }
     if (!/^\d{4}$/.test(pin)) {
-      Alert.alert('Invalid PIN', 'Store PIN must be exactly 4 digits.');
+      Alert.alert(t('returnBook.invalidPin'), t('returnBook.invalidPinHint'));
       return;
     }
 
@@ -101,18 +94,15 @@ export default function ReturnBookModal({
 
   function handleError(err) {
     if (err.code === 'INVALID_PIN') {
-      Alert.alert('Wrong PIN', 'The store PIN is incorrect.');
+      Alert.alert(t('returnBook.wrongPin'), t('returnBook.wrongPinHint'));
     } else if (err.code === 'PIN_LOCKOUT') {
-      Alert.alert('Locked out', err.message || 'Too many failed PIN attempts.');
+      Alert.alert(t('returnBook.lockedOut'), err.message || t('returnBook.lockedOutHint'));
     } else if (err.code === 'BARCODE_MISMATCH') {
-      Alert.alert(
-        'Wrong barcode',
-        'The scanned barcode does not match this book.'
-      );
+      Alert.alert(t('returnBook.wrongBarcode'), t('returnBook.wrongBarcodeHint'));
     } else if (err.code === 'BOOK_NOT_FOUND') {
-      Alert.alert('Not found', 'No active book matches this barcode.');
+      Alert.alert(t('returnBook.notFound'), t('returnBook.notFoundHint'));
     } else {
-      Alert.alert(err.code || 'Error', err.message || 'Could not return book.');
+      Alert.alert(err.code || t('common.error'), err.message || t('common.tryAgain'));
     }
   }
 
@@ -129,25 +119,23 @@ export default function ReturnBookModal({
       >
         <View style={styles.card}>
           <ScrollView keyboardShouldPersistTaps="handled">
-            <Text style={styles.title}>Return to Vendor</Text>
-            <Text style={styles.subtitle}>
-              Lottery salesman is removing this book. Pre-return revenue will be preserved.
-            </Text>
+            <Text style={styles.title}>{t('returnBook.title')}</Text>
+            <Text style={styles.subtitle}>{t('returnBook.subtitle')}</Text>
 
             {prefilledStaticCode && (
               <View style={styles.contextCard}>
-                <Text style={styles.contextLabel}>Returning</Text>
+                <Text style={styles.contextLabel}>{t('returnBook.returning')}</Text>
                 <Text style={styles.contextValue}>{prefilledStaticCode}</Text>
               </View>
             )}
 
-            <Text style={styles.label}>Barcode</Text>
+            <Text style={styles.label}>{t('returnBook.barcode')}</Text>
             <View style={styles.barcodeRow}>
               <TextInput
                 style={[styles.input, styles.barcodeInput]}
                 value={barcode}
                 onChangeText={setBarcode}
-                placeholder="Scan or type"
+                placeholder={t('returnBook.barcodePlaceholder')}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
@@ -156,11 +144,11 @@ export default function ReturnBookModal({
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.label}>Store PIN</Text>
+            <Text style={styles.label}>{t('returnBook.storePin')}</Text>
             <TextInput
               style={styles.input}
               value={pin}
-              onChangeText={(t) => setPin(t.replace(/\D/g, '').slice(0, 4))}
+              onChangeText={(text) => setPin(text.replace(/\D/g, '').slice(0, 4))}
               placeholder="••••"
               keyboardType="number-pad"
               secureTextEntry
@@ -173,7 +161,7 @@ export default function ReturnBookModal({
                 onPress={onCancel}
                 disabled={busy}
               >
-                <Text style={styles.cancelText}>Cancel</Text>
+                <Text style={styles.cancelText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.button, styles.submitButton, busy && styles.disabled]}
@@ -183,7 +171,7 @@ export default function ReturnBookModal({
                 {busy ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.submitText}>Confirm Return</Text>
+                  <Text style={styles.submitText}>{t('returnBook.confirmReturn')}</Text>
                 )}
               </TouchableOpacity>
             </View>

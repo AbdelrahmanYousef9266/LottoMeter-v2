@@ -11,10 +11,13 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+
 import { login } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
 
 export default function LoginScreen() {
+  const { t } = useTranslation();
   const { setUser } = useAuth();
   const [storeCode, setStoreCode] = useState('LM001');
   const [username, setUsername] = useState('admin');
@@ -23,7 +26,7 @@ export default function LoginScreen() {
 
   async function handleLogin() {
     if (!storeCode || !username || !password) {
-      Alert.alert('Missing info', 'Please fill all fields.');
+      Alert.alert(t('common.error'), t('auth.missingFields'));
       return;
     }
     setBusy(true);
@@ -32,8 +35,8 @@ export default function LoginScreen() {
       setUser(data.user);
     } catch (err) {
       Alert.alert(
-        'Login failed',
-        err.message || 'Could not log in.'
+        t('auth.loginFailed'),
+        err.message || t('auth.couldNotLogIn')
       );
     } finally {
       setBusy(false);
@@ -47,10 +50,10 @@ export default function LoginScreen() {
         style={styles.flex}
       >
         <View style={styles.inner}>
-          <Text style={styles.title}>LottoMeter</Text>
-          <Text style={styles.subtitle}>Sign in to your store</Text>
+          <Text style={styles.title}>{t('auth.appName')}</Text>
+          <Text style={styles.subtitle}>{t('auth.subtitle')}</Text>
 
-          <Text style={styles.label}>Store Code</Text>
+          <Text style={styles.label}>{t('auth.storeCode')}</Text>
           <TextInput
             style={styles.input}
             value={storeCode}
@@ -60,7 +63,7 @@ export default function LoginScreen() {
             placeholder="LM001"
           />
 
-          <Text style={styles.label}>Username</Text>
+          <Text style={styles.label}>{t('auth.username')}</Text>
           <TextInput
             style={styles.input}
             value={username}
@@ -70,7 +73,7 @@ export default function LoginScreen() {
             placeholder="admin"
           />
 
-          <Text style={styles.label}>Password</Text>
+          <Text style={styles.label}>{t('auth.password')}</Text>
           <TextInput
             style={styles.input}
             value={password}
@@ -87,7 +90,7 @@ export default function LoginScreen() {
             {busy ? (
               <ActivityIndicator color="#fff" />
             ) : (
-              <Text style={styles.buttonText}>Sign In</Text>
+              <Text style={styles.buttonText}>{t('auth.signIn')}</Text>
             )}
           </TouchableOpacity>
         </View>

@@ -11,10 +11,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 
 import { listShifts } from '../api/shifts';
 
 export default function HistoryScreen() {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -25,9 +27,9 @@ export default function HistoryScreen() {
       const data = await listShifts({ limit: 50 });
       setShifts(data.shifts || []);
     } catch (err) {
-      Alert.alert('Error loading shifts', err.message || 'Try again.');
+      Alert.alert(t('history.errorLoadingShifts'), err.message || t('common.tryAgain'));
     }
-  }, []);
+  }, [t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -55,7 +57,7 @@ export default function HistoryScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>History</Text>
+        <Text style={styles.title}>{t('history.title')}</Text>
       </View>
 
       <ScrollView
@@ -66,16 +68,15 @@ export default function HistoryScreen() {
       >
         {shifts.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No shifts yet.</Text>
-            <Text style={styles.emptyHint}>
-              Closed shifts will appear here.
-            </Text>
+            <Text style={styles.emptyText}>{t('history.noShifts')}</Text>
+            <Text style={styles.emptyHint}>{t('history.noShiftsHint')}</Text>
           </View>
         ) : (
           shifts.map((shift) => (
             <ShiftCard
               key={shift.shift_id}
               shift={shift}
+              t={t}
               onPress={() =>
                 navigation.navigate('ReportDetail', { shiftId: shift.shift_id })
               }
@@ -87,33 +88,33 @@ export default function HistoryScreen() {
   );
 }
 
-function ShiftCard({ shift, onPress }) {
+function ShiftCard({ shift, t, onPress }) {
   const isOpen = shift.is_shift_open;
   const isVoided = shift.voided;
-  const status = shift.shift_status; // correct | over | short | null
+  const status = shift.shift_status;
 
   let badgeColor = '#888';
   let badgeBg = '#f0f0f0';
-  let badgeText = isOpen ? 'Open' : '—';
+  let badgeText = isOpen ? t('history.statusOpen') : '—';
 
   if (isVoided) {
-    badgeText = 'Voided';
+    badgeText = t('history.statusVoided');
     badgeColor = '#7c2d12';
     badgeBg = '#fee2e2';
   } else if (isOpen) {
-    badgeText = 'Open';
+    badgeText = t('history.statusOpen');
     badgeColor = '#1a73e8';
     badgeBg = '#e8f0fe';
   } else if (status === 'correct') {
-    badgeText = 'Correct';
+    badgeText = t('history.statusCorrect');
     badgeColor = '#166534';
     badgeBg = '#dcfce7';
   } else if (status === 'over') {
-    badgeText = 'Over';
+    badgeText = t('history.statusOver');
     badgeColor = '#b45309';
     badgeBg = '#fef3c7';
   } else if (status === 'short') {
-    badgeText = 'Short';
+    badgeText = t('history.statusShort');
     badgeColor = '#dc2626';
     badgeBg = '#fef2f2';
   }
@@ -124,18 +125,16 @@ function ShiftCard({ shift, onPress }) {
   return (
     <TouchableOpacity style={styles.card} onPress={onPress}>
       <View style={styles.cardHeader}>
-        <Text style={styles.cardDate}>
-          {formatDate(shift.shift_start_time)}
-        </Text>
+        <Text style={styles.cardDate}>{formatDate(shift.shift_start_time)}</Text>
         <View style={[styles.badge, { backgroundColor: badgeBg }]}>
           <Text style={[styles.badgeText, { color: badgeColor }]}>{badgeText}</Text>
         </View>
       </View>
 
       <View style={styles.cardBody}>
-        <KV k="Tickets Total" v={`$${tickets.toFixed(2)}`} />
-        <KV k="Difference" v={`$${diff.toFixed(2)}`} vColor={diffColor(diff, status)} />
-        <KV k="Sub-shifts" v={shift.subshift_count ?? '—'} />
+        <KV k={t('history.ticketsTotal')} v={`$${tickets.toFixed(2)}`} />
+        <KV k={t('history.difference')} v={`$${diff.toFixed(2)}`} vColor={diffColor(diff, status)} />
+        <KV k={t('history.subshifts')} v={shift.subshift_count ?? '—'} />
       </View>
     </TouchableOpacity>
   );
@@ -195,11 +194,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   cardDate: { fontSize: 14, fontWeight: '600', color: '#333' },
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
+  badge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
   badgeText: { fontSize: 12, fontWeight: '700' },
 
   cardBody: {},

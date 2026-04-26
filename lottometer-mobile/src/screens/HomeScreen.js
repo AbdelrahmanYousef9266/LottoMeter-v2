@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../context/AuthContext';
 import {
@@ -25,13 +26,14 @@ import WholeBookSaleModal from '../components/WholeBookSaleModal';
 import ReturnBookModal from '../components/ReturnBookModal';
 
 export default function HomeScreen() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
   const [shiftDetail, setShiftDetail] = useState(null);
 
-  const [closeMode, setCloseMode] = useState(null);   // null | 'handover' | 'final'
+  const [closeMode, setCloseMode] = useState(null);
   const [wbSaleOpen, setWbSaleOpen] = useState(false);
   const [returnOpen, setReturnOpen] = useState(false);
 
@@ -45,10 +47,10 @@ export default function HomeScreen() {
       const detail = await getShift(shifts[0].shift_id);
       setShiftDetail(detail);
     } catch (err) {
-      Alert.alert('Error loading shift', err.message || 'Network error');
+      Alert.alert(t('home.errorLoadingShift'), err.message || t('common.networkError'));
       setShiftDetail(null);
     }
-  }, []);
+  }, [t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -69,7 +71,7 @@ export default function HomeScreen() {
       await openShift();
       await loadCurrentShift();
     } catch (err) {
-      Alert.alert('Could not open shift', err.message || 'Try again.');
+      Alert.alert(t('home.couldNotOpenShift'), err.message || t('common.tryAgain'));
     } finally {
       setBusy(false);
     }
@@ -81,7 +83,7 @@ export default function HomeScreen() {
       await handoverSubshift(shiftDetail.main_shift.shift_id, payload);
       setCloseMode(null);
       await loadCurrentShift();
-      Alert.alert('Sub-shift ended', 'A new sub-shift has started.');
+      Alert.alert(t('home.subshiftEnded'), t('home.subshiftEndedHint'));
     } catch (err) {
       handleCloseError(err);
       throw err;
@@ -94,7 +96,7 @@ export default function HomeScreen() {
       await closeMainShift(shiftDetail.main_shift.shift_id, payload);
       setCloseMode(null);
       await loadCurrentShift();
-      Alert.alert('Main shift closed', 'View the report on the History tab.');
+      Alert.alert(t('home.mainShiftClosed'), t('home.mainShiftClosedHint'));
     } catch (err) {
       handleCloseError(err);
       throw err;
@@ -103,20 +105,21 @@ export default function HomeScreen() {
 
   function handleCloseError(err) {
     if (err.code === 'BOOKS_NOT_CLOSED') {
-      Alert.alert(
-        'Books not closed',
-        err.message || 'Some active books still need close scans. Go to the Scan tab and record final positions.'
-      );
+      Alert.alert(t('closeShift.booksNotClosed'), err.message || t('closeShift.booksNotClosedHint'));
     } else {
-      Alert.alert(err.code || 'Error', err.message || 'Could not close.');
+      Alert.alert(err.code || t('common.error'), err.message || t('common.tryAgain'));
     }
   }
 
   function handleWbSuccess(extraSale) {
     setWbSaleOpen(false);
     Alert.alert(
-      'Whole book sold',
-      `${extraSale.ticket_count} tickets at $${extraSale.ticket_price} → $${extraSale.value}`
+      t('wholeBook.wholeBookSold'),
+      t('wholeBook.wholeBookSoldDetails', {
+        count: extraSale.ticket_count,
+        price: extraSale.ticket_price,
+        value: extraSale.value,
+      })
     );
     loadCurrentShift();
   }
@@ -124,10 +127,10 @@ export default function HomeScreen() {
   function handleReturnSuccess(result) {
     setReturnOpen(false);
     Alert.alert(
-      'Book returned',
+      t('returnBook.bookReturned'),
       result.close_scan_recorded
-        ? `Pre-return revenue preserved at position ${result.position}.`
-        : 'Book unassigned and marked returned.'
+        ? t('returnBook.revenuePreserved', { position: result.position })
+        : t('returnBook.noRevenue')
     );
     loadCurrentShift();
   }
@@ -154,10 +157,12 @@ export default function HomeScreen() {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
-        <Text style={styles.greeting}>Hi, {user?.username}</Text>
+        <Text style={styles.greeting}>
+          {t('home.greeting', { name: user?.username || '' })}
+        </Text>
 
         {!shiftDetail ? (
-          <NoShiftView onOpen={handleOpenShift} busy={busy} />
+          <NoShiftView onOpen={handleOpenShift} busy={busy} t={t} />
         ) : (
           <ActiveShiftView
             shiftDetail={shiftDetail}
@@ -165,6 +170,7 @@ export default function HomeScreen() {
             onFinalClose={() => setCloseMode('final')}
             onSellWholeBook={() => setWbSaleOpen(true)}
             onReturnBook={() => setReturnOpen(true)}
+            t={t}
           />
         )}
       </ScrollView>
@@ -197,13 +203,11 @@ export default function HomeScreen() {
   );
 }
 
-function NoShiftView({ onOpen, busy }) {
+function NoShiftView({ onOpen, busy, t }) {
   return (
     <View style={styles.card}>
-      <Text style={styles.cardTitle}>No active shift</Text>
-      <Text style={styles.cardSubtitle}>
-        Open a shift to start scanning and tracking sales.
-      </Text>
+      <Text style={styles.cardTitle}>{t('home.noActiveShift')}</Text>
+      <Text style={styles.cardSubtitle}>{t('home.noActiveShiftHint')}</Text>
       <TouchableOpacity
         style={[styles.primaryButton, busy && styles.disabled]}
         onPress={onOpen}
@@ -212,7 +216,7 @@ function NoShiftView({ onOpen, busy }) {
         {busy ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.primaryButtonText}>Open Shift</Text>
+          <Text style={styles.primaryButtonText}>{t('home.openShift')}</Text>
         )}
       </TouchableOpacity>
     </View>
@@ -225,6 +229,7 @@ function ActiveShiftView({
   onFinalClose,
   onSellWholeBook,
   onReturnBook,
+  t,
 }) {
   const main = shiftDetail.main_shift;
   const subs = shiftDetail.subshifts || [];
@@ -236,58 +241,56 @@ function ActiveShiftView({
       <View style={styles.card}>
         <View style={styles.shiftHeader}>
           <View style={styles.activeBadge}>
-            <Text style={styles.activeBadgeText}>● Active</Text>
+            <Text style={styles.activeBadgeText}>{t('home.active')}</Text>
           </View>
-          <Text style={styles.shiftId}>Shift #{main.shift_id}</Text>
+          <Text style={styles.shiftId}>
+            {t('home.shiftId', { id: main.shift_id })}
+          </Text>
         </View>
-        <Text style={styles.cardTitle}>Main Shift</Text>
-        <KV k="Started by" v={main.opened_by?.username} />
-        <KV k="Started" v={formatTime(main.shift_start_time)} />
-        <KV k="Sub-shifts" v={subs.length} />
+        <Text style={styles.cardTitle}>{t('home.mainShift')}</Text>
+        <KV k={t('home.startedBy')} v={main.opened_by?.username} />
+        <KV k={t('home.started')} v={formatTime(main.shift_start_time)} />
+        <KV k={t('home.subshifts')} v={subs.length} />
       </View>
 
       {currentSub && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>
-            Sub-shift {currentSub.shift_number}
+            {t('home.subshift', { number: currentSub.shift_number })}
           </Text>
-          <KV k="Opened by" v={currentSub.opened_by?.username} />
-          <KV k="Started" v={formatTime(currentSub.shift_start_time)} />
+          <KV k={t('home.openedBy')} v={currentSub.opened_by?.username} />
+          <KV k={t('home.started')} v={formatTime(currentSub.shift_start_time)} />
           {currentPending && (
             <KV
-              k="Pending scans"
+              k={t('home.pendingScans')}
               v={currentPending.pending_scans?.length || 0}
             />
           )}
           {currentPending && !currentPending.is_initialized && (
             <View style={styles.banner}>
-              <Text style={styles.bannerText}>
-                ⚠ Scan all pending books to initialize this sub-shift
-              </Text>
+              <Text style={styles.bannerText}>{t('home.pendingBanner')}</Text>
             </View>
           )}
         </View>
       )}
 
-      {/* Quick actions */}
       <View style={styles.quickActions}>
         <TouchableOpacity style={styles.quickAction} onPress={onSellWholeBook}>
           <Text style={styles.quickActionEmoji}>📚</Text>
-          <Text style={styles.quickActionLabel}>Sell Whole Book</Text>
+          <Text style={styles.quickActionLabel}>{t('home.sellWholeBook')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.quickAction} onPress={onReturnBook}>
           <Text style={styles.quickActionEmoji}>↩️</Text>
-          <Text style={styles.quickActionLabel}>Return Book</Text>
+          <Text style={styles.quickActionLabel}>{t('home.returnBook')}</Text>
         </TouchableOpacity>
       </View>
 
-      {/* End shift actions */}
       <View style={styles.actions}>
         <TouchableOpacity style={styles.handoverButton} onPress={onHandover}>
-          <Text style={styles.handoverText}>End Sub-shift (Handover)</Text>
+          <Text style={styles.handoverText}>{t('home.endSubshift')}</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.endShiftButton} onPress={onFinalClose}>
-          <Text style={styles.endShiftText}>End Main Shift</Text>
+          <Text style={styles.endShiftText}>{t('home.endMainShift')}</Text>
         </TouchableOpacity>
       </View>
     </>
@@ -369,11 +372,7 @@ const styles = StyleSheet.create({
   primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   disabled: { opacity: 0.6 },
 
-  quickActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginBottom: 12,
-  },
+  quickActions: { flexDirection: 'row', gap: 10, marginBottom: 12 },
   quickAction: {
     flex: 1,
     backgroundColor: '#fff',

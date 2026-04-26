@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../context/AuthContext';
 import { listSlots, createSlot } from '../api/slots';
@@ -22,6 +23,7 @@ import { listSlots, createSlot } from '../api/slots';
 const VALID_PRICES = ['1.00', '2.00', '3.00', '5.00', '10.00', '20.00'];
 
 export default function BooksScreen() {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const navigation = useNavigation();
   const isAdmin = user?.role === 'admin';
@@ -36,9 +38,9 @@ export default function BooksScreen() {
       const data = await listSlots();
       setSlots(data.slots || []);
     } catch (err) {
-      Alert.alert('Error loading slots', err.message || 'Try again.');
+      Alert.alert(t('books.errorLoadingSlots'), err.message || t('common.tryAgain'));
     }
-  }, []);
+  }, [t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -66,13 +68,10 @@ export default function BooksScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Slots</Text>
+        <Text style={styles.title}>{t('books.title')}</Text>
         {isAdmin && (
-          <TouchableOpacity
-            style={styles.addButton}
-            onPress={() => setCreateOpen(true)}
-          >
-            <Text style={styles.addButtonText}>+ New Slot</Text>
+          <TouchableOpacity style={styles.addButton} onPress={() => setCreateOpen(true)}>
+            <Text style={styles.addButtonText}>{t('books.newSlot')}</Text>
           </TouchableOpacity>
         )}
       </View>
@@ -85,18 +84,15 @@ export default function BooksScreen() {
       >
         {slots.length === 0 ? (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>No slots yet.</Text>
-            {isAdmin && (
-              <Text style={styles.emptyHint}>
-                Tap "+ New Slot" to create your first one.
-              </Text>
-            )}
+            <Text style={styles.emptyText}>{t('books.noSlots')}</Text>
+            {isAdmin && <Text style={styles.emptyHint}>{t('books.noSlotsHint')}</Text>}
           </View>
         ) : (
           slots.map((slot) => (
             <SlotCard
               key={slot.slot_id}
               slot={slot}
+              t={t}
               onPress={() =>
                 navigation.navigate('SlotDetail', { slotId: slot.slot_id })
               }
@@ -107,6 +103,7 @@ export default function BooksScreen() {
 
       <CreateSlotModal
         visible={createOpen}
+        t={t}
         onClose={() => setCreateOpen(false)}
         onCreated={() => {
           setCreateOpen(false);
@@ -117,7 +114,7 @@ export default function BooksScreen() {
   );
 }
 
-function SlotCard({ slot, onPress }) {
+function SlotCard({ slot, t, onPress }) {
   const hasBook = !!slot.current_book;
   return (
     <TouchableOpacity style={styles.slotCard} onPress={onPress}>
@@ -133,18 +130,18 @@ function SlotCard({ slot, onPress }) {
             📚 {slot.current_book.static_code}
           </Text>
           <Text style={styles.slotSubMeta}>
-            Position {slot.current_book.start_position}
+            {t('books.emptyPositionLabel', { position: slot.current_book.start_position })}
             {slot.current_book.book_name ? ` · ${slot.current_book.book_name}` : ''}
           </Text>
         </View>
       ) : (
-        <Text style={styles.slotEmpty}>Empty — tap to assign a book</Text>
+        <Text style={styles.slotEmpty}>{t('books.emptySlotHint')}</Text>
       )}
     </TouchableOpacity>
   );
 }
 
-function CreateSlotModal({ visible, onClose, onCreated }) {
+function CreateSlotModal({ visible, t, onClose, onCreated }) {
   const [slotName, setSlotName] = useState('');
   const [price, setPrice] = useState('5.00');
   const [busy, setBusy] = useState(false);
@@ -156,7 +153,7 @@ function CreateSlotModal({ visible, onClose, onCreated }) {
 
   async function handleCreate() {
     if (!slotName.trim()) {
-      Alert.alert('Missing name', 'Enter a slot name.');
+      Alert.alert(t('books.missingName'), t('books.missingNameHint'));
       return;
     }
     setBusy(true);
@@ -165,44 +162,36 @@ function CreateSlotModal({ visible, onClose, onCreated }) {
       reset();
       onCreated();
     } catch (err) {
-      Alert.alert(err.code || 'Error', err.message || 'Could not create slot.');
+      Alert.alert(err.code || t('common.error'), err.message || t('books.couldNotCreate'));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={onClose}
-    >
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.modalBackdrop}
       >
         <View style={styles.modalCard}>
-          <Text style={styles.modalTitle}>New Slot</Text>
+          <Text style={styles.modalTitle}>{t('books.newSlotTitle')}</Text>
 
-          <Text style={styles.label}>Slot Name</Text>
+          <Text style={styles.label}>{t('books.slotName')}</Text>
           <TextInput
             style={styles.input}
             value={slotName}
             onChangeText={setSlotName}
-            placeholder="e.g. Slot A"
+            placeholder={t('books.slotNamePlaceholder')}
             autoFocus
           />
 
-          <Text style={styles.label}>Ticket Price</Text>
+          <Text style={styles.label}>{t('books.ticketPrice')}</Text>
           <View style={styles.priceGrid}>
             {VALID_PRICES.map((p) => (
               <TouchableOpacity
                 key={p}
-                style={[
-                  styles.priceOption,
-                  price === p && styles.priceOptionActive,
-                ]}
+                style={[styles.priceOption, price === p && styles.priceOptionActive]}
                 onPress={() => setPrice(p)}
               >
                 <Text
@@ -223,7 +212,7 @@ function CreateSlotModal({ visible, onClose, onCreated }) {
               onPress={onClose}
               disabled={busy}
             >
-              <Text style={styles.modalCancelText}>Cancel</Text>
+              <Text style={styles.modalCancelText}>{t('common.cancel')}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.modalButton, styles.modalConfirm, busy && styles.disabled]}
@@ -233,7 +222,7 @@ function CreateSlotModal({ visible, onClose, onCreated }) {
               {busy ? (
                 <ActivityIndicator color="#fff" />
               ) : (
-                <Text style={styles.modalConfirmText}>Create</Text>
+                <Text style={styles.modalConfirmText}>{t('books.create')}</Text>
               )}
             </TouchableOpacity>
           </View>
@@ -317,11 +306,7 @@ const styles = StyleSheet.create({
     padding: 20,
     paddingBottom: 40,
   },
-  modalTitle: {
-    fontSize: 22,
-    fontWeight: '700',
-    marginBottom: 16,
-  },
+  modalTitle: { fontSize: 22, fontWeight: '700', marginBottom: 16 },
   label: {
     fontSize: 13,
     color: '#444',
@@ -337,12 +322,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     backgroundColor: '#fafafa',
   },
-
-  priceGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
+  priceGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   priceOption: {
     paddingHorizontal: 16,
     paddingVertical: 10,
@@ -350,31 +330,20 @@ const styles = StyleSheet.create({
     borderColor: '#ddd',
     borderRadius: 8,
   },
-  priceOptionActive: {
-    borderColor: '#1a73e8',
-    backgroundColor: '#e8f0fe',
-  },
+  priceOptionActive: { borderColor: '#1a73e8', backgroundColor: '#e8f0fe' },
   priceOptionText: { color: '#666', fontWeight: '600' },
   priceOptionTextActive: { color: '#1a73e8' },
 
-  modalActions: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 24,
-  },
+  modalActions: { flexDirection: 'row', gap: 12, marginTop: 24 },
   modalButton: {
     flex: 1,
     padding: 14,
     borderRadius: 8,
     alignItems: 'center',
   },
-  modalCancel: {
-    backgroundColor: '#f0f0f0',
-  },
+  modalCancel: { backgroundColor: '#f0f0f0' },
   modalCancelText: { color: '#444', fontWeight: '600' },
-  modalConfirm: {
-    backgroundColor: '#1a73e8',
-  },
+  modalConfirm: { backgroundColor: '#1a73e8' },
   modalConfirmText: { color: '#fff', fontWeight: '600' },
   disabled: { opacity: 0.6 },
 });

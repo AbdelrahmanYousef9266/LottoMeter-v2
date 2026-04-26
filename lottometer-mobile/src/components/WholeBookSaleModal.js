@@ -13,6 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 
 import { recordWholeBookSale } from '../api/wholeBookSale';
 
@@ -28,6 +29,7 @@ const LENGTH_BY_PRICE = {
 };
 
 export default function WholeBookSaleModal({ visible, subshiftId, onCancel, onSuccess }) {
+  const { t } = useTranslation();
   const navigation = useNavigation();
   const [barcode, setBarcode] = useState('');
   const [price, setPrice] = useState('5.00');
@@ -50,15 +52,15 @@ export default function WholeBookSaleModal({ visible, subshiftId, onCancel, onSu
 
   async function handleSubmit() {
     if (!barcode.trim()) {
-      Alert.alert('Missing barcode', 'Scan or type the book barcode.');
+      Alert.alert(t('wholeBook.missingBarcode'), t('wholeBook.missingBarcodeHint'));
       return;
     }
     if (!VALID_PRICES.includes(price)) {
-      Alert.alert('Invalid price', 'Pick a valid ticket price.');
+      Alert.alert(t('wholeBook.invalidPrice'), t('wholeBook.invalidPriceHint'));
       return;
     }
     if (!/^\d{4}$/.test(pin)) {
-      Alert.alert('Invalid PIN', 'Store PIN must be exactly 4 digits.');
+      Alert.alert(t('wholeBook.invalidPin'), t('wholeBook.invalidPinHint'));
       return;
     }
 
@@ -79,20 +81,16 @@ export default function WholeBookSaleModal({ visible, subshiftId, onCancel, onSu
 
   function handleError(err) {
     if (err.code === 'INVALID_PIN') {
-      Alert.alert('Wrong PIN', 'The store PIN is incorrect.');
+      Alert.alert(t('wholeBook.wrongPin'), t('wholeBook.wrongPinHint'));
     } else if (err.code === 'PIN_LOCKOUT') {
-      Alert.alert(
-        'Locked out',
-        err.message || 'Too many failed PIN attempts. Try again later.'
-      );
+      Alert.alert(t('wholeBook.lockedOut'), err.message || t('wholeBook.lockedOutHint'));
     } else if (err.code === 'PIN_NOT_CONFIGURED') {
-      Alert.alert('PIN not set', 'Ask an admin to set the store PIN first.');
+      Alert.alert(t('wholeBook.pinNotSet'), t('wholeBook.pinNotSetHint'));
     } else {
-      Alert.alert(err.code || 'Error', err.message || 'Could not record sale.');
+      Alert.alert(err.code || t('common.error'), err.message || t('common.tryAgain'));
     }
   }
 
-  // Live preview
   const ticketCount = LENGTH_BY_PRICE[price] || 0;
   const value = ticketCount * (parseFloat(price) || 0);
 
@@ -109,18 +107,16 @@ export default function WholeBookSaleModal({ visible, subshiftId, onCancel, onSu
       >
         <View style={styles.card}>
           <ScrollView keyboardShouldPersistTaps="handled">
-            <Text style={styles.title}>Sell Whole Book</Text>
-            <Text style={styles.subtitle}>
-              Customer is buying an entire book in one transaction.
-            </Text>
+            <Text style={styles.title}>{t('wholeBook.title')}</Text>
+            <Text style={styles.subtitle}>{t('wholeBook.subtitle')}</Text>
 
-            <Text style={styles.label}>Barcode</Text>
+            <Text style={styles.label}>{t('wholeBook.barcode')}</Text>
             <View style={styles.barcodeRow}>
               <TextInput
                 style={[styles.input, styles.barcodeInput]}
                 value={barcode}
                 onChangeText={setBarcode}
-                placeholder="Scan or type"
+                placeholder={t('wholeBook.barcodePlaceholder')}
                 autoCapitalize="none"
                 autoCorrect={false}
               />
@@ -129,7 +125,7 @@ export default function WholeBookSaleModal({ visible, subshiftId, onCancel, onSu
               </TouchableOpacity>
             </View>
 
-            <Text style={styles.label}>Ticket Price</Text>
+            <Text style={styles.label}>{t('wholeBook.ticketPrice')}</Text>
             <View style={styles.priceGrid}>
               {VALID_PRICES.map((p) => (
                 <TouchableOpacity
@@ -150,22 +146,22 @@ export default function WholeBookSaleModal({ visible, subshiftId, onCancel, onSu
             </View>
 
             <View style={styles.previewCard}>
-              <Text style={styles.previewLabel}>This Sale</Text>
+              <Text style={styles.previewLabel}>{t('wholeBook.thisSale')}</Text>
               <View style={styles.kvRow}>
-                <Text style={styles.kvKey}>Tickets</Text>
+                <Text style={styles.kvKey}>{t('wholeBook.tickets')}</Text>
                 <Text style={styles.kvValue}>{ticketCount}</Text>
               </View>
               <View style={styles.kvRow}>
-                <Text style={styles.kvKey}>Value</Text>
+                <Text style={styles.kvKey}>{t('wholeBook.value')}</Text>
                 <Text style={styles.kvValue}>${value.toFixed(2)}</Text>
               </View>
             </View>
 
-            <Text style={styles.label}>Store PIN</Text>
+            <Text style={styles.label}>{t('wholeBook.storePin')}</Text>
             <TextInput
               style={styles.input}
               value={pin}
-              onChangeText={(t) => setPin(t.replace(/\D/g, '').slice(0, 4))}
+              onChangeText={(text) => setPin(text.replace(/\D/g, '').slice(0, 4))}
               placeholder="••••"
               keyboardType="number-pad"
               secureTextEntry
@@ -178,7 +174,7 @@ export default function WholeBookSaleModal({ visible, subshiftId, onCancel, onSu
                 onPress={onCancel}
                 disabled={busy}
               >
-                <Text style={styles.cancelText}>Cancel</Text>
+                <Text style={styles.cancelText}>{t('common.cancel')}</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.button, styles.submitButton, busy && styles.disabled]}
@@ -188,7 +184,7 @@ export default function WholeBookSaleModal({ visible, subshiftId, onCancel, onSu
                 {busy ? (
                   <ActivityIndicator color="#fff" />
                 ) : (
-                  <Text style={styles.submitText}>Confirm Sale</Text>
+                  <Text style={styles.submitText}>{t('wholeBook.confirmSale')}</Text>
                 )}
               </TouchableOpacity>
             </View>

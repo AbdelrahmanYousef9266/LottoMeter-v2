@@ -9,8 +9,10 @@ import {
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
 
 export default function CameraScannerScreen({ navigation, route }) {
+  const { t } = useTranslation();
   const [permission, requestPermission] = useCameraPermissions();
   const [scanned, setScanned] = useState(false);
   const onScanned = route.params?.onScanned;
@@ -22,7 +24,6 @@ export default function CameraScannerScreen({ navigation, route }) {
     setScanned(true);
     Vibration.vibrate(60);
 
-    // Pass the barcode back to the previous screen
     if (typeof onScanned === 'function') {
       onScanned(data);
     }
@@ -30,7 +31,6 @@ export default function CameraScannerScreen({ navigation, route }) {
   }
 
   if (!permission) {
-    // Permission state still loading
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
@@ -44,18 +44,16 @@ export default function CameraScannerScreen({ navigation, route }) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
-          <Text style={styles.permTitle}>Camera permission required</Text>
-          <Text style={styles.permText}>
-            We need access to the camera to scan barcodes.
-          </Text>
+          <Text style={styles.permTitle}>{t('camera.permissionRequired')}</Text>
+          <Text style={styles.permText}>{t('camera.permissionHint')}</Text>
           <TouchableOpacity style={styles.permButton} onPress={requestPermission}>
-            <Text style={styles.permButtonText}>Grant Permission</Text>
+            <Text style={styles.permButtonText}>{t('camera.grantPermission')}</Text>
           </TouchableOpacity>
           <TouchableOpacity
             style={[styles.permButton, styles.cancelButton]}
             onPress={() => navigation.goBack()}
           >
-            <Text style={styles.cancelText}>Cancel</Text>
+            <Text style={styles.cancelText}>{t('camera.cancel')}</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
@@ -85,10 +83,9 @@ export default function CameraScannerScreen({ navigation, route }) {
         }}
       />
 
-      {/* Overlay */}
       <View style={styles.overlay}>
         <View style={styles.targetBox} />
-        <Text style={styles.hint}>Point camera at the barcode</Text>
+        <Text style={styles.hint}>{t('camera.hint')}</Text>
       </View>
 
       <SafeAreaView style={styles.bottom} edges={['bottom']}>
@@ -96,7 +93,7 @@ export default function CameraScannerScreen({ navigation, route }) {
           style={styles.cancelBtn}
           onPress={() => navigation.goBack()}
         >
-          <Text style={styles.cancelBtnText}>Cancel</Text>
+          <Text style={styles.cancelBtnText}>{t('camera.cancel')}</Text>
         </TouchableOpacity>
       </SafeAreaView>
     </View>

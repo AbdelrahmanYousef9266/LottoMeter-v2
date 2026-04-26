@@ -11,10 +11,12 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useTranslation } from 'react-i18next';
 
 import { getShiftReport } from '../api/reports';
 
 export default function ReportDetailScreen({ route }) {
+  const { t } = useTranslation();
   const { shiftId } = route.params;
   const navigation = useNavigation();
 
@@ -27,9 +29,9 @@ export default function ReportDetailScreen({ route }) {
       const data = await getShiftReport(shiftId);
       setReport(data);
     } catch (err) {
-      Alert.alert('Error', err.message || 'Could not load report.');
+      Alert.alert(t('common.error'), err.message || t('report.errorLoadingReport'));
     }
-  }, [shiftId]);
+  }, [shiftId, t]);
 
   useFocusEffect(
     useCallback(() => {
@@ -58,7 +60,7 @@ export default function ReportDetailScreen({ route }) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
-          <Text>Report not found.</Text>
+          <Text>{t('report.reportNotFound')}</Text>
         </View>
       </SafeAreaView>
     );
@@ -73,7 +75,7 @@ export default function ReportDetailScreen({ route }) {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>← History</Text>
+          <Text style={styles.backText}>{t('report.back')}</Text>
         </TouchableOpacity>
       </View>
 
@@ -83,35 +85,34 @@ export default function ReportDetailScreen({ route }) {
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
         }
       >
-        {/* Main Shift Summary */}
         <View style={styles.card}>
           <View style={styles.headerRow}>
-            <Text style={styles.title}>Main Shift #{main.shift_id}</Text>
-            <StatusBadge status={totals.shift_status} voided={main.voided} />
+            <Text style={styles.title}>
+              {t('report.mainShiftTitle', { id: main.shift_id })}
+            </Text>
+            <StatusBadge status={totals.shift_status} voided={main.voided} t={t} />
           </View>
-          <KV k="Started" v={formatTime(main.shift_start_time)} />
-          <KV k="Ended" v={formatTime(main.shift_end_time)} />
-          <KV k="Opened by" v={main.opened_by?.username} />
+          <KV k={t('report.started')} v={formatTime(main.shift_start_time)} />
+          <KV k={t('report.ended')} v={formatTime(main.shift_end_time)} />
+          <KV k={t('report.openedBy')} v={main.opened_by?.username} />
         </View>
 
-        {/* Totals */}
-        <SectionTitle text="Totals" />
+        <SectionTitle text={t('report.totals')} />
         <View style={styles.card}>
-          <KV k="Tickets Total" v={fmt$(totals.tickets_total)} />
-          <KV k="Gross Sales" v={fmt$(totals.gross_sales)} />
-          <KV k="Cash in Hand" v={fmt$(totals.cash_in_hand)} />
-          <KV k="Expected Cash" v={fmt$(totals.expected_cash)} />
+          <KV k={t('report.ticketsTotal')} v={fmt$(totals.tickets_total)} />
+          <KV k={t('report.grossSales')} v={fmt$(totals.gross_sales)} />
+          <KV k={t('report.cashInHand')} v={fmt$(totals.cash_in_hand)} />
+          <KV k={t('report.expectedCash')} v={fmt$(totals.expected_cash)} />
           <KV
-            k="Difference"
+            k={t('report.difference')}
             v={fmt$(totals.difference)}
             vColor={diffColor(totals.shift_status)}
           />
         </View>
 
-        {/* Ticket Breakdown */}
         {main.ticket_breakdown?.length > 0 && (
           <>
-            <SectionTitle text="Ticket Breakdown" />
+            <SectionTitle text={t('report.ticketBreakdown')} />
             <View style={styles.card}>
               {main.ticket_breakdown.map((row, i) => (
                 <View key={i} style={styles.kvRow}>
@@ -127,31 +128,29 @@ export default function ReportDetailScreen({ route }) {
           </>
         )}
 
-        {/* Sub-shifts */}
         {subshifts.length > 0 && (
           <>
-            <SectionTitle text="Sub-shifts" />
+            <SectionTitle text={t('report.subshifts')} />
             {subshifts.map((sub) => (
-              <SubshiftCard key={sub.shift_id} sub={sub} />
+              <SubshiftCard key={sub.shift_id} sub={sub} t={t} />
             ))}
           </>
         )}
 
-        {/* Voided sub-shifts */}
         {voidedSubshifts.length > 0 && (
           <>
-            <SectionTitle text="Voided Sub-shifts" />
+            <SectionTitle text={t('report.voidedSubshifts')} />
             {voidedSubshifts.map((sub) => (
               <View key={sub.shift_id} style={[styles.card, styles.voidedCard]}>
                 <View style={styles.headerRow}>
                   <Text style={styles.subTitle}>
-                    Sub-shift {sub.shift_number}
+                    {t('report.subshiftTitle', { number: sub.shift_number })}
                   </Text>
                   <View style={styles.voidedBadge}>
-                    <Text style={styles.voidedText}>VOIDED</Text>
+                    <Text style={styles.voidedText}>{t('report.voidedBadge')}</Text>
                   </View>
                 </View>
-                <KV k="Reason" v={sub.void_reason || '—'} />
+                <KV k={t('report.reason')} v={sub.void_reason || '—'} />
               </View>
             ))}
           </>
@@ -161,37 +160,38 @@ export default function ReportDetailScreen({ route }) {
   );
 }
 
-function SubshiftCard({ sub }) {
+function SubshiftCard({ sub, t }) {
   return (
     <View style={styles.card}>
       <View style={styles.headerRow}>
-        <Text style={styles.subTitle}>Sub-shift {sub.shift_number}</Text>
-        <StatusBadge status={sub.shift_status} voided={sub.voided} />
+        <Text style={styles.subTitle}>
+          {t('report.subshiftTitle', { number: sub.shift_number })}
+        </Text>
+        <StatusBadge status={sub.shift_status} voided={sub.voided} t={t} />
       </View>
 
-      <KV k="Opened by" v={sub.opened_by?.username} />
-      <KV k="Closed by" v={sub.closed_by?.username} />
-      <KV k="Started" v={formatTime(sub.shift_start_time)} />
-      <KV k="Ended" v={formatTime(sub.shift_end_time)} />
+      <KV k={t('report.openedBy')} v={sub.opened_by?.username} />
+      <KV k={t('report.closedBy')} v={sub.closed_by?.username} />
+      <KV k={t('report.started')} v={formatTime(sub.shift_start_time)} />
+      <KV k={t('report.ended')} v={formatTime(sub.shift_end_time)} />
 
       <View style={styles.divider} />
 
-      <KV k="Cash in Hand" v={fmt$(sub.cash_in_hand)} />
-      <KV k="Gross Sales" v={fmt$(sub.gross_sales)} />
-      <KV k="Cash Out" v={fmt$(sub.cash_out)} />
-      <KV k="Tickets Total" v={fmt$(sub.tickets_total)} />
-      <KV k="Expected Cash" v={fmt$(sub.expected_cash)} />
+      <KV k={t('report.cashInHand')} v={fmt$(sub.cash_in_hand)} />
+      <KV k={t('report.grossSales')} v={fmt$(sub.gross_sales)} />
+      <KV k={t('report.cashOut')} v={fmt$(sub.cash_out)} />
+      <KV k={t('report.ticketsTotal')} v={fmt$(sub.tickets_total)} />
+      <KV k={t('report.expectedCash')} v={fmt$(sub.expected_cash)} />
       <KV
-        k="Difference"
+        k={t('report.difference')}
         v={fmt$(sub.difference)}
         vColor={diffColor(sub.shift_status)}
       />
 
-      {/* Books */}
       {sub.books?.length > 0 && (
         <>
           <View style={styles.divider} />
-          <Text style={styles.sectionLabel}>Books</Text>
+          <Text style={styles.sectionLabel}>{t('report.books')}</Text>
           {sub.books.map((b, i) => (
             <View key={i} style={styles.bookRow}>
               <View style={styles.bookHeader}>
@@ -199,19 +199,18 @@ function SubshiftCard({ sub }) {
                 <Text style={styles.bookValue}>{fmt$(b.value)}</Text>
               </View>
               <Text style={styles.bookMeta}>
-                {b.slot_name} · ${b.ticket_price} · {b.open_position} → {b.close_position} · {b.tickets_sold} sold
-                {b.fully_sold && ' · ✓ sold out'}
+                {b.slot_name} · ${b.ticket_price} · {b.open_position} → {b.close_position} · {t('report.subshiftFooter', { count: b.tickets_sold })}
+                {b.fully_sold && ' · ' + t('report.soldOut')}
               </Text>
             </View>
           ))}
         </>
       )}
 
-      {/* Whole-book sales */}
       {sub.whole_book_sales?.length > 0 && (
         <>
           <View style={styles.divider} />
-          <Text style={styles.sectionLabel}>Whole-Book Sales</Text>
+          <Text style={styles.sectionLabel}>{t('report.wholeBookSales')}</Text>
           {sub.whole_book_sales.map((s) => (
             <View key={s.extra_sale_id} style={styles.bookRow}>
               <View style={styles.bookHeader}>
@@ -219,18 +218,17 @@ function SubshiftCard({ sub }) {
                 <Text style={styles.bookValue}>{fmt$(s.value)}</Text>
               </View>
               <Text style={styles.bookMeta}>
-                ${s.ticket_price} · {s.ticket_count} tickets · {s.created_by?.username}
+                ${s.ticket_price} · {s.ticket_count} · {s.created_by?.username}
               </Text>
             </View>
           ))}
         </>
       )}
 
-      {/* Returned books */}
       {sub.returned_books?.length > 0 && (
         <>
           <View style={styles.divider} />
-          <Text style={styles.sectionLabel}>Returned Books</Text>
+          <Text style={styles.sectionLabel}>{t('report.returnedBooks')}</Text>
           {sub.returned_books.map((r) => (
             <View key={r.book_id} style={styles.bookRow}>
               <View style={styles.bookHeader}>
@@ -238,18 +236,17 @@ function SubshiftCard({ sub }) {
                 <Text style={styles.bookValue}>{fmt$(r.value)}</Text>
               </View>
               <Text style={styles.bookMeta}>
-                {r.slot_name} · ${r.ticket_price} · {r.open_position} → {r.returned_at_position} · {r.tickets_sold} sold before return
+                {r.slot_name} · ${r.ticket_price} · {r.open_position} → {r.returned_at_position} · {t('report.soldBeforeReturn', { count: r.tickets_sold })}
               </Text>
             </View>
           ))}
         </>
       )}
 
-      {/* Ticket breakdown for sub-shift */}
       {sub.ticket_breakdown?.length > 0 && (
         <>
           <View style={styles.divider} />
-          <Text style={styles.sectionLabel}>Ticket Breakdown</Text>
+          <Text style={styles.sectionLabel}>{t('report.ticketBreakdown')}</Text>
           {sub.ticket_breakdown.map((row, i) => (
             <View key={i} style={styles.kvRow}>
               <Text style={styles.kvKey}>
@@ -266,25 +263,25 @@ function SubshiftCard({ sub }) {
   );
 }
 
-function StatusBadge({ status, voided }) {
+function StatusBadge({ status, voided, t }) {
   let color = '#888';
   let bg = '#f0f0f0';
   let text = '—';
 
   if (voided) {
-    text = 'Voided';
+    text = t('history.statusVoided');
     color = '#7c2d12';
     bg = '#fee2e2';
   } else if (status === 'correct') {
-    text = 'Correct';
+    text = t('history.statusCorrect');
     color = '#166534';
     bg = '#dcfce7';
   } else if (status === 'over') {
-    text = 'Over';
+    text = t('history.statusOver');
     color = '#b45309';
     bg = '#fef3c7';
   } else if (status === 'short') {
-    text = 'Short';
+    text = t('history.statusShort');
     color = '#dc2626';
     bg = '#fef2f2';
   }

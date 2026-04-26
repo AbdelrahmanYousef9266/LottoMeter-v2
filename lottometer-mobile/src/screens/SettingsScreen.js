@@ -7,20 +7,23 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+
 import { logout } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
 
 export default function SettingsScreen() {
+  const { t } = useTranslation();
   const { user, setUser } = useAuth();
 
   function confirmLogout() {
     Alert.alert(
-      'Log out?',
-      'You will need to sign in again.',
+      t('auth.logoutConfirmTitle'),
+      t('auth.logoutConfirmMessage'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('common.cancel'), style: 'cancel' },
         {
-          text: 'Log out',
+          text: t('auth.logout'),
           style: 'destructive',
           onPress: async () => {
             await logout();
@@ -34,17 +37,23 @@ export default function SettingsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.inner}>
-        <Text style={styles.title}>Settings</Text>
+        <Text style={styles.title}>{t('settings.title')}</Text>
 
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Account</Text>
-          <Text style={styles.text}>User: {user?.username || `#${user?.user_id}`}</Text>
-          <Text style={styles.text}>Role: {user?.role}</Text>
-          <Text style={styles.text}>Store: #{user?.store_id}</Text>
+          <Text style={styles.cardTitle}>{t('settings.account')}</Text>
+          <Text style={styles.text}>
+            {t('settings.user')}: {user?.username || `#${user?.user_id}`}
+          </Text>
+          <Text style={styles.text}>
+            {t('settings.role')}: {user?.role}
+          </Text>
+          <Text style={styles.text}>
+            {t('settings.store')}: #{user?.store_id}
+          </Text>
         </View>
 
         <TouchableOpacity style={styles.logoutButton} onPress={confirmLogout}>
-          <Text style={styles.logoutText}>Log Out</Text>
+          <Text style={styles.logoutText}>{t('auth.logout')}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
