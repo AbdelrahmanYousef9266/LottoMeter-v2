@@ -7,6 +7,7 @@ import { useAuth } from '../context/AuthContext';
 import LoginScreen from '../screens/LoginScreen';
 import MainTabs from './MainTabs';
 import CameraScannerScreen from '../screens/CameraScannerScreen';
+import SlotDetailScreen from '../screens/SlotDetailScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -27,6 +28,7 @@ export default function RootNavigator() {
         {user ? (
           <>
             <Stack.Screen name="Main" component={MainTabs} />
+            <Stack.Screen name="SlotDetail" component={SlotDetailScreen} />
             <Stack.Screen
               name="CameraScanner"
               component={CameraScannerScreen}

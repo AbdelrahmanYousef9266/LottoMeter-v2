@@ -114,12 +114,16 @@ def record_scan(
             code="INVALID_POSITION",
         )
 
-    # Rule 8: open scan cannot be (re)written after any close scan started in this sub-shift
+    # Rule 8: cannot REWRITE an existing open scan after any close scan has started.
+    # New opens for newly-assigned books are still allowed (they have no prior open
+    # scan in this sub-shift, so this isn't a "rewrite").
     if scan_type == "open" and _has_any_close_scan_in_subshift(shift_id):
-        raise ConflictError(
-            "Cannot record open scan after closing has started on this sub-shift.",
-            code="OPEN_RESCAN_BLOCKED",
-        )
+        prior_open = _open_scan_for(shift_id, static_code)
+        if prior_open is not None:
+            raise ConflictError(
+                "Cannot rewrite open scan after closing has started on this sub-shift.",
+                code="OPEN_RESCAN_BLOCKED",
+            )
 
     # Rule 7: close position >= open position
     if scan_type == "close":

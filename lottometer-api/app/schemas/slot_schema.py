@@ -36,11 +36,32 @@ class SlotUpdateSchema(Schema):
         _validate_ticket_price(value)
 
 
+def _current_book_for_slot(slot) -> dict | None:
+    """Find the active book in this slot, if any. Returns a dict or None."""
+    from app.models.book import Book
+
+    book = (
+        Book.query
+        .filter_by(slot_id=slot.slot_id, store_id=slot.store_id, is_active=True)
+        .first()
+    )
+    if book is None:
+        return None
+    return {
+        "book_id": book.book_id,
+        "static_code": book.static_code,
+        "barcode": book.barcode,
+        "start_position": book.start_position,
+        "book_name": book.book_name,
+        "ticket_price": str(book.ticket_price) if book.ticket_price is not None else None,
+    }
+
+
 def serialize_slot(slot) -> dict:
     """Serialize a Slot to dict matching API Contract §3."""
     return {
         "slot_id": slot.slot_id,
         "slot_name": slot.slot_name,
         "ticket_price": str(slot.ticket_price),
-        "current_book": None,  # populated when Book model exists
+        "current_book": _current_book_for_slot(slot),
     }
