@@ -51,3 +51,15 @@ build/
 
 # Migrations
 **/migrations/__pycache__/
+
+# Node / React Native / Expo
+node_modules/
+.expo/
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+*.orig.*
+web-build/
+.expo-shared/
