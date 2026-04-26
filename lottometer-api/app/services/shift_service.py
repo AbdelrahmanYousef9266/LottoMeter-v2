@@ -75,11 +75,11 @@ def get_pending_scans_for_subshift(
     subshift: ShiftDetails,
 ) -> list[Book]:
     """Books that are active and don't yet have an open scan in this sub-shift."""
-    open_barcodes = {
-        s.barcode for s in
+    open_static_codes = {
+        s.static_code for s in
         ShiftBooks.query.filter_by(shift_id=subshift.shift_id, scan_type="open").all()
     }
-    return [b for b in _all_active_books(store_id) if b.barcode not in open_barcodes]
+    return [b for b in _all_active_books(store_id) if b.static_code not in open_static_codes]
 
 
 # ---------- tickets_total computation ----------
@@ -93,21 +93,21 @@ def _compute_subshift_tickets_total(subshift_id: int) -> Decimal:
 
     # Scanned book sales: pair each open with its corresponding close
     open_scans = {
-        s.barcode: s for s in
+        s.static_code: s for s in
         ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="open").all()
     }
     close_scans = {
-        s.barcode: s for s in
+        s.static_code: s for s in
         ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="close").all()
     }
 
-    for barcode, close in close_scans.items():
-        open_scan = open_scans.get(barcode)
+    for static_code, close in close_scans.items():
+        open_scan = open_scans.get(static_code)
         if open_scan is None:
             continue  # unmatched close — skip (shouldn't happen with Rule 7 enforced)
 
         # Look up book to get ticket_price
-        book = Book.query.filter_by(barcode=barcode).first()
+        book = Book.query.filter_by(static_code=static_code).first()
         if book is None or book.ticket_price is None:
             continue
 
@@ -134,11 +134,11 @@ def _verify_all_active_books_have_close_scan(store_id: int, subshift_id: int) ->
     if not active_books:
         return
 
-    close_barcodes = {
-        s.barcode for s in
+    close_static_codes = {
+        s.static_code for s in
         ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="close").all()
     }
-    missing = [b for b in active_books if b.barcode not in close_barcodes]
+    missing = [b for b in active_books if b.static_code not in close_static_codes]
     if missing:
         raise BusinessRuleError(
             f"{len(missing)} active book(s) have no close scan. Scan them first.",
@@ -217,15 +217,16 @@ def _carry_forward_open_scans(
     for close in prev_close_scans:
         # Only carry if the book is still active and not sold
         book = Book.query.filter_by(
-            store_id=store_id, barcode=close.barcode
+            store_id=store_id, static_code=close.static_code
         ).first()
         if book is None or not book.is_active or book.is_sold:
             continue
 
         carried = ShiftBooks(
             shift_id=new_subshift_id,
-            barcode=close.barcode,
+            static_code=close.static_code,
             scan_type="open",
+            barcode=book.barcode,  # current barcode of the book
             start_at_scan=close.start_at_scan,
             is_last_ticket=False,
             scan_source="carried_forward",

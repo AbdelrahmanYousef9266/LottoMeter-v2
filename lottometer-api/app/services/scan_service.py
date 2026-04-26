@@ -53,16 +53,16 @@ def _has_any_close_scan_in_subshift(shift_id: int) -> bool:
     )
 
 
-def _existing_scan(shift_id: int, barcode: str, scan_type: str) -> ShiftBooks | None:
+def _existing_scan(shift_id: int, static_code: str, scan_type: str) -> ShiftBooks | None:
     return (
         ShiftBooks.query
-        .filter_by(shift_id=shift_id, barcode=barcode, scan_type=scan_type)
+        .filter_by(shift_id=shift_id, static_code=static_code, scan_type=scan_type)
         .first()
     )
 
 
-def _open_scan_for(shift_id: int, barcode: str) -> ShiftBooks | None:
-    return _existing_scan(shift_id, barcode, "open")
+def _open_scan_for(shift_id: int, static_code: str) -> ShiftBooks | None:
+    return _existing_scan(shift_id, static_code, "open")
 
 
 def record_scan(
@@ -71,7 +71,7 @@ def record_scan(
     shift_id: int,
     barcode: str,
     scan_type: str,
-) -> tuple[ShiftBooks, Book, ShiftDetails]:
+):
     """Process a scan with all 8 SRS rules.
 
     Returns: (scan_row, book, subshift)
@@ -123,7 +123,7 @@ def record_scan(
 
     # Rule 7: close position >= open position
     if scan_type == "close":
-        open_row = _open_scan_for(shift_id, barcode)
+        open_row = _open_scan_for(shift_id, static_code)
         if open_row is None:
             raise BusinessRuleError(
                 "Cannot record close scan: no open scan exists for this book in this sub-shift.",
@@ -136,23 +136,25 @@ def record_scan(
                 code="POSITION_BEFORE_OPEN",
             )
 
-    # Rule 5: duplicate (same shift + barcode + scan_type) → overwrite
+    # Rule 5: duplicate (same shift + book + scan_type) → overwrite
     is_last_ticket = (position == book_length - 1)
-    existing = _existing_scan(shift_id, barcode, scan_type)
+    existing = _existing_scan(shift_id, static_code, scan_type)
 
     if existing is not None:
+        existing.barcode = barcode
         existing.start_at_scan = position
         existing.is_last_ticket = is_last_ticket
         existing.scan_source = "scanned"
-        existing.slot_id = book.slot_id  # current slot at scan time
+        existing.slot_id = book.slot_id
         existing.scanned_at = datetime.now(timezone.utc)
         existing.scanned_by_user_id = user_id
         scan_row = existing
     else:
         scan_row = ShiftBooks(
             shift_id=shift_id,
-            barcode=barcode,
+            static_code=static_code,
             scan_type=scan_type,
+            barcode=barcode,
             start_at_scan=position,
             is_last_ticket=is_last_ticket,
             scan_source="scanned",
@@ -162,8 +164,15 @@ def record_scan(
         )
         db.session.add(scan_row)
 
-    # Last-ticket detection: mark sold, free slot, close history
-    if is_last_ticket:
+    # Last-ticket detection: marks the book sold ONLY when a close scan at
+    # the last position represents an actual sale this shift.
+    sold_this_scan = False
+    if is_last_ticket and scan_type == "close":
+        open_row = _open_scan_for(shift_id, static_code)
+        if open_row is not None and position > open_row.start_at_scan:
+            sold_this_scan = True
+
+    if sold_this_scan:
         book.is_sold = True
         book.is_active = False
         book.slot_id = None
@@ -184,7 +193,7 @@ def record_scan(
 
 
 def get_running_totals(shift_id: int) -> dict:
-    """Compact stats for the sub-shift: scan counts and a running tickets_total estimate."""
+    """Compact stats for the sub-shift: scan counts."""
     open_count = (
         ShiftBooks.query
         .filter_by(shift_id=shift_id, scan_type="open")
@@ -198,7 +207,6 @@ def get_running_totals(shift_id: int) -> dict:
     return {
         "books_scanned_open": open_count,
         "books_scanned_close": close_count,
-        # tickets_total is computed at close in Step 3b
     }
 
 
@@ -209,8 +217,8 @@ def pending_scans_remaining(store_id: int, shift_id: int) -> int:
         .filter_by(store_id=store_id, is_active=True, is_sold=False)
         .all()
     )
-    open_barcodes = {
-        s.barcode for s in
+    open_static_codes = {
+        s.static_code for s in
         ShiftBooks.query.filter_by(shift_id=shift_id, scan_type="open").all()
     }
-    return sum(1 for b in active if b.barcode not in open_barcodes)
+    return sum(1 for b in active if b.static_code not in open_static_codes)

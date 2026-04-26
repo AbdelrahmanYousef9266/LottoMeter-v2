@@ -348,7 +348,7 @@ def return_to_vendor(
             open_scan = (
                 ShiftBooks.query
                 .filter_by(
-                    shift_id=open_sub.shift_id, barcode=book.barcode, scan_type="open"
+                    shift_id=open_sub.shift_id, static_code=book.static_code, scan_type="open"
                 )
                 .first()
             )
@@ -364,11 +364,12 @@ def return_to_vendor(
                 existing_close = (
                     ShiftBooks.query
                     .filter_by(
-                        shift_id=open_sub.shift_id, barcode=book.barcode, scan_type="close"
+                        shift_id=open_sub.shift_id, static_code=book.static_code, scan_type="close"
                     )
                     .first()
                 )
                 if existing_close is not None:
+                    existing_close.barcode = barcode
                     existing_close.start_at_scan = position
                     existing_close.is_last_ticket = False
                     existing_close.scan_source = "returned_to_vendor"
@@ -378,8 +379,9 @@ def return_to_vendor(
                 else:
                     close_row = ShiftBooks(
                         shift_id=open_sub.shift_id,
-                        barcode=book.barcode,
+                        static_code=book.static_code,
                         scan_type="close",
+                        barcode=barcode,
                         start_at_scan=position,
                         is_last_ticket=False,
                         scan_source="returned_to_vendor",

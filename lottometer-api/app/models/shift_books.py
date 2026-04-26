@@ -5,8 +5,12 @@ from app.extensions import db
 
 
 class ShiftBooks(db.Model):
-    """A single scan event during a sub-shift. Composite PK allows two rows
-    per book per sub-shift: one open scan + one close scan.
+    """A single scan event during a sub-shift.
+
+    PK is (shift_id, static_code, scan_type) — keying on the book identity
+    (static_code), not the full barcode, so open and close scans for the
+    same book pair correctly even when their positions (and full barcodes)
+    differ.
     """
 
     __tablename__ = "shift_books"
@@ -16,9 +20,10 @@ class ShiftBooks(db.Model):
         db.ForeignKey("shift_details.shift_id"),
         primary_key=True,
     )
-    barcode = db.Column(db.String(100), primary_key=True)
+    static_code = db.Column(db.String(100), primary_key=True)
     scan_type = db.Column(db.String(10), primary_key=True)  # 'open' | 'close'
 
+    barcode = db.Column(db.String(100), nullable=False)  # full barcode at scan time
     start_at_scan = db.Column(db.Integer, nullable=False)
     is_last_ticket = db.Column(db.Boolean, nullable=False, default=False)
     scan_source = db.Column(
@@ -61,4 +66,4 @@ class ShiftBooks(db.Model):
     )
 
     def __repr__(self) -> str:
-        return f"<ShiftBooks shift={self.shift_id} barcode={self.barcode} type={self.scan_type}>"
+        return f"<ShiftBooks shift={self.shift_id} static_code={self.static_code} type={self.scan_type}>"

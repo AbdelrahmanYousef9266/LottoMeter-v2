@@ -47,13 +47,13 @@ def _build_slot_name_map(slot_ids: set[int]) -> dict[int, str]:
     }
 
 
-def _build_book_map(barcodes: set[str], store_id: int) -> dict[str, Book]:
-    if not barcodes:
+def _build_book_map_by_static_code(static_codes: set[str], store_id: int) -> dict[str, Book]:
+    if not static_codes:
         return {}
     return {
-        b.barcode: b
+        b.static_code: b
         for b in Book.query.filter(
-            Book.store_id == store_id, Book.barcode.in_(barcodes)
+            Book.store_id == store_id, Book.static_code.in_(static_codes)
         ).all()
     }
 
@@ -69,26 +69,26 @@ def _per_book_lines_for_subshift(
     'returned_books' = books whose close scan has scan_source='returned_to_vendor'.
     """
     open_scans = {
-        s.barcode: s for s in
+        s.static_code: s for s in
         ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="open").all()
     }
     close_scans = {
-        s.barcode: s for s in
+        s.static_code: s for s in
         ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="close").all()
     }
-    barcodes = set(open_scans) | set(close_scans)
-    book_map = _build_book_map(barcodes, store_id)
+    static_codes = set(open_scans) | set(close_scans)
+    book_map = _build_book_map_by_static_code(static_codes, store_id)
 
     regular = []
     returned = []
 
-    for barcode in sorted(barcodes):
-        book = book_map.get(barcode)
+    for static_code in sorted(static_codes):
+        book = book_map.get(static_code)
         if book is None:
             continue
 
-        open_scan = open_scans.get(barcode)
-        close_scan = close_scans.get(barcode)
+        open_scan = open_scans.get(static_code)
+        close_scan = close_scans.get(static_code)
 
         open_position = open_scan.start_at_scan if open_scan else None
         close_position = close_scan.start_at_scan if close_scan else None
@@ -172,20 +172,20 @@ def _ticket_breakdown_for_subshift(
 
     # Gather scanned sales
     open_scans = {
-        s.barcode: s for s in
+        s.static_code: s for s in
         ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="open").all()
     }
     close_scans = ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="close").all()
-    barcodes = set(open_scans) | {c.barcode for c in close_scans}
-    book_map = _build_book_map(barcodes, store_id)
+    static_codes = set(open_scans) | {c.static_code for c in close_scans}
+    book_map = _build_book_map_by_static_code(static_codes, store_id)
 
     # price → tickets_sold
     scanned_totals: dict[Decimal, int] = defaultdict(int)
     for close in close_scans:
-        open_scan = open_scans.get(close.barcode)
+        open_scan = open_scans.get(close.static_code)
         if open_scan is None:
             continue
-        book = book_map.get(close.barcode)
+        book = book_map.get(close.static_code)
         if book is None or book.ticket_price is None:
             continue
         sold = close.start_at_scan - open_scan.start_at_scan
@@ -269,16 +269,17 @@ def build_main_shift_report(store_id: int, main_shift_id: int) -> dict:
     for s in subs:
         user_ids.update({s.opened_by_user_id, s.closed_by_user_id, s.voided_by_user_id})
     # Plus return-to-vendor users from books referenced in scans
-    barcodes_in_subs = set()
+    static_codes_in_subs = set()
     for s in subs:
         for sb in ShiftBooks.query.filter_by(shift_id=s.shift_id).all():
-            barcodes_in_subs.add(sb.barcode)
-    if barcodes_in_subs:
+            static_codes_in_subs.add(sb.static_code)
+    if static_codes_in_subs:
         for b in Book.query.filter(
-            Book.store_id == store_id, Book.barcode.in_(barcodes_in_subs)
+            Book.store_id == store_id, Book.static_code.in_(static_codes_in_subs)
         ).all():
             if b.returned_by_user_id:
                 user_ids.add(b.returned_by_user_id)
+    # Cleanup the leftover variable name no longer used
     # Plus whole-book-sale creators
     for s in subs:
         for e in ShiftExtraSales.query.filter_by(shift_id=s.shift_id).all():

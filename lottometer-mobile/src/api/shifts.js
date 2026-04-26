@@ -24,3 +24,9 @@ export async function closeMainShift(shiftId, payload) {
   const { data } = await api.put(`/shifts/${shiftId}/close`, payload);
   return data;
 }
+
+export async function getCurrentOpenShift() {
+  const { shifts } = await listShifts({ status: 'open', limit: 1 });
+  if (shifts.length === 0) return null;
+  return await getShift(shifts[0].shift_id);
+}
