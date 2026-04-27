@@ -14,3 +14,14 @@ class ChangePinSchema(Schema):
         required=True,
         validate=validate.Regexp(r"^\d{4}$", error="PIN must be exactly 4 digits."),
     )
+
+
+class ChangeScanModeSchema(Schema):
+    """Validates PUT /api/store/settings/scan-mode request body."""
+
+    scan_mode = fields.Str(
+        required=True,
+        validate=validate.OneOf(
+            ["camera_single", "camera_continuous", "hardware_scanner"]
+        ),
+    )

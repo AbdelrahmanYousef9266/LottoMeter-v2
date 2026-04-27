@@ -255,7 +255,17 @@
     "pinFormatTitle": "Invalid format",
     "pinFormatHint": "PIN must be exactly 4 digits.",
     "currentPinWrongTitle": "Wrong current PIN",
-    "currentPinWrongHint": "The current PIN is incorrect."
+    "currentPinWrongHint": "The current PIN is incorrect.",
+    "scanMode": "Scan Mode",
+    "scanModeHint": "How barcodes are captured in this store. Affects all employees.",
+    "scanModeSingle": "Single Scan (Camera)",
+    "scanModeSingleDesc": "Tap to open camera, scan one barcode, return.",
+    "scanModeContinuous": "Continuous Scan (Camera)",
+    "scanModeContinuousDesc": "Open the camera once, scan many barcodes in a row, then tap Done.",
+    "scanModeHardware": "Hardware Scanner",
+    "scanModeHardwareDesc": "Use a USB or Bluetooth barcode scanner. Phone shows an input that captures keystrokes.",
+    "scanModeUpdatedTitle": "Scan mode updated",
+    "scanModeUpdatedHint": "All scan screens will use the new mode."
   },
 
   "closeShift": {

@@ -6,6 +6,7 @@ const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
+  const [store, setStore] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -14,7 +15,14 @@ export function AuthProvider({ children }) {
         const token = await getToken();
         if (token) {
           const me = await getMe();
-          setUser(me);
+          // /auth/me returns: { user_id, store_id, role, username, store }
+          setUser({
+            user_id: me.user_id,
+            store_id: me.store_id,
+            role: me.role,
+            username: me.username,
+          });
+          setStore(me.store || null);
         }
       } catch (_) {
         // Token invalid/expired
@@ -24,8 +32,20 @@ export function AuthProvider({ children }) {
     })();
   }, []);
 
+  // Helper: pull scan_mode out of the store, with a safe default
+  const scanMode = store?.scan_mode || 'camera_single';
+
   return (
-    <AuthContext.Provider value={{ user, setUser, loading }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        setUser,
+        store,
+        setStore,
+        scanMode,
+        loading,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

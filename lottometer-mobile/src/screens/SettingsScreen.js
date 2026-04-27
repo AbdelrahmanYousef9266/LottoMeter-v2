@@ -14,7 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 
 import { logout } from '../api/auth';
-import { changeStorePin } from '../api/store';
+import { changeStorePin, changeScanMode } from '../api/store';
 import { useAuth } from '../context/AuthContext';
 import { setStoredLanguage } from '../i18n';
 import { syncRTL } from '../utils/rtl';
@@ -27,7 +27,7 @@ const LANGUAGES = [
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
   const navigation = useNavigation();
-  const { user, setUser } = useAuth();
+  const { user, setUser, store, setStore, scanMode } = useAuth();
   const isAdmin = user?.role === 'admin';
 
   const [busy, setBusy] = useState(false);
@@ -38,6 +38,7 @@ export default function SettingsScreen() {
   const [newPin, setNewPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [pinSaving, setPinSaving] = useState(false);
+  const [scanModeSaving, setScanModeSaving] = useState(false);
 
   function confirmLogout() {
     Alert.alert(
@@ -112,6 +113,25 @@ export default function SettingsScreen() {
     }
   }
 
+async function handleScanModeChange(newMode) {
+    if (newMode === scanMode || scanModeSaving) return;
+    setScanModeSaving(true);
+    try {
+      const result = await changeScanMode(newMode);
+      // Update store in context so all screens see new mode immediately
+      setStore({ ...(store || {}), scan_mode: result.scan_mode });
+      Alert.alert(
+        t('settings.scanModeUpdatedTitle'),
+        t('settings.scanModeUpdatedHint')
+      );
+    } catch (err) {
+      Alert.alert(err.code || t('common.error'), err.message || t('common.tryAgain'));
+    } finally {
+      setScanModeSaving(false);
+    }
+  }
+
+
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -166,6 +186,38 @@ export default function SettingsScreen() {
             >
               <Text style={styles.manageUsersButtonText}>{t('users.title')}</Text>
             </TouchableOpacity>
+          </View>
+        )}
+
+        {isAdmin && (
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>{t('settings.scanMode')}</Text>
+            <Text style={styles.helperText}>{t('settings.scanModeHint')}</Text>
+
+            <ScanModeOption
+              code="camera_single"
+              label={t('settings.scanModeSingle')}
+              description={t('settings.scanModeSingleDesc')}
+              active={scanMode === 'camera_single'}
+              onPress={() => handleScanModeChange('camera_single')}
+              disabled={scanModeSaving}
+            />
+            <ScanModeOption
+              code="camera_continuous"
+              label={t('settings.scanModeContinuous')}
+              description={t('settings.scanModeContinuousDesc')}
+              active={scanMode === 'camera_continuous'}
+              onPress={() => handleScanModeChange('camera_continuous')}
+              disabled={scanModeSaving}
+            />
+            <ScanModeOption
+              code="hardware_scanner"
+              label={t('settings.scanModeHardware')}
+              description={t('settings.scanModeHardwareDesc')}
+              active={scanMode === 'hardware_scanner'}
+              onPress={() => handleScanModeChange('hardware_scanner')}
+              disabled={scanModeSaving}
+            />
           </View>
         )}
 
@@ -264,6 +316,29 @@ export default function SettingsScreen() {
   );
 }
 
+function ScanModeOption({ label, description, active, onPress, disabled }) {
+  return (
+    <TouchableOpacity
+      style={[styles.scanModeOption, active && styles.scanModeOptionActive]}
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.7}
+    >
+      <View style={styles.scanModeRow}>
+        <View style={styles.scanModeRadio}>
+          {active && <View style={styles.scanModeRadioInner} />}
+        </View>
+        <View style={styles.scanModeTextWrap}>
+          <Text style={[styles.scanModeLabel, active && styles.scanModeLabelActive]}>
+            {label}
+          </Text>
+          <Text style={styles.scanModeDescription}>{description}</Text>
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f4f5f7' },
   scroll: { padding: 16, paddingBottom: 32 },
@@ -291,6 +366,42 @@ const styles = StyleSheet.create({
   langText: { fontSize: 15, color: '#333', fontWeight: '500' },
   langTextActive: { color: '#1a73e8', fontWeight: '700' },
   checkmark: { color: '#1a73e8', fontSize: 18, fontWeight: '700' },
+
+  scanModeOption: {
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 6,
+    borderWidth: 1,
+    borderColor: '#eee',
+    backgroundColor: '#fff',
+  },
+  scanModeOptionActive: {
+    borderColor: '#1a73e8',
+    backgroundColor: '#e8f0fe',
+  },
+  scanModeRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  scanModeRadio: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 2,
+    borderColor: '#1a73e8',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+    marginRight: 12,
+  },
+  scanModeRadioInner: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#1a73e8',
+  },
+  scanModeTextWrap: { flex: 1 },
+  scanModeLabel: { fontSize: 15, color: '#222', fontWeight: '600' },
+  scanModeLabelActive: { color: '#1a73e8' },
+  scanModeDescription: { fontSize: 12, color: '#666', marginTop: 2 },
 
   manageUsersButton: {
     backgroundColor: '#1a73e8',

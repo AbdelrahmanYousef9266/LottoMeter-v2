@@ -18,7 +18,7 @@ import { useAuth } from '../context/AuthContext';
 
 export default function LoginScreen() {
   const { t } = useTranslation();
-  const { setUser } = useAuth();
+  const { setUser, setStore } = useAuth();
   const [storeCode, setStoreCode] = useState('LM001');
   const [username, setUsername] = useState('admin');
   const [password, setPassword] = useState('');
@@ -33,6 +33,7 @@ export default function LoginScreen() {
     try {
       const data = await login({ store_code: storeCode, username, password });
       setUser(data.user);
+      setStore(data.store || null);
     } catch (err) {
       Alert.alert(
         t('auth.loginFailed'),

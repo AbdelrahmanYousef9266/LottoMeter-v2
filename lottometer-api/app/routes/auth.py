@@ -8,6 +8,7 @@ from app.schemas.auth_schema import SetupRequestSchema, LoginRequestSchema
 from app.services import auth_service
 from app.errors import ValidationError
 from app.token_blocklist import add_to_blocklist
+from app.models.store import Store
 from app.auth_helpers import (
     admin_required,
     current_user_id,
@@ -57,11 +58,26 @@ def logout():
 @auth_bp.route("/me", methods=["GET"])
 @jwt_required()
 def me():
-    """Returns the authenticated user's claims — for verifying decorators."""
+    """Returns the authenticated user + their store info."""
+    from app.models.user import User
+
+    user_id = current_user_id()
+    store_id = current_store_id()
+
+    user = User.query.filter_by(user_id=user_id, store_id=store_id).first()
+    store = Store.query.filter_by(store_id=store_id).first()
+
     return jsonify({
-        "user_id": current_user_id(),
-        "store_id": current_store_id(),
+        "user_id": user_id,
+        "store_id": store_id,
         "role": current_role(),
+        "username": user.username if user else None,
+        "store": {
+            "store_id": store.store_id,
+            "store_name": store.store_name,
+            "store_code": store.store_code,
+            "scan_mode": store.scan_mode,
+        } if store else None,
     })
 
 

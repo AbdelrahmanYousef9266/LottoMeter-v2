@@ -255,7 +255,17 @@
     "pinFormatTitle": "تنسيق غير صالح",
     "pinFormatHint": "يجب أن يكون الرمز ٤ أرقام بالضبط.",
     "currentPinWrongTitle": "الرمز الحالي خاطئ",
-    "currentPinWrongHint": "الرمز الحالي غير صحيح."
+    "currentPinWrongHint": "الرمز الحالي غير صحيح.",
+    "scanMode": "وضع المسح",
+    "scanModeHint": "طريقة التقاط الباركود في هذا المتجر. ينطبق على جميع الموظفين.",
+    "scanModeSingle": "مسح فردي (كاميرا)",
+    "scanModeSingleDesc": "اضغط لفتح الكاميرا، امسح باركودًا واحدًا، ثم اخرج.",
+    "scanModeContinuous": "مسح متواصل (كاميرا)",
+    "scanModeContinuousDesc": "افتح الكاميرا مرة واحدة، امسح عدة باركودات، ثم اضغط تم.",
+    "scanModeHardware": "ماسح خارجي",
+    "scanModeHardwareDesc": "استخدم ماسح باركود USB أو بلوتوث. يظهر حقل إدخال يلتقط ضربات المفاتيح.",
+    "scanModeUpdatedTitle": "تم تحديث وضع المسح",
+    "scanModeUpdatedHint": "ستستخدم جميع شاشات المسح الوضع الجديد."
   },
 
   "closeShift": {

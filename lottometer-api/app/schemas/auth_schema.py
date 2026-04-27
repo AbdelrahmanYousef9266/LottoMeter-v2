@@ -21,7 +21,10 @@ class SetupRequestSchema(Schema):
     store_pin = fields.Str(
         required=True, validate=validate.Regexp(r"^\d{4}$", error="PIN must be exactly 4 digits.")
     )
-
+    scan_mode = fields.Str(
+        required=False,
+        validate=validate.OneOf(["camera_single", "camera_continuous", "hardware_scanner"]),
+    )
 
 class LoginRequestSchema(Schema):
     """Validates POST /api/auth/login request body."""

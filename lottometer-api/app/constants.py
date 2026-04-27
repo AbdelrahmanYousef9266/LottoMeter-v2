@@ -24,3 +24,12 @@ ALLOWED_TICKET_PRICES = set(LENGTH_BY_PRICE.keys())
 def last_position_for(ticket_price: Decimal) -> int:
     """Return the last (zero-indexed) position for a book at this price."""
     return LENGTH_BY_PRICE[ticket_price] - 1
+
+# Allowed scan modes for Store.scan_mode
+# Source: store setup workflow — admin chooses how barcodes are captured
+VALID_SCAN_MODES = {
+    "camera_single",       # tap to scan, scan one barcode, close camera
+    "camera_continuous",   # tap once, camera stays open, scan many in a row
+    "hardware_scanner",    # USB/Bluetooth scanner types into a focused input
+}
+DEFAULT_SCAN_MODE = "camera_single"

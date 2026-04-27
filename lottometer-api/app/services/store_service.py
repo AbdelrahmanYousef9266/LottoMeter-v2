@@ -31,3 +31,57 @@ def change_pin(store_id: int, current_pin: str, new_pin: str) -> dict:
     db.session.commit()
 
     return {"message": "Store PIN updated successfully."}
+
+def change_scan_mode(store_id: int, scan_mode: str) -> dict:
+    """Admin-only: change the store's scan mode preference.
+
+    Validation of allowed values is done at the schema layer.
+    """
+    from app.constants import VALID_SCAN_MODES
+
+    if scan_mode not in VALID_SCAN_MODES:
+        # Defense in depth — schema should catch this first
+        from app.errors import ValidationError
+        raise ValidationError(
+            f"Invalid scan_mode: {scan_mode}",
+            code="INVALID_SCAN_MODE",
+        )
+
+    store = Store.query.filter_by(store_id=store_id).first()
+    if store is None:
+        raise NotFoundError("Store not found.", code="STORE_NOT_FOUND")
+
+    store.scan_mode = scan_mode
+    db.session.commit()
+
+    return {
+        "message": "Scan mode updated successfully.",
+        "scan_mode": store.scan_mode,
+    }
+
+def change_scan_mode(store_id: int, scan_mode: str) -> dict:
+    """Admin-only: change the store's scan mode preference.
+
+    Validation of allowed values is done at the schema layer.
+    """
+    from app.constants import VALID_SCAN_MODES
+
+    if scan_mode not in VALID_SCAN_MODES:
+        # Defense in depth — schema should catch this first
+        from app.errors import ValidationError
+        raise ValidationError(
+            f"Invalid scan_mode: {scan_mode}",
+            code="INVALID_SCAN_MODE",
+        )
+
+    store = Store.query.filter_by(store_id=store_id).first()
+    if store is None:
+        raise NotFoundError("Store not found.", code="STORE_NOT_FOUND")
+
+    store.scan_mode = scan_mode
+    db.session.commit()
+
+    return {
+        "message": "Scan mode updated successfully.",
+        "scan_mode": store.scan_mode,
+    }

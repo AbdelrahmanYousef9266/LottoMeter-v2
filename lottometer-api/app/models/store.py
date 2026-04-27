@@ -18,6 +18,12 @@ class Store(db.Model):
     store_name = db.Column(db.String(150), nullable=False)
     store_code = db.Column(db.String(50), unique=True, nullable=False)
     store_pin_hash = db.Column(db.String(256), nullable=True)  # set during setup
+    scan_mode = db.Column(
+        db.String(30),
+        nullable=False,
+        default="camera_single",
+        server_default="camera_single",
+    )
     created_at = db.Column(
         db.DateTime,
         nullable=False,
