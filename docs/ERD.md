@@ -1,8 +1,8 @@
 # Entity Relationship Diagram — LottoMeter v2.0
 
-**Version:** 2.0
+**Version:** 2.1
 **Date:** April 2026
-**Status:** Final — aligned with SRS v5.0
+**Status:** Final — aligned with SRS v5.2
 
 ---
 
@@ -283,24 +283,31 @@ CREATE UNIQUE INDEX uq_one_open_main_shift_per_store
 
 ### 7. ShiftBooks
 
-Scan records. Composite PK allows two rows per book per sub-shift (open + close).
+Scan records. Composite PK keys on `static_code` (book identity) so open and close scans for the same book pair correctly even though their full barcodes differ by position.
 
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
 | shift_id | Integer | PK, FK → ShiftDetails | Always a sub-shift |
-| barcode | String(100) | PK | Scanned barcode string |
+| static_code | String(100) | PK | Book identifier (barcode minus last 3 digits) |
 | scan_type | String(10) | PK | `open` \| `close` |
+| barcode | String(100) | Not Null | Full barcode string at scan time (audit) |
 | start_at_scan | Integer | Not Null | Position extracted from barcode |
-| is_last_ticket | Boolean | Not Null, default False | |
+| is_last_ticket | Boolean | Not Null, default False | True only when scan_type=close AND close > open AND position is last |
 | scan_source | String(25) | Not Null, default 'scanned' | `scanned` \| `carried_forward` \| `whole_book_sale` \| `returned_to_vendor` |
 | slot_id | Integer | FK → Slot, Not Null | Slot at scan time (denormalized for reports) |
 | store_id | Integer | FK → Store, Not Null, Indexed | |
 | scanned_at | DateTime | Not Null, default now() | |
 | scanned_by_user_id | Integer | FK → User, Not Null | |
 
-**PK:** Composite `(shift_id, barcode, scan_type)`
+**PK:** Composite `(shift_id, static_code, scan_type)`
+
+**Check constraints:**
+- `scan_type IN ('open', 'close')`
+- `scan_source IN ('scanned', 'carried_forward', 'whole_book_sale', 'returned_to_vendor')`
 
 **Index:** `(store_id, scanned_at)` for reporting by date
+
+**Why static_code in the PK:** The barcode includes the position digits, so an open scan at position 0 (`<static_code>000`) and a close scan at position 59 (`<static_code>059`) for the same book would have different PKs under a barcode-keyed scheme — breaking the open/close pairing logic. Keying on `static_code` fixes this; the actual scanned barcode is preserved as a regular column for audit.
 
 ### 8. ShiftExtraSales
 
@@ -435,9 +442,9 @@ LIMIT 1;
 
 ---
 
-## Schema Decisions Applied from SRS v5.0 Review
+## Schema Decisions Applied from SRS v5.0–v5.2 Reviews
 
-1. **ShiftBooks PK = (shift_id, barcode, scan_type)** — fixes the double-scan bug (same book scanned at open AND close)
+1. **ShiftBooks PK = (shift_id, static_code, scan_type)** — original v5.0 design used `barcode` in the PK, but barcodes include position digits and so do not pair open/close scans for the same book. Changed to `static_code` in v5.2 implementation phase. The full barcode is preserved as a regular column for audit.
 2. **Book.end and Book.total removed** — derived from LENGTH_BY_PRICE and scan history
 3. **Book.static_code, start_position, ticket_price, slot_id all nullable until assignment** — books don't exist in the DB before assignment anyway in practice, but schema allows partial rows
 4. **Book.returned_at, returned_by_user_id added** — return-to-vendor lifecycle

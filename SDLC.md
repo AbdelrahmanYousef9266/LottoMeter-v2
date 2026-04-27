@@ -129,7 +129,7 @@ A complete design review was conducted between SRS v4.0 and v5.0. Twenty-two des
 
 **Status:** Complete | **Date:** April 2026
 
-The complete REST API is implemented and tested end-to-end with Thunder Client. All 28 endpoints from the API Contract are functional. PostgreSQL-compatible. Containerized with Docker and docker-compose.
+The complete REST API is implemented and tested end-to-end with both Thunder Client and a fully integrated mobile client. All 29 endpoints from the API Contract are functional. PostgreSQL-compatible. Containerized with Docker and docker-compose.
 
 **Build order completed in sequence:**
 
@@ -147,12 +147,13 @@ The complete REST API is implemented and tested end-to-end with Thunder Client. 
 - [x] Pending-scans computation
 - [x] Carry-forward logic (correct-status only)
 - [x] ShiftBooks model + scan service + routes
-- [x] Last-ticket detection via LENGTH_BY_PRICE
-- [x] Scan validation rules 1-8
+- [x] Last-ticket detection via LENGTH_BY_PRICE (refined per v5.2 decisions)
+- [x] Scan validation rules 1–8 (Rule 8 narrowed in v5.2)
 - [x] ShiftExtraSales model + whole-book-sale endpoint
 - [x] PIN rate-limiting
 - [x] Void endpoints (sub-shift + main shift)
 - [x] Reports service + endpoint
+- [x] Sub-shift summary endpoint (`GET /api/shifts/{id}/summary`) for live preview
 - [x] Docker + docker-compose setup
 
 ### Implementation Stats
@@ -160,12 +161,17 @@ The complete REST API is implemented and tested end-to-end with Thunder Client. 
 | Metric | Value |
 |---|---|
 | SQLAlchemy models | 8 |
-| API endpoints | 28 |
+| API endpoints | 29 |
 | Flask blueprints | 8 |
 | Marshmallow schemas | 7 |
 | Services | 9 |
-| Database migrations | 6 |
-| Lines of Python (approx) | 2,500 |
+| Database migrations | 7 |
+| Lines of Python (approx) | 2,600 |
+
+### Backend — Outstanding
+
+- [ ] Multi-tenancy audit (verify every internal query touching multi-tenant tables filters by `store_id`). `_compute_subshift_tickets_total` updated during Phase 4; full sweep deferred until pre-deployment.
+
 
 ### Branching Strategy
 ```
@@ -174,7 +180,7 @@ develop       ← integration branch
 feature/*     ← one branch per feature
 ```
 
-For Phase 4 backend, all commits went directly to `main` since this was solo development before any deployment.
+All Phase 4 commits went directly to `main` since this was solo development before any deployment.
 
 ### Commit Convention Used
 - `feat:` new feature
@@ -185,33 +191,85 @@ For Phase 4 backend, all commits went directly to `main` since this was solo dev
 - `chore:` tooling, config, dependency updates
 
 ### Testing During Implementation
-Each module was end-to-end tested via Thunder Client immediately after implementation. Test sequences included:
+Each backend module was end-to-end tested via Thunder Client immediately after implementation. Test sequences included:
 - Happy path validation
 - All error codes from the API Contract
 - Edge cases (out-of-range positions, duplicate names, soft-deleted name reuse, etc.)
 - Cross-feature interactions (slot guards triggered by book assignment, FR-CLOSE-01 blocking handover, carry-forward creating real ShiftBooks rows, return-to-vendor creating close scans)
 
-### Mobile App (React Native) ⏳
+The mobile build (below) then exercised the API as an integrated consumer, surfacing 5 additional bugs that the API-only tests had not caught. All fixed and documented in **Implementation Bug Discoveries** below.
 
-**Status:** Pending — Next Phase
+### Mobile App (React Native) ✅
 
-### Build Order
-- [ ] Project scaffold (Expo, navigation, i18n, RTL)
-- [ ] Auth context + JWT storage
-- [ ] Login screen
-- [ ] Splash screen
-- [ ] Onboarding screen
-- [ ] Bottom tab navigation
-- [ ] Home / Shift screen (live totals, shift timer, scanned books list, pending banner)
-- [ ] Scan screen (camera + manual fallback, hardware scanner support, feedback sounds, scan counter)
-- [ ] Books screen (admin slots grid, bulk assignment flow)
-- [ ] Shift history screen (date filter, shift cards, detail view with report)
-- [ ] Settings screen (language, theme, store info, PIN change, logout)
-- [ ] Whole-book-sale modal + PIN dialog
-- [ ] Return-book modal + PIN dialog
-- [ ] Reusable components (SkeletonLoader, ToastNotification, ConfirmDialog, PinDialog, OfflineBanner)
-- [ ] English translation file
-- [ ] Arabic translation file + RTL layout
+**Status:** ~95% complete | **Date:** April 2026
+
+Cross-platform mobile client built with Expo. Wires up the entire API end-to-end — auth, scanning, slot management, shift lifecycle, PIN-protected actions, reports, and i18n. Tested live on Android via Expo Go.
+
+**Build order completed in sequence:**
+
+- [x] Project scaffold (Expo blank template, ~700 npm packages)
+- [x] Folder structure: `src/{api,components,context,locales,navigation,screens,utils}`
+- [x] Axios client with JWT auto-attach + standardized error envelope
+- [x] SecureStore for token persistence
+- [x] AuthContext with token validation on mount via `/auth/me`
+- [x] Login screen (Store Code + Username + Password)
+- [x] Stack + bottom tab navigation (5 tabs)
+- [x] Safe-area inset fix for Android navigation bar
+- [x] Home screen — current shift state, open shift, pull-to-refresh
+- [x] Scan screen — camera + manual fallback, scan-type auto-locking by sub-shift init state
+- [x] Camera barcode scanner via `expo-camera` (full-screen modal, target rectangle, vibration)
+- [x] Books screen — slots grid, create-slot modal
+- [x] Slot detail screen — assign (camera + manual), reassign confirmation, unassign, return to vendor
+- [x] History screen — closed shifts list with status badges (correct/over/short/voided)
+- [x] Report detail screen — totals, ticket breakdown, sub-shifts, books, whole-book sales, returned books, voided sub-shifts
+- [x] Close shift modal — handover + final close with live preview (tickets_total, expected_cash, difference, status)
+- [x] Pre-close pending-close-scan check via summary endpoint
+- [x] Whole-book sale modal (PIN-protected, live ticket count + value preview)
+- [x] Return-to-vendor modal (PIN-protected, by-id or by-barcode lookup)
+- [x] Settings screen — account info, language picker, logout
+- [x] i18n infrastructure: `i18next` + `react-i18next` + `expo-localization` + AsyncStorage persistence
+- [x] English translation file (14 namespaces, every user-facing string)
+- [x] Arabic translation file (14 namespaces, full translation parity)
+- [x] RTL layout flip via `I18nManager.forceRTL` + restart-required prompt
+- [x] Reusable components: `CloseShiftModal`, `WholeBookSaleModal`, `ReturnBookModal`, `CameraScannerScreen`
+
+### Mobile App — Outstanding
+
+- [ ] PIN change UI in Settings (admin only) — backend endpoint exists; mobile wiring deferred
+- [ ] Custom splash screen (Expo default in use)
+- [ ] Onboarding screen (deferred to post-launch)
+- [ ] Theme picker (light/dark)
+- [ ] Toast notifications + skeleton loaders (polish, deferred)
+- [ ] Hardware scanner keystroke-wedge support (works incidentally; not explicitly tested)
+
+### Mobile Stack
+| Layer | Library |
+|---|---|
+| Framework | React Native (Expo SDK 54) |
+| Navigation | `@react-navigation/native` + `native-stack` + `bottom-tabs` |
+| HTTP | `axios` |
+| Token storage | `expo-secure-store` |
+| Local prefs | `@react-native-async-storage/async-storage` |
+| Camera | `expo-camera` |
+| i18n | `i18next` + `react-i18next` |
+| Locale detect | `expo-localization` |
+| Layout safety | `react-native-safe-area-context` |
+
+### Implementation Bug Discoveries
+
+End-to-end testing through the mobile app surfaced 5 backend bugs that the Thunder Client API-only tests did not catch. All fixed during Phase 4 and documented as new entries (#25–#31) in SRS §18.
+
+| # | Discovery | Resolution |
+|---|---|---|
+| 1 | Last-ticket fired on open scans (selling books at the open of a shift) | Required `scan_type == "close"` |
+| 2 | Last-ticket fired without movement (selling books that just sat at last position) | Required `close_position > open_position` |
+| 3 | ShiftBooks PK keyed on full barcode broke open/close pairing | Changed PK to `(shift_id, static_code, scan_type)`; required schema migration |
+| 4 | Slot serializer hardcoded `current_book: null` | Implemented active-book lookup in `_current_book_for_slot` |
+| 5 | Rule 8 blocked legitimate new opens after a close in same sub-shift | Narrowed Rule 8 to rewrites only |
+
+**Why these escaped the API tests:** they all required exercising the mobile-driven workflow — open → close at *different* barcodes, slot assignment + slot list integration, mid-shift book swap with prior closes in the same sub-shift. The Thunder Client tests reused the same barcode for paired open/close calls (PK bug masked), only checked endpoints individually (slot list × book assignment integration not exercised), and didn't simulate the sequential scans within one sub-shift that would trigger Rule 8.
+
+This validates the decision to do mobile + API in the same project rather than treating mobile as an afterthought — the integration testing surfaced bugs that API-only QA could not have caught.
 
 ---
 

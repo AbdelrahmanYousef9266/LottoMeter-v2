@@ -12,11 +12,12 @@ Stores that sell lottery tickets traditionally rely on manual paperwork to track
 
 - **Admin setup:** creates slots (each with a fixed ticket price) and assigns books to them by scanning barcodes
 - **Shift open:** employee opens a main shift → Sub-shift 1 is auto-created → system lists every book that needs an open scan
-- **During shift:** every ticket sale is scanned; the system auto-detects last tickets (by price) and marks books sold
+- **During shift:** employees only scan at key events — last ticket of a book sold, whole-book sale, return to vendor, or shift close. Routine ticket sales go through the cash register.
+- **Last-ticket sale:** customer buys the final ticket; employee scans it as a close — system marks book sold and frees the slot
 - **Whole-book sale:** customer buys an entire book in one transaction — PIN-authorized quick flow
 - **Return to vendor:** lottery salesman removes a book — PIN-authorized, preserves pre-return revenue
 - **Sub-shift handover:** clean-close carries positions forward automatically; short/over forces full rescan by the next employee
-- **Sub-shift close:** employee scans remaining books, enters cash numbers; system calculates totals and status (correct / over / short)
+- **Sub-shift close:** employee scans final positions of remaining books, enters cash numbers; system calculates totals and status (correct / over / short) with a live preview as they type
 - **Admin void:** safety valve for admin-level errors — flags a shift, preserves all data, excluded from totals
 - **Reports:** main shift totals + each sub-shift separately + ticket price breakdown + per-book open/close positions + whole-book sales + returns + voids
 
@@ -26,16 +27,18 @@ Stores that sell lottery tickets traditionally rely on manual paperwork to track
 
 | Layer | Technology |
 |---|---|
-| Mobile App | React Native (Expo) |
-| API | Flask (Python) |
-| ORM | SQLAlchemy |
+| Mobile App | React Native (Expo SDK 54) |
+| API | Flask (Python 3.11+) |
+| ORM | SQLAlchemy 2.x |
 | Database (Dev) | SQLite |
 | Database (Prod) | PostgreSQL |
 | Auth | JWT (Flask-JWT-Extended) |
 | Serialization | Marshmallow |
-| i18n | i18next + react-i18next |
-| Containerization | Docker |
-| CI/CD | GitHub Actions |
+| Camera | expo-camera |
+| Token storage | expo-secure-store |
+| i18n | i18next + react-i18next + expo-localization |
+| Containerization | Docker + docker-compose |
+| CI/CD | GitHub Actions (planned) |
 
 ---
 
@@ -64,7 +67,7 @@ Stores that sell lottery tickets traditionally rely on manual paperwork to track
 | `Book` | Lottery ticket book — created via slot assignment, tracked through lifecycle |
 | `BookAssignmentHistory` | Every assignment / reassignment / unassignment event |
 | `ShiftDetails` | Main shift (container) or sub-shift (has scans + financials) |
-| `ShiftBooks` | Scan records — open + close per book per sub-shift |
+| `ShiftBooks` | Scan records — keyed on `(shift_id, static_code, scan_type)` so open and close pair correctly across position changes |
 | `ShiftExtraSales` | Whole-book sales — not tied to Book records |
 
 ---
@@ -82,7 +85,21 @@ Fixed business constants — not configurable:
 | $10 | 30 | 29 |
 | $20 | 30 | 29 |
 
-Last-ticket detection checks `scanned_position == LENGTH_BY_PRICE[book.ticket_price] - 1`.
+Barcode parsing: `static_code` = barcode minus the last 3 digits; `position` = last 3 digits as integer.
+
+---
+
+## Last-Ticket Detection
+
+The book is marked sold ONLY when ALL three conditions hold:
+
+1. `scan_type == "close"` — open scans at the last position never sell the book
+2. `position == LENGTH_BY_PRICE[ticket_price] - 1` — at the last ticket
+3. `close_position > open_position` — at least one ticket actually sold this sub-shift
+
+This protects against accidental sales during shift opening, and against books that just sat at their last position with no movement (e.g. carried forward from a previous shift).
+
+The mobile UI also auto-locks the scan_type picker — "open" while pending opens exist, "close" once initialized — making the wrong scan_type impossible to select.
 
 ---
 
@@ -97,6 +114,8 @@ difference = 0  → ✅ correct
 difference > 0  → ⚠️ over  (more cash than expected)
 difference < 0  → ❌ short (less cash than expected)
 ```
+
+The mobile close-shift modal computes `expected_cash` and `difference` live as the employee types, using `GET /api/shifts/{id}/summary` for the running tickets_total.
 
 ---
 
@@ -115,22 +134,33 @@ Clean closes reward employees with fast handover. Discrepancies trigger full ver
 
 ## Features
 
-### v2.0 — Core
-- Admin bulk slot + book management with scan-to-assign
-- Shift management (main shift + sub-shifts) with trust-based handover
-- Barcode scanning — open and close with all 8 validation rules
-- Last ticket detection by ticket price (fixed book lengths)
+### v2.0 — Core (~95% complete)
+- Backend: 29 REST endpoints, 8 SQLAlchemy models, JWT auth, Marshmallow schemas, PIN rate-limiting, Docker
+- Mobile: full app — auth, scanning (camera + manual), slot management, shift lifecycle, history, reports
+- Admin bulk slot + book management with scan-to-assign + reassignment confirmation flow
+- Shift management with handover and final close, both with live cash preview
+- Barcode scanning via `expo-camera` with manual fallback on every screen
+- Smart scan_type auto-locking by sub-shift initialization state
+- Last-ticket detection refined to require close + real movement
 - Whole-book sale with store PIN
 - Return-to-vendor flow with store PIN (revenue-preserving)
 - Admin void with audit trail (data-preserving)
 - Auto-calculated tickets total, expected cash, difference, shift status
 - Ticket price breakdown on every report (scanned vs whole-book)
-- Light/dark mode, English + Arabic, RTL support
-- Bottom tab navigation, splash, onboarding, live totals, scan feedback
+- English + Arabic with full RTL layout flip
+- Bottom tab navigation, pull-to-refresh, status badges
 - Admin role enforcement from day 1
-- PIN rate-limiting
+- PIN rate-limiting (5 attempts / 10 min)
 
-### v2.1 — Growth
+### v2.0 — Outstanding (deferred)
+- PIN change UI in Settings (admin-only mobile screen)
+- Custom splash screen
+- Onboarding flow
+- Theme picker (light/dark)
+- Toast notifications + skeleton loaders (polish)
+- Multi-tenancy audit (pre-deployment hardening)
+
+### v2.1 — Growth (planned)
 - Store self-registration
 - Manager analytics dashboard (web)
 - Stripe subscription billing
@@ -150,18 +180,20 @@ Clean closes reward employees with fast handover. Discrepancies trigger full ver
 
 ## Supported Languages
 
-| Language | RTL | Version |
-|---|---|---|
-| English | No | v2.0 |
-| Arabic | Yes | v2.0 |
-| Hindi | No | v2.1 |
-| Spanish | No | v2.1 |
-| French | No | v2.1 |
-| Urdu | Yes | v2.1 |
-| Bengali | No | v2.2 |
-| Portuguese | No | v2.2 |
-| Punjabi | No | v2.2 |
-| Tamil | No | v2.2 |
+| Language | RTL | Version | Status |
+|---|---|---|---|
+| English | No | v2.0 | ✅ Implemented |
+| Arabic | Yes | v2.0 | ✅ Implemented (full RTL flip) |
+| Hindi | No | v2.1 | Planned |
+| Spanish | No | v2.1 | Planned |
+| French | No | v2.1 | Planned |
+| Urdu | Yes | v2.1 | Planned |
+| Bengali | No | v2.2 | Planned |
+| Portuguese | No | v2.2 | Planned |
+| Punjabi | No | v2.2 | Planned |
+| Tamil | No | v2.2 | Planned |
+
+The i18n architecture (i18next + JSON translation files + AsyncStorage persistence + I18nManager RTL flip) is fully built — adding new languages in v2.1/v2.2 is just a JSON file drop-in.
 
 ---
 
@@ -170,13 +202,54 @@ Clean closes reward employees with fast handover. Discrepancies trigger full ver
 | Phase | Status |
 |---|---|
 | Planning | ✅ Complete |
-| Requirements (SRS v5.0) | ✅ Complete — Verified |
-| System Design (ERD v2.0, API Contract v2.0) | ✅ Complete |
-| Implementation | ⏳ Next |
-| Testing | ⏳ Pending |
-| Deployment | ⏳ Pending |
-| Maintenance | ⏳ Pending |
-| Commercialization | 🗺️ Planned |
+| Requirements (SRS v5.2) | ✅ Complete — Verified |
+| System Design (ERD v2.1, API Contract v2.1) | ✅ Complete |
+| Implementation — Backend | ✅ Complete |
+| Implementation — Mobile | ✅ ~95% complete |
+| Testing | ⏳ Pending (Phase 5) |
+| Deployment | ⏳ Pending (Phase 6) |
+| Maintenance | ⏳ Pending (Phase 7) |
+| Commercialization | 🗺️ Planned (Phase 8) |
+
+---
+
+## Repository Layout
+
+```
+LottoMeter-v2/
+├── docs/
+│   ├── ERD.md
+│   └── API_Contract.md
+├── lottometer-api/         ← Flask REST API
+│   ├── app/
+│   │   ├── models/
+│   │   ├── schemas/
+│   │   ├── services/
+│   │   ├── routes/
+│   │   ├── config.py
+│   │   ├── constants.py
+│   │   └── errors.py
+│   ├── migrations/
+│   ├── tests/
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   └── run.py
+├── lottometer-mobile/      ← React Native (Expo)
+│   ├── src/
+│   │   ├── api/
+│   │   ├── components/
+│   │   ├── context/
+│   │   ├── locales/        ← en.json, ar.json
+│   │   ├── navigation/
+│   │   ├── screens/
+│   │   ├── utils/
+│   │   └── i18n.js
+│   ├── App.js
+│   └── package.json
+├── README.md
+├── SDLC.md
+└── SRS_LottoMeter_v2.md
+```
 
 ---
 
@@ -184,10 +257,10 @@ Clean closes reward employees with fast handover. Discrepancies trigger full ver
 
 | Document | Description |
 |---|---|
-| [SRS_LottoMeter_v2.md](./SRS_LottoMeter_v2.md) | Software Requirements Specification v5.0 |
+| [SRS_LottoMeter_v2.md](./SRS_LottoMeter_v2.md) | Software Requirements Specification v5.2 |
 | [SDLC.md](./SDLC.md) | SDLC phase tracker + decision log + commercialization roadmap |
-| [docs/ERD.md](./docs/ERD.md) | Entity Relationship Diagram — 8 models |
-| [docs/API_Contract.md](./docs/API_Contract.md) | Full API endpoint and JSON contract |
+| [docs/ERD.md](./docs/ERD.md) | Entity Relationship Diagram v2.1 — 8 models |
+| [docs/API_Contract.md](./docs/API_Contract.md) | Full API endpoint and JSON contract v2.1 |
 
 ---
 

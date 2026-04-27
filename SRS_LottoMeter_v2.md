@@ -6,7 +6,7 @@
 | Field | Value |
 |---|---|
 | **Project Name** | LottoMeter v2.0 |
-| **Document Version** | 5.1 |
+| **Document Version** | 5.2 |
 | **Author** | Abdelrahman Yousef |
 | **Date** | April 2026 |
 | **Status** | Final — Verified |
@@ -20,6 +20,7 @@
 | 4.0 | April 2026 | Initial verified SRS |
 | 5.0 | April 2026 | Design review revisions — see §18 Decision Log |
 | 5.1 | April 2026 | Clarified scan event model — scans happen only at shift open, last ticket, return-to-vendor, and shift close (not on every sale) |
+| 5.2 | April 2026 | Implementation revisions caught via end-to-end mobile testing: ShiftBooks PK changed to (shift_id, static_code, scan_type); last-ticket detection refined (close + position movement required); Rule 8 narrowed to rewrites only; mobile UX rules; i18n implemented ||
 
 ---
 
@@ -234,7 +235,7 @@ Between these events, employees sell tickets normally at the register without us
 5. Rescanning the same book with the same scan_type **overwrites** the existing scan (no duplicate error)
 6. Extracted position must be within `[0, length-1]` for the book's price
 7. For close scans: position must be ≥ the open scan position for this book in this sub-shift
-8. Open scans cannot be rewritten after any close scan has started on this sub-shift
+8. Open scans cannot be **rewritten** (overwritten) after any close scan has started on this sub-shift. New books assigned mid-shift can still receive their initial open scan; only re-writes of existing open scans are blocked.
 
 Any violation returns a specific error code so the app can display clear feedback to the employee.
 
@@ -248,13 +249,20 @@ When a ticket is scanned, the system checks whether this is the book's final tic
 is_last_ticket = (scanned_position == LENGTH_BY_PRICE[book.ticket_price] - 1)
 ```
 
-When true:
+**The book is marked sold ONLY when all three conditions hold:**
+1. `scan_type == "close"` — open scans at the last position never sell the book (they just record the position)
+2. `position == LENGTH_BY_PRICE[ticket_price] - 1` — the scan is at the last ticket position
+3. `close_position > open_position` — at least one ticket was sold this sub-shift (rules out the edge case where a book sat at the last position with no movement)
+
+When all three hold:
 - `ShiftBooks.is_last_ticket = true` on that scan row
 - `Book.is_sold = true`
 - `Book.slot_id = null` (slot becomes empty)
 - `Book.is_active = false`
-- BookAssignmentHistory row gets `unassigned_at = now()`
+- BookAssignmentHistory row gets `unassigned_at = now()` and `unassign_reason = "sold"`
 - If a new book is assigned to the now-empty slot later in this sub-shift, it becomes a pending scan that blocks further scan events until scanned
+
+**Mobile UX enforcement:** the scan_type picker auto-locks to "open" when the sub-shift is not yet initialized, and to "close" when initialized. This makes accidental "open scan at last position" impossible during the sales phase, and makes "close scan during initialization" impossible during the opening phase.
 
 ### 5.9 Sub-Shift Handover (Mid-Shift)
 
@@ -964,7 +972,32 @@ Key decisions made during SRS v5.0 design review (April 2026):
 ### v5.1 revision (April 2026):
 
 23. **Scan event model clarified** — scans occur only at shift open, last-ticket of a book, return-to-vendor, and shift close. The app is not a point-of-sale; routine ticket sales are handled at the register. Per-book totals are reconciled at close from open/close positions.
+
 24. **Hardware barcode scanner support** — scan screen supports both camera (Expo Camera) and hardware scanners (Zebra, Honeywell, etc. via keystroke wedge mode).
+
+### v5.2 revisions (April 2026 — implementation phase, caught via end-to-end mobile testing):
+
+25. **ShiftBooks PK changed to (shift_id, static_code, scan_type)** — the previous PK `(shift_id, barcode, scan_type)` did not pair open and close scans correctly because the full barcode includes the position digits. An open scan at position 0 (`<static_code>000`) and a close scan at position 59 (`<static_code>059`) for the same book have different PKs under the old scheme, breaking Rule 7's "close ≥ open" lookup. Keying on `static_code` fixes this — the position is captured in `start_at_scan` regardless. Migration: required a table rebuild; no scan data was preserved (caught early in implementation).
+
+26. **Last-ticket detection requires scan_type=close** — the original §5.8 implementation fired on any scan at the last position, including opens. Open scans at the last position should never sell the book; they're just opening it at that position. Now requires `scan_type == "close"`.
+
+27. **Last-ticket detection requires close > open** — added second guard: even on a close scan at the last position, the book is only marked sold if `close_position > open_position`. This rules out the edge case of a book sitting at the last position all shift with zero movement (e.g. carried forward from a previous shift, never sold). Without this, the close-at-last scan would mark the book sold incorrectly.
+
+28. **Rule 8 narrowed to rewrites only** — the original §5.7 Rule 8 blocked ALL open scans after any close had started in the sub-shift. This broke the legitimate case of an admin assigning a brand-new book mid-shift, which then needs its first open scan. Now Rule 8 only blocks **rewriting** an existing open scan; brand-new opens are allowed.
+
+29. **Mobile scan_type picker auto-locks based on sub-shift state** — the picker forces "Open" when the sub-shift is not yet initialized (pending opens exist) and forces "Close" when initialized. This eliminates the entire class of UX errors where an employee accidentally selects the wrong scan_type. Combined with #26, makes the close-at-last sale flow unambiguous.
+
+30. **Slot serializer populates current_book** — the original `serialize_slot` had `current_book: None` as a TODO that was never finished, causing the slots list to always show "empty" even when books were assigned. Now correctly queries the active book by `(slot_id, store_id, is_active=True)` and includes it in the slot dict.
+
+31. **`_compute_subshift_tickets_total` now scoped to store_id** — previously took only `subshift_id`, leaving the function multi-tenancy-unsafe. All ShiftBooks/Book/ShiftExtraSales queries inside now also filter by `store_id`. Same change applied to `get_running_summary`. (Note: an audit pass for similar holes is recommended pre-deployment.)
+
+32. **i18n implemented from v2.0 with English + Arabic + RTL** — all user-facing strings flow through `react-i18next`'s `t()` lookups, with translations in `src/locales/{en,ar}.json`. Language preference persists in AsyncStorage. RTL layout flip via `I18nManager.forceRTL` requires app restart and is signaled to the user with a "Restart Required" prompt. Architecture supports adding the v2.1 languages (Hindi, Spanish, French, Urdu) by dropping in JSON files only.
+
+33. **Live preview on shift close modal** — the close shift modal computes `expected_cash`, `difference`, and status (correct/over/short) live as the employee types cash values, using a new `GET /api/shifts/{id}/summary` endpoint for the running tickets_total. Submission is blocked when any active books still need close scans (`books_pending_close > 0`).
+
+34. **Camera barcode scanning via expo-camera** — full-screen modal scanner with a target rectangle and vibration feedback on detection. Used from Scan, SlotDetail (assign), WholeBookSale, and Return modals. Manual barcode entry remains as a fallback on every screen that uses scanning.
+
+35. **Reassignment confirmation flow on mobile** — when a scanned barcode matches a book already active in another slot, the API returns `REASSIGN_CONFIRMATION_REQUIRED` (409). The mobile app catches this and shows a "Move it" / "Cancel" dialog before retrying with `confirm_reassign: true`. Implements the SRS Decision #22.
 
 ---
 

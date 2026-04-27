@@ -1,6 +1,6 @@
 # API Contract — LottoMeter v2.0
 
-**Version:** 2.0
+**Version:** 2.1
 **Base URL:** `/api`
 **Auth:** JWT in `Authorization: Bearer <token>` header (except where noted)
 **Content-Type:** `application/json`
@@ -426,6 +426,35 @@ Only main shifts returned.
 ### GET /api/shifts/{id}
 **Response 200** — full main shift with nested sub-shifts and pending_scans for the current open sub-shift.
 
+### GET /api/shifts/{id}/summary
+
+Returns live-preview totals for an OPEN sub-shift. Used by the mobile close-shift modal to compute `expected_cash` and `difference` as the employee types cash values, without committing the close.
+
+`{id}` is a **sub-shift** id.
+
+**Response 200**
+```json
+{
+  "tickets_total": "440.00",
+  "whole_book_total": "300.00",
+  "books_total_active": 5,
+  "books_with_close": 3,
+  "books_pending_close": 2
+}
+```
+
+- `tickets_total` — sum of (close − open) × ticket_price across paired scans, plus all whole-book sale values, all return-to-vendor partials. Same formula used at close time.
+- `whole_book_total` — broken out for UI display.
+- `books_total_active` — count of currently-active books in the store.
+- `books_with_close` — count of those active books that have a close scan in this sub-shift.
+- `books_pending_close` — `books_total_active - books_with_close`. The mobile app blocks close-shift submission while this is > 0.
+
+**Errors:**
+- 404 `SUBSHIFT_NOT_FOUND` — id doesn't match a sub-shift in this store
+- 422 `SHIFT_CLOSED` — sub-shift is already closed
+- 422 `SHIFT_VOIDED` — sub-shift has been voided
+
+
 ### POST /api/shifts/{id}/subshifts
 Closes the currently open sub-shift AND opens the next one (handover).
 
@@ -526,12 +555,18 @@ Records a ticket scan during an open sub-shift.
 4. If duplicate (same shift + barcode + scan_type): update existing row (no 409)
 5. Validate position in `[0, length-1]` for book's price
 6. For close: validate position ≥ open position
-7. For open: reject if any close scan exists in this sub-shift (Rule 8)
-8. Check last-ticket detection: if `position == length - 1`:
-   - Set `is_last_ticket = true`
-   - Set `book.is_sold = true`
+7. For open: reject if a prior open scan for this book already exists in this sub-shift AND any close scan has started — i.e. block re-writes after closing has begun. Brand-new opens for newly-assigned books are still allowed (Rule 8).
+8. Last-ticket detection — sets `is_last_ticket = true` on the scan row when `position == length - 1`, regardless of scan_type. The book is marked **sold** only when ALL of:
+   - `scan_type == "close"`
+   - `position == length - 1` (last ticket position)
+   - `close_position > open_position` for this book in this sub-shift (real movement happened)
+
+   When the book is sold:
+   - `book.is_sold = true`
    - Unassign book from slot (`slot_id = null`, `is_active = false`)
    - Log BookAssignmentHistory with `unassign_reason='sold'`
+
+   This protects against (a) open scans accidentally selling books at the last position during shift initialization, and (b) close scans incorrectly selling books that sat at the last position with no movement this shift (e.g. carried forward from a previous shift).
 
 **Response 200**
 ```json
@@ -566,7 +601,7 @@ When `pending_scans_remaining = 0` and `is_initialized = true`, sale scans are u
 - 422 `BOOK_ALREADY_SOLD` — already marked sold
 - 400 `INVALID_POSITION` — position out of range
 - 400 `POSITION_BEFORE_OPEN` — close position < open position
-- 409 `OPEN_RESCAN_BLOCKED` — cannot rescan open after close started (Rule 8)
+- 409 `OPEN_RESCAN_BLOCKED` — cannot rewrite an existing open scan after close has started in this sub-shift (Rule 8). Brand-new open scans for newly-assigned books are still allowed.
 - 422 `SHIFT_CLOSED` — target sub-shift is not open
 - 422 `SHIFT_VOIDED` — target sub-shift has been voided
 - 422 `SALES_BLOCKED_PENDING_INIT` — attempted sale scan before pending_scans empty
@@ -784,6 +819,7 @@ Implementation: in-memory counter for v2.0; Redis-backed for production later.
 | POST | /api/shifts | JWT | any |
 | GET | /api/shifts | JWT | any |
 | GET | /api/shifts/{id} | JWT | any |
+| GET | /api/shifts/{id}/summary | JWT | any |
 | POST | /api/shifts/{id}/subshifts | JWT | any |
 | PUT | /api/shifts/{id}/close | JWT | any |
 | POST | /api/shifts/{id}/void | JWT | admin |
