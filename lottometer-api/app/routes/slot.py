@@ -4,7 +4,13 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from marshmallow import ValidationError as MarshmallowValidationError
 
-from app.schemas.slot_schema import SlotCreateSchema, SlotUpdateSchema, serialize_slot
+from app.schemas.slot_schema import (
+    SlotCreateSchema,
+    SlotUpdateSchema,
+    BulkCreateSlotsSchema,
+    BulkDeleteSlotsSchema,
+    serialize_slot,
+)
 from app.services import slot_service
 from app.errors import ValidationError
 from app.auth_helpers import admin_required, current_store_id
@@ -70,3 +76,42 @@ def delete_slot(slot_id):
     """Admin-only: soft-delete a slot."""
     slot_service.soft_delete_slot(current_store_id(), slot_id)
     return "", 204
+
+
+@slot_bp.route("/bulk", methods=["POST"])
+@admin_required
+def bulk_create_slots():
+    """Admin-only: create many slots in one request."""
+    try:
+        data = BulkCreateSlotsSchema().load(request.get_json() or {})
+    except MarshmallowValidationError as err:
+        raise ValidationError("Invalid request body.", details=err.messages)
+
+    result = slot_service.bulk_create_slots(
+        store_id=current_store_id(),
+        tiers=data["tiers"],
+        name_prefix=data.get("name_prefix", "Slot "),
+    )
+    return jsonify({
+        "created_count": result["created_count"],
+        "slots": [serialize_slot(s) for s in result["slots"]],
+    }), 201
+
+
+@slot_bp.route("/bulk-delete", methods=["POST"])
+@admin_required
+def bulk_delete_slots():
+    """Admin-only: soft-delete many slots at once.
+
+    Slots with active books or already deleted are reported but not deleted.
+    """
+    try:
+        data = BulkDeleteSlotsSchema().load(request.get_json() or {})
+    except MarshmallowValidationError as err:
+        raise ValidationError("Invalid request body.", details=err.messages)
+
+    result = slot_service.bulk_delete_slots(
+        store_id=current_store_id(),
+        slot_ids=data["slot_ids"],
+    )
+    return jsonify(result), 200

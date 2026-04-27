@@ -152,7 +152,47 @@
     "couldNotCreate": "تعذّر إنشاء الفتحة.",
     "emptySlotHint": "فارغة — اضغط لتعيين دفتر",
     "emptyPositionLabel": "الموضع {{position}}",
-    "errorLoadingSlots": "خطأ في تحميل الفتحات"
+    "errorLoadingSlots": "خطأ في تحميل الفتحات",
+    "bulkAdd": "+ إضافة بالجملة",
+    "select": "تحديد",
+    "cancelSelect": "إلغاء",
+    "selectedCount": "تم تحديد {{count}}",
+    "deleteSelected": "حذف {{count}}",
+    "selectionHint": "اضغط على الفتحات لتحديدها. الفتحات التي تحتوي على دفاتر معطّلة.",
+    "hasBookBadge": "📚 يحتوي دفتر",
+    "deleteConfirmTitle": "حذف {{count}} فتحة؟",
+    "deleteConfirmMessage": "ستُحذف هذه الفتحات. لا يمكن التراجع، لكن التقارير السابقة ستستمر في الإشارة إليها.",
+    "deleteResultTitle": "تم حذف الفتحات",
+    "deleteResultMessage": "تم حذف {{deleted}}. تم تخطّي {{occupied}} (تحتوي دفاتر).",
+    "deleteErrorTitle": "تعذّر الحذف"
+  },
+
+  
+  "bulkSlots": {
+    "title": "إضافة فتحات بالجملة",
+    "modeQuick": "إنشاء سريع",
+    "modeGroups": "مجموعات بالسعر",
+    "quickHint": "إنشاء عدد من الفتحات بنفس السعر.",
+    "groupsHint": "مزيج وتشكيلة: مثلاً ١٠ × ١$ + ١٥ × ٥$ + ٢٠ × ١٠$.",
+    "howMany": "كم عدد الفتحات؟",
+    "atPrice": "سعر التذكرة",
+    "count": "العدد",
+    "price": "السعر",
+    "addTier": "+ إضافة مجموعة أخرى",
+    "namePrefix": "بادئة الاسم (اختياري)",
+    "namePrefixHint": "تُرقَّم أسماء الفتحات تلقائيًا. الافتراضي \"Slot 1\"، \"Slot 2\". أدخل بادئة خاصة بك لاستخدامها بدلًا من ذلك.",
+    "namePrefixPlaceholder": "Slot",
+    "totalLabel": "الإجمالي",
+    "totalValue": "سيتم إنشاء {{count}} فتحة",
+    "createButton": "إنشاء {{count}} فتحة",
+    "invalidCount": "عدد غير صالح",
+    "invalidCountHint": "يجب أن تحتوي كل مجموعة على فتحة واحدة على الأقل.",
+    "invalidPrice": "سعر غير صالح",
+    "invalidPriceHint": "اختر سعر تذكرة صالح.",
+    "tooMany": "فتحات كثيرة جدًا",
+    "tooManyHint": "لا يمكن إنشاء أكثر من ٥٠٠ فتحة دفعة واحدة (طلبت {{total}}).",
+    "successTitle": "تم إنشاء الفتحات",
+    "successHint": "تمت إضافة {{count}} فتحة."
   },
 
   "slotDetail": {
@@ -181,7 +221,13 @@
     "manualEntryTitle": "أدخل الباركود",
     "manualEntryHint": "اكتب الباركود الكامل بما في ذلك الأرقام الثلاثة للموضع في النهاية.",
     "manualEntryPlaceholder": "مثل: 1234567890000",
-    "assign": "تعيين"
+    "assign": "تعيين",
+    "deleteSlot": "حذف الفتحة",
+    "delete": "حذف",
+    "deleteSlotTitle": "حذف الفتحة؟",
+    "deleteSlotMessage": "إزالة \"{{name}}\" نهائيًا؟ لا يمكن التراجع، لكن التقارير السابقة ستستمر في الإشارة إلى اسم هذه الفتحة.",
+    "cannotDeleteTitle": "لا يمكن الحذف",
+    "cannotDeleteHint": "ألغ تعيين الدفتر من هذه الفتحة قبل حذفها."
   },
 
   "history": {

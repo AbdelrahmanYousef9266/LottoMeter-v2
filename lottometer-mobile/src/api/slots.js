@@ -34,3 +34,15 @@ export async function unassignBook(bookId) {
   const { data } = await api.post(`/books/${bookId}/unassign`);
   return data;
 }
+
+export async function bulkCreateSlots({ tiers, name_prefix }) {
+  const payload = { tiers };
+  if (name_prefix) payload.name_prefix = name_prefix;
+  const { data } = await api.post('/slots/bulk', payload);
+  return data;
+}
+
+export async function bulkDeleteSlots(slotIds) {
+  const { data } = await api.post('/slots/bulk-delete', { slot_ids: slotIds });
+  return data;
+}

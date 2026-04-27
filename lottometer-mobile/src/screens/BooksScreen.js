@@ -18,7 +18,8 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../context/AuthContext';
-import { listSlots, createSlot } from '../api/slots';
+import { listSlots, createSlot, bulkDeleteSlots } from '../api/slots';
+import BulkCreateSlotsModal from '../components/BulkCreateSlotsModal';
 
 const VALID_PRICES = ['1.00', '2.00', '3.00', '5.00', '10.00', '20.00'];
 
@@ -32,6 +33,12 @@ export default function BooksScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [slots, setSlots] = useState([]);
   const [createOpen, setCreateOpen] = useState(false);
+  const [bulkOpen, setBulkOpen] = useState(false);
+
+  // Selection mode state
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [deleting, setDeleting] = useState(false);
 
   const loadSlots = useCallback(async () => {
     try {
@@ -55,6 +62,79 @@ export default function BooksScreen() {
     setRefreshing(false);
   }
 
+  function enterSelectMode() {
+    setSelectMode(true);
+    setSelectedIds(new Set());
+  }
+
+  function exitSelectMode() {
+    setSelectMode(false);
+    setSelectedIds(new Set());
+  }
+
+  function toggleSelected(slotId, hasBook) {
+    if (hasBook) return; // disabled — slots with books can't be deleted
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(slotId)) {
+        next.delete(slotId);
+      } else {
+        next.add(slotId);
+      }
+      return next;
+    });
+  }
+
+  function handleSlotPress(slot) {
+    if (selectMode) {
+      const hasBook = !!slot.current_book;
+      toggleSelected(slot.slot_id, hasBook);
+    } else {
+      navigation.navigate('SlotDetail', { slotId: slot.slot_id });
+    }
+  }
+
+  function confirmBulkDelete() {
+    const count = selectedIds.size;
+    if (count === 0) return;
+    Alert.alert(
+      t('books.deleteConfirmTitle', { count }),
+      t('books.deleteConfirmMessage'),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('books.deleteSelected', { count }),
+          style: 'destructive',
+          onPress: handleBulkDelete,
+        },
+      ]
+    );
+  }
+
+  async function handleBulkDelete() {
+    const ids = Array.from(selectedIds);
+    setDeleting(true);
+    try {
+      const result = await bulkDeleteSlots(ids);
+      Alert.alert(
+        t('books.deleteResultTitle'),
+        t('books.deleteResultMessage', {
+          deleted: result.deleted_count,
+          occupied: result.skipped_occupied?.length || 0,
+        })
+      );
+      exitSelectMode();
+      await loadSlots();
+    } catch (err) {
+      Alert.alert(
+        t('books.deleteErrorTitle'),
+        err.message || t('common.tryAgain')
+      );
+    } finally {
+      setDeleting(false);
+    }
+  }
+
   if (loading) {
     return (
       <SafeAreaView style={styles.container}>
@@ -65,21 +145,68 @@ export default function BooksScreen() {
     );
   }
 
+  const selectableCount = slots.filter((s) => !s.current_book).length;
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>{t('books.title')}</Text>
-        {isAdmin && (
-          <TouchableOpacity style={styles.addButton} onPress={() => setCreateOpen(true)}>
-            <Text style={styles.addButtonText}>{t('books.newSlot')}</Text>
-          </TouchableOpacity>
+        {selectMode ? (
+          <>
+            <Text style={styles.title}>
+              {t('books.selectedCount', { count: selectedIds.size })}
+            </Text>
+            <TouchableOpacity onPress={exitSelectMode} style={styles.cancelSelectBtn}>
+              <Text style={styles.cancelSelectText}>{t('books.cancelSelect')}</Text>
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <Text style={styles.title}>{t('books.title')}</Text>
+            {isAdmin && (
+              <View style={styles.headerButtons}>
+                {slots.length > 0 && (
+                  <TouchableOpacity
+                    style={styles.selectButton}
+                    onPress={enterSelectMode}
+                  >
+                    <Text style={styles.selectButtonText}>{t('books.select')}</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.bulkButton}
+                  onPress={() => setBulkOpen(true)}
+                >
+                  <Text style={styles.bulkButtonText}>{t('books.bulkAdd')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.addButton}
+                  onPress={() => setCreateOpen(true)}
+                >
+                  <Text style={styles.addButtonText}>{t('books.newSlot')}</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </>
         )}
       </View>
 
+      {selectMode && (
+        <View style={styles.selectionHintBanner}>
+          <Text style={styles.selectionHintText}>
+            {t('books.selectionHint')}
+          </Text>
+        </View>
+      )}
+
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={[
+          styles.scroll,
+          selectMode && { paddingBottom: 100 }, // room for action bar
+        ]}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          !selectMode ? (
+            <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          ) : undefined
         }
       >
         {slots.length === 0 ? (
@@ -93,13 +220,32 @@ export default function BooksScreen() {
               key={slot.slot_id}
               slot={slot}
               t={t}
-              onPress={() =>
-                navigation.navigate('SlotDetail', { slotId: slot.slot_id })
-              }
+              selectMode={selectMode}
+              selected={selectedIds.has(slot.slot_id)}
+              onPress={() => handleSlotPress(slot)}
             />
           ))
         )}
       </ScrollView>
+
+      {/* Floating delete bar in selection mode */}
+      {selectMode && selectedIds.size > 0 && (
+        <SafeAreaView edges={['bottom']} style={styles.actionBar}>
+          <TouchableOpacity
+            style={[styles.deleteSelectedBtn, deleting && styles.disabled]}
+            onPress={confirmBulkDelete}
+            disabled={deleting}
+          >
+            {deleting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.deleteSelectedText}>
+                {t('books.deleteSelected', { count: selectedIds.size })}
+              </Text>
+            )}
+          </TouchableOpacity>
+        </SafeAreaView>
+      )}
 
       <CreateSlotModal
         visible={createOpen}
@@ -110,29 +256,70 @@ export default function BooksScreen() {
           loadSlots();
         }}
       />
+
+      <BulkCreateSlotsModal
+        visible={bulkOpen}
+        onClose={() => setBulkOpen(false)}
+        onCreated={() => {
+          setBulkOpen(false);
+          loadSlots();
+        }}
+      />
     </SafeAreaView>
   );
 }
 
-function SlotCard({ slot, t, onPress }) {
+function SlotCard({ slot, t, selectMode, selected, onPress }) {
   const hasBook = !!slot.current_book;
+  const disabled = selectMode && hasBook;
+
   return (
-    <TouchableOpacity style={styles.slotCard} onPress={onPress}>
+    <TouchableOpacity
+      style={[
+        styles.slotCard,
+        selectMode && styles.slotCardSelectable,
+        selected && styles.slotCardSelected,
+        disabled && styles.slotCardDisabled,
+      ]}
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={disabled ? 1 : 0.7}
+    >
       <View style={styles.slotHeader}>
-        <Text style={styles.slotName}>{slot.slot_name}</Text>
+        <View style={styles.slotHeaderLeft}>
+          {selectMode && (
+            <View
+              style={[
+                styles.checkbox,
+                selected && styles.checkboxSelected,
+                disabled && styles.checkboxDisabled,
+              ]}
+            >
+              {selected && <Text style={styles.checkmark}>✓</Text>}
+            </View>
+          )}
+          <Text style={styles.slotName}>{slot.slot_name}</Text>
+        </View>
         <View style={styles.priceBadge}>
           <Text style={styles.priceBadgeText}>${slot.ticket_price}</Text>
         </View>
       </View>
       {hasBook ? (
         <View>
-          <Text style={styles.slotMeta}>
-            📚 {slot.current_book.static_code}
-          </Text>
-          <Text style={styles.slotSubMeta}>
-            {t('books.emptyPositionLabel', { position: slot.current_book.start_position })}
-            {slot.current_book.book_name ? ` · ${slot.current_book.book_name}` : ''}
-          </Text>
+          <Text style={styles.slotMeta}>📚 {slot.current_book.static_code}</Text>
+          {!selectMode && (
+            <Text style={styles.slotSubMeta}>
+              {t('books.emptyPositionLabel', {
+                position: slot.current_book.start_position,
+              })}
+              {slot.current_book.book_name
+                ? ` · ${slot.current_book.book_name}`
+                : ''}
+            </Text>
+          )}
+          {selectMode && (
+            <Text style={styles.disabledBadge}>{t('books.hasBookBadge')}</Text>
+          )}
         </View>
       ) : (
         <Text style={styles.slotEmpty}>{t('books.emptySlotHint')}</Text>
@@ -253,6 +440,42 @@ const styles = StyleSheet.create({
   },
   addButtonText: { color: '#fff', fontWeight: '600' },
 
+  headerButtons: { flexDirection: 'row', gap: 6 },
+  bulkButton: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#1a73e8',
+  },
+  bulkButtonText: { color: '#1a73e8', fontWeight: '600', fontSize: 13 },
+
+  selectButton: {
+    backgroundColor: '#fff',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#666',
+  },
+  selectButtonText: { color: '#444', fontWeight: '600', fontSize: 13 },
+
+  cancelSelectBtn: {
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 8,
+    backgroundColor: '#f0f0f0',
+  },
+  cancelSelectText: { color: '#444', fontWeight: '600' },
+
+  selectionHintBanner: {
+    backgroundColor: '#fef3c7',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  selectionHintText: { color: '#92400e', fontSize: 12 },
+
   scroll: { padding: 16, paddingBottom: 32 },
 
   emptyCard: {
@@ -275,12 +498,47 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  slotCardSelectable: {
+    borderWidth: 1.5,
+    borderColor: 'transparent',
+  },
+  slotCardSelected: {
+    borderColor: '#1a73e8',
+    backgroundColor: '#e8f0fe',
+  },
+  slotCardDisabled: {
+    opacity: 0.5,
+    backgroundColor: '#f5f5f5',
+  },
+
   slotHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 8,
   },
+  slotHeaderLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+
+  checkbox: {
+    width: 22,
+    height: 22,
+    borderRadius: 4,
+    borderWidth: 2,
+    borderColor: '#999',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+  },
+  checkboxSelected: {
+    borderColor: '#1a73e8',
+    backgroundColor: '#1a73e8',
+  },
+  checkboxDisabled: {
+    borderColor: '#ccc',
+    backgroundColor: '#eee',
+  },
+  checkmark: { color: '#fff', fontSize: 14, fontWeight: '700' },
+
   slotName: { fontSize: 18, fontWeight: '700', color: '#222' },
   priceBadge: {
     backgroundColor: '#e8f0fe',
@@ -293,6 +551,32 @@ const styles = StyleSheet.create({
   slotMeta: { fontSize: 14, color: '#222', fontWeight: '600' },
   slotSubMeta: { fontSize: 12, color: '#666', marginTop: 2 },
   slotEmpty: { fontSize: 13, color: '#888', fontStyle: 'italic' },
+  disabledBadge: { fontSize: 12, color: '#999', marginTop: 2, fontStyle: 'italic' },
+
+  actionBar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#fff',
+    paddingHorizontal: 16,
+    paddingTop: 12,
+    paddingBottom: 8,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: '#ddd',
+    shadowColor: '#000',
+    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: -2 },
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  deleteSelectedBtn: {
+    backgroundColor: '#dc2626',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  deleteSelectedText: { color: '#fff', fontWeight: '700', fontSize: 15 },
 
   modalBackdrop: {
     flex: 1,

@@ -18,7 +18,7 @@ import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../context/AuthContext';
-import { getSlot, assignBook, unassignBook } from '../api/slots';
+import { getSlot, assignBook, unassignBook, deleteSlot } from '../api/slots';
 import ReturnBookModal from '../components/ReturnBookModal';
 
 export default function SlotDetailScreen({ route }) {
@@ -126,6 +126,40 @@ export default function SlotDetailScreen({ route }) {
         },
       ]
     );
+  }
+
+  function confirmDeleteSlot() {
+    if (hasBook) {
+      Alert.alert(
+        t('slotDetail.cannotDeleteTitle'),
+        t('slotDetail.cannotDeleteHint')
+      );
+      return;
+    }
+    Alert.alert(
+      t('slotDetail.deleteSlotTitle'),
+      t('slotDetail.deleteSlotMessage', { name: slot?.slot_name }),
+      [
+        { text: t('common.cancel'), style: 'cancel' },
+        {
+          text: t('slotDetail.delete'),
+          style: 'destructive',
+          onPress: handleDeleteSlot,
+        },
+      ]
+    );
+  }
+
+  async function handleDeleteSlot() {
+    setBusy(true);
+    try {
+      await deleteSlot(slotId);
+      navigation.goBack();
+    } catch (err) {
+      Alert.alert(err.code || t('common.error'), err.message || t('common.tryAgain'));
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function handleUnassign() {
@@ -257,6 +291,16 @@ export default function SlotDetailScreen({ route }) {
               disabled={busy}
             >
               <Text style={styles.dangerActionText}>{t('slotDetail.unassignBook')}</Text>
+            </TouchableOpacity>
+          )}
+
+          {isAdmin && !hasBook && (
+            <TouchableOpacity
+              style={[styles.actionButton, styles.dangerAction, busy && styles.disabled]}
+              onPress={confirmDeleteSlot}
+              disabled={busy}
+            >
+              <Text style={styles.dangerActionText}>{t('slotDetail.deleteSlot')}</Text>
             </TouchableOpacity>
           )}
         </View>

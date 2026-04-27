@@ -152,7 +152,47 @@
     "couldNotCreate": "Could not create slot.",
     "emptySlotHint": "Empty — tap to assign a book",
     "emptyPositionLabel": "Position {{position}}",
-    "errorLoadingSlots": "Error loading slots"
+    "errorLoadingSlots": "Error loading slots",
+    "bulkAdd": "+ Bulk Add",
+    "select": "Select",
+    "cancelSelect": "Cancel",
+    "selectedCount": "{{count}} selected",
+    "deleteSelected": "Delete {{count}}",
+    "selectionHint": "Tap slots to select. Slots with books are disabled.",
+    "hasBookBadge": "📚 has book",
+    "deleteConfirmTitle": "Delete {{count}} slots?",
+    "deleteConfirmMessage": "These slots will be removed. This cannot be undone, but historical reports will still reference them.",
+    "deleteResultTitle": "Slots deleted",
+    "deleteResultMessage": "{{deleted}} deleted. {{occupied}} skipped (had books).",
+    "deleteErrorTitle": "Could not delete"
+  },
+
+  
+  "bulkSlots": {
+    "title": "Bulk Add Slots",
+    "modeQuick": "Quick Create",
+    "modeGroups": "Price Groups",
+    "quickHint": "Create N slots, all at the same price.",
+    "groupsHint": "Mix-and-match: e.g. 10 × $1 + 15 × $5 + 20 × $10.",
+    "howMany": "How many slots?",
+    "atPrice": "Ticket price",
+    "count": "Count",
+    "price": "Price",
+    "addTier": "+ Add another tier",
+    "namePrefix": "Name prefix (optional)",
+    "namePrefixHint": "Slot names will be auto-numbered. Default is \"Slot 1\", \"Slot 2\". Enter your own prefix to use instead.",
+    "namePrefixPlaceholder": "Slot",
+    "totalLabel": "Total",
+    "totalValue": "{{count}} slots will be created",
+    "createButton": "Create {{count}} slots",
+    "invalidCount": "Invalid count",
+    "invalidCountHint": "Each tier must have at least 1 slot.",
+    "invalidPrice": "Invalid price",
+    "invalidPriceHint": "Pick a valid ticket price.",
+    "tooMany": "Too many slots",
+    "tooManyHint": "Cannot create more than 500 slots at once (you requested {{total}}).",
+    "successTitle": "Slots created",
+    "successHint": "{{count}} slots have been added."
   },
 
   "slotDetail": {
@@ -181,7 +221,13 @@
     "manualEntryTitle": "Enter Barcode",
     "manualEntryHint": "Type the full barcode including the 3-digit position at the end.",
     "manualEntryPlaceholder": "e.g. 1234567890000",
-    "assign": "Assign"
+    "assign": "Assign",
+    "deleteSlot": "Delete Slot",
+    "delete": "Delete",
+    "deleteSlotTitle": "Delete slot?",
+    "deleteSlotMessage": "Permanently remove \"{{name}}\"? This cannot be undone, but historical reports will still reference this slot's name.",
+    "cannotDeleteTitle": "Cannot delete",
+    "cannotDeleteHint": "Unassign the book from this slot before deleting it."
   },
 
   "history": {

@@ -65,3 +65,43 @@ def serialize_slot(slot) -> dict:
         "ticket_price": str(slot.ticket_price),
         "current_book": _current_book_for_slot(slot),
     }
+
+
+class _BulkTierSchema(Schema):
+    """One tier in a bulk create request: count + ticket_price."""
+    count = fields.Int(
+        required=True,
+        validate=validate.Range(min=1, max=200, error="count must be 1-200."),
+    )
+    ticket_price = fields.Str(required=True)
+
+    @validates("ticket_price")
+    def _check_price(self, value, **kwargs):
+        _validate_ticket_price(value)
+
+
+class BulkCreateSlotsSchema(Schema):
+    """Validates POST /api/slots/bulk request body.
+
+    tiers: list of { count, ticket_price } pairs.
+    Total slots across all tiers cannot exceed 500 in one call.
+    name_prefix: optional string prepended to auto-generated names.
+                 Defaults to "Slot ". E.g. prefix "Front " yields "Front 1", "Front 2", ...
+    """
+    tiers = fields.List(
+        fields.Nested(_BulkTierSchema),
+        required=True,
+        validate=validate.Length(min=1, max=10, error="tiers must have 1-10 entries."),
+    )
+    name_prefix = fields.Str(
+        required=False,
+        validate=validate.Length(max=50),
+    )
+
+class BulkDeleteSlotsSchema(Schema):
+    """Validates POST /api/slots/bulk-delete request body."""
+    slot_ids = fields.List(
+        fields.Int(strict=True),
+        required=True,
+        validate=validate.Length(min=1, max=200, error="slot_ids must be 1-200 items."),
+    )
