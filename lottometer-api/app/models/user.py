@@ -25,9 +25,17 @@ class User(db.Model):
         default=lambda: datetime.now(timezone.utc),
     )
 
+    deleted_at = db.Column(db.DateTime, nullable=True)
+
     __table_args__ = (
-        db.UniqueConstraint("store_id", "username", name="uq_users_store_username"),
-        db.CheckConstraint("role IN ('admin', 'employee')", name="ck_users_role"),
+        db.Index(
+            "uq_users_store_username_active",
+            "store_id",
+            "username",
+            unique=True,
+            sqlite_where=db.text("deleted_at IS NULL"),
+            postgresql_where=db.text("deleted_at IS NULL"),
+        ),
     )
 
     def __repr__(self) -> str:

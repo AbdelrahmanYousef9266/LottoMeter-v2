@@ -11,6 +11,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScrollView } from 'react-native';
 import { useTranslation } from 'react-i18next';
+import { useNavigation } from '@react-navigation/native';
 
 import { logout } from '../api/auth';
 import { changeStorePin } from '../api/store';
@@ -25,6 +26,7 @@ const LANGUAGES = [
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
+  const navigation = useNavigation();
   const { user, setUser } = useAuth();
   const isAdmin = user?.role === 'admin';
 
@@ -156,6 +158,19 @@ export default function SettingsScreen() {
 
         {isAdmin && (
           <View style={styles.card}>
+            <Text style={styles.cardTitle}>{t('users.manageUsers')}</Text>
+            <Text style={styles.helperText}>{t('users.manageUsersHint')}</Text>
+            <TouchableOpacity
+              style={styles.manageUsersButton}
+              onPress={() => navigation.navigate('Users')}
+            >
+              <Text style={styles.manageUsersButtonText}>{t('users.title')}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {isAdmin && (
+          <View style={styles.card}>
             <Text style={styles.cardTitle}>{t('settings.storePin')}</Text>
             <Text style={styles.helperText}>{t('settings.storePinHint')}</Text>
 
@@ -276,6 +291,14 @@ const styles = StyleSheet.create({
   langText: { fontSize: 15, color: '#333', fontWeight: '500' },
   langTextActive: { color: '#1a73e8', fontWeight: '700' },
   checkmark: { color: '#1a73e8', fontSize: 18, fontWeight: '700' },
+
+  manageUsersButton: {
+    backgroundColor: '#1a73e8',
+    padding: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  manageUsersButtonText: { color: '#fff', fontWeight: '600' },
 
   changePinButton: {
     backgroundColor: '#1a73e8',

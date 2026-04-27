@@ -1,5 +1,4 @@
 """Route blueprints."""
-
 from app.routes.auth import auth_bp
 from app.routes.store import store_bp
 from app.routes.slot import slot_bp
@@ -8,6 +7,7 @@ from app.routes.shift import shift_bp
 from app.routes.scan import scan_bp
 from app.routes.extra_sales import extra_sales_bp
 from app.routes.report import report_bp
+from app.routes.user import user_bp
 
 
 def register_blueprints(app):
@@ -20,3 +20,4 @@ def register_blueprints(app):
     app.register_blueprint(scan_bp)
     app.register_blueprint(extra_sales_bp)
     app.register_blueprint(report_bp)
+    app.register_blueprint(user_bp)
