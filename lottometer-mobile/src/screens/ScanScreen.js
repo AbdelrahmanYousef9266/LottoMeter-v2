@@ -17,10 +17,12 @@ import { useTranslation } from 'react-i18next';
 
 import { getCurrentOpenShift } from '../api/shifts';
 import { recordScan } from '../api/scan';
+import { useAuth } from '../context/AuthContext';
 
 export default function ScanScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
+  const { scanMode } = useAuth();
   const [loading, setLoading] = useState(true);
   const [shift, setShift] = useState(null);
   const [openSubId, setOpenSubId] = useState(null);
@@ -123,8 +125,14 @@ export default function ScanScreen() {
       Alert.alert(t('scan.noOpenShift'), t('scan.noOpenShiftHint'));
       return;
     }
+    const isContinuous = scanMode === 'camera_continuous';
     navigation.navigate('CameraScanner', {
+      mode: isContinuous ? 'continuous' : 'single',
       onScanned: (data) => {
+        // Same handler in both modes — submitScan fires the API.
+        // In continuous mode it gets called once per scan while the
+        // camera stays open; in single mode it's called once and the
+        // camera closes immediately after.
         submitScan(data);
       },
     });
@@ -216,15 +224,19 @@ export default function ScanScreen() {
               </TouchableOpacity>
             </View>
 
-            <TouchableOpacity
-              style={[styles.cameraButton, busy && styles.disabled]}
-              onPress={handleOpenCamera}
-              disabled={busy}
-            >
-              <Text style={styles.cameraButtonText}>{t('scan.scanWithCamera')}</Text>
-            </TouchableOpacity>
+            {scanMode !== 'hardware_scanner' && (
+              <>
+                <TouchableOpacity
+                  style={[styles.cameraButton, busy && styles.disabled]}
+                  onPress={handleOpenCamera}
+                  disabled={busy}
+                >
+                  <Text style={styles.cameraButtonText}>{t('scan.scanWithCamera')}</Text>
+                </TouchableOpacity>
 
-            <Text style={styles.divider}>{t('scan.orEnterManually')}</Text>
+                <Text style={styles.divider}>{t('scan.orEnterManually')}</Text>
+              </>
+            )}
 
             <Text style={styles.label}>{t('scan.barcode')}</Text>
             <TextInput
@@ -238,6 +250,7 @@ export default function ScanScreen() {
               keyboardType="default"
               returnKeyType="done"
               onSubmitEditing={handleManualScan}
+              autoFocus={scanMode === 'hardware_scanner'}
             />
 
             <TouchableOpacity

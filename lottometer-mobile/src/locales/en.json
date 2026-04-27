@@ -349,9 +349,16 @@
 
   "camera": {
     "permissionRequired": "Camera permission required",
-    "permissionHint": "We need access to the camera to scan barcodes.",
+    "permissionHint": "We need camera access to scan barcodes.",
     "grantPermission": "Grant Permission",
     "cancel": "Cancel",
-    "hint": "Point camera at the barcode"
+    "done": "Done",
+    "hint": "Point the camera at a barcode",
+    "continuousHint": "Keep scanning — tap Done when finished",
+    "scannedCount": "{{count}} scanned",
+    "loading": "Loading active books…",
+    "errorMalformed": "❌ Invalid barcode",
+    "errorUnknownBook": "❌ Unknown book — not in this store",
+    "errorBadPosition": "❌ Position {{position}} invalid for ${{price}} book (max {{max}})"
   }
 }

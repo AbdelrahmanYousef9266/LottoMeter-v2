@@ -16,6 +16,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
 import { recordWholeBookSale } from '../api/wholeBookSale';
+import { useAuth } from '../context/AuthContext';
 
 const VALID_PRICES = ['1.00', '2.00', '3.00', '5.00', '10.00', '20.00'];
 
@@ -31,6 +32,7 @@ const LENGTH_BY_PRICE = {
 export default function WholeBookSaleModal({ visible, subshiftId, onCancel, onSuccess }) {
   const { t } = useTranslation();
   const navigation = useNavigation();
+  const { scanMode } = useAuth();
   const [barcode, setBarcode] = useState('');
   const [price, setPrice] = useState('5.00');
   const [pin, setPin] = useState('');
@@ -112,18 +114,21 @@ export default function WholeBookSaleModal({ visible, subshiftId, onCancel, onSu
 
             <Text style={styles.label}>{t('wholeBook.barcode')}</Text>
             <View style={styles.barcodeRow}>
-              <TextInput
-                style={[styles.input, styles.barcodeInput]}
-                value={barcode}
-                onChangeText={setBarcode}
-                placeholder={t('wholeBook.barcodePlaceholder')}
-                autoCapitalize="none"
-                autoCorrect={false}
-              />
-              <TouchableOpacity style={styles.cameraButton} onPress={handleScanCamera}>
-                <Text style={styles.cameraButtonText}>📷</Text>
-              </TouchableOpacity>
-            </View>
+                <TextInput
+                  style={[styles.input, styles.barcodeInput]}
+                  value={barcode}
+                  onChangeText={setBarcode}
+                  placeholder={t('wholeBook.barcodePlaceholder')}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  autoFocus={scanMode === 'hardware_scanner'}
+                />
+                {scanMode !== 'hardware_scanner' && (
+                  <TouchableOpacity style={styles.cameraButton} onPress={handleScanCamera}>
+                    <Text style={styles.cameraButtonText}>📷</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
 
             <Text style={styles.label}>{t('wholeBook.ticketPrice')}</Text>
             <View style={styles.priceGrid}>

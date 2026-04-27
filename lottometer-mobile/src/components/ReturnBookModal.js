@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 
 import { returnBookToVendor } from '../api/wholeBookSale';
 import api from '../api/client';
+import { useAuth } from '../context/AuthContext';
 
 export default function ReturnBookModal({
   visible,
@@ -27,9 +28,11 @@ export default function ReturnBookModal({
 }) {
   const { t } = useTranslation();
   const navigation = useNavigation();
+  const { scanMode } = useAuth();
   const [barcode, setBarcode] = useState('');
   const [pin, setPin] = useState('');
   const [busy, setBusy] = useState(false);
+  
 
   useEffect(() => {
     if (visible) {
@@ -138,10 +141,13 @@ export default function ReturnBookModal({
                 placeholder={t('returnBook.barcodePlaceholder')}
                 autoCapitalize="none"
                 autoCorrect={false}
+                autoFocus={scanMode === 'hardware_scanner'}
               />
-              <TouchableOpacity style={styles.cameraButton} onPress={handleScanCamera}>
-                <Text style={styles.cameraButtonText}>📷</Text>
-              </TouchableOpacity>
+              {scanMode !== 'hardware_scanner' && (
+                <TouchableOpacity style={styles.cameraButton} onPress={handleScanCamera}>
+                  <Text style={styles.cameraButtonText}>📷</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             <Text style={styles.label}>{t('returnBook.storePin')}</Text>

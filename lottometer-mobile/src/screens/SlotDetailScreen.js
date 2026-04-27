@@ -25,7 +25,7 @@ export default function SlotDetailScreen({ route }) {
   const { t } = useTranslation();
   const { slotId } = route.params;
   const navigation = useNavigation();
-  const { user } = useAuth();
+  const { user, scanMode } = useAuth();
   const isAdmin = user?.role === 'admin';
 
   const [loading, setLoading] = useState(true);
@@ -60,6 +60,7 @@ export default function SlotDetailScreen({ route }) {
 
   function handleScanToAssign() {
     navigation.navigate('CameraScanner', {
+      validate: false, // book might be brand new, not yet in DB
       onScanned: async (barcode) => {
         await doAssign(barcode);
       },
@@ -215,15 +216,17 @@ export default function SlotDetailScreen({ route }) {
         <View style={styles.actionsCard}>
           {isAdmin && (
             <>
-              <TouchableOpacity
-                style={[styles.actionButton, styles.primaryAction, busy && styles.disabled]}
-                onPress={handleScanToAssign}
-                disabled={busy}
-              >
-                <Text style={styles.actionButtonText}>
-                  {hasBook ? t('slotDetail.replaceScan') : t('slotDetail.assignScan')}
-                </Text>
-              </TouchableOpacity>
+              {scanMode !== 'hardware_scanner' && (
+                <TouchableOpacity
+                  style={[styles.actionButton, styles.primaryAction, busy && styles.disabled]}
+                  onPress={handleScanToAssign}
+                  disabled={busy}
+                >
+                  <Text style={styles.actionButtonText}>
+                    {hasBook ? t('slotDetail.replaceScan') : t('slotDetail.assignScan')}
+                  </Text>
+                </TouchableOpacity>
+              )}
 
               <TouchableOpacity
                 style={[styles.actionButton, styles.secondaryAction, busy && styles.disabled]}
