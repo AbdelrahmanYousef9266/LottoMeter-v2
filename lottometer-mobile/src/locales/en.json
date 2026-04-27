@@ -198,7 +198,22 @@
     "theme": "Theme",
     "logoutSection": "Session",
     "restartTitle": "Restart Required",
-    "restartMessage": "Layout direction has changed. Close the app completely and reopen it for the change to take effect."
+    "restartMessage": "Layout direction has changed. Close the app completely and reopen it for the change to take effect.",
+    "storePin": "Store PIN",
+    "storePinHint": "The 4-digit PIN protects whole-book sales and returns. Admin only.",
+    "changePin": "Change PIN",
+    "currentPin": "Current PIN",
+    "newPin": "New PIN",
+    "confirmPin": "Confirm New PIN",
+    "save": "Save",
+    "pinChangedTitle": "PIN updated",
+    "pinChangedHint": "Your store PIN has been changed.",
+    "pinMismatchTitle": "PINs don't match",
+    "pinMismatchHint": "New PIN and confirmation must be the same.",
+    "pinFormatTitle": "Invalid format",
+    "pinFormatHint": "PIN must be exactly 4 digits.",
+    "currentPinWrongTitle": "Wrong current PIN",
+    "currentPinWrongHint": "The current PIN is incorrect."
   },
 
   "closeShift": {
