@@ -242,7 +242,20 @@
     "statusCorrect": "Correct",
     "statusOver": "Over",
     "statusShort": "Short",
-    "statusVoided": "Voided"
+    "statusVoided": "Voided",
+    "filters": {
+      "pill": "Filters",
+      "from": "From",
+      "to": "To",
+      "datePlaceholder": "YYYY-MM-DD",
+      "status": "Status",
+      "statusAll": "All",
+      "statusClosed": "Closed",
+      "employee": "Employee",
+      "allEmployees": "All Employees",
+      "apply": "Apply",
+      "clear": "Clear"
+    }
   },
 
   "report": {
@@ -272,7 +285,17 @@
     "soldBeforeReturn": "{{count}} sold before return",
     "reportNotFound": "Report not found.",
     "errorLoadingReport": "Could not load report.",
-    "subshiftFooter": "{{count}} sold"
+    "subshiftFooter": "{{count}} sold",
+    "export": {
+      "button": "Export PDF",
+      "printButton": "Print",
+      "shareTitle": "Share Report",
+      "errorTitle": "Export Failed",
+      "printErrorTitle": "Print Failed",
+      "generatedAt": "Generated",
+      "savedTitle": "Saved",
+      "savedMessage": "{{filename}} has been saved."
+    }
   },
 
   "settings": {

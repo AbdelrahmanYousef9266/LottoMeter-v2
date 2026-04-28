@@ -341,6 +341,9 @@ def list_main_shifts(
     status: str | None = None,
     limit: int = 50,
     offset: int = 0,
+    opened_by_user_id: int | None = None,
+    from_date: datetime | None = None,
+    to_date: datetime | None = None,
 ) -> tuple[list[ShiftDetails], int]:
     q = ShiftDetails.query.filter_by(store_id=store_id, main_shift_id=None)
     if status == "open":
@@ -350,6 +353,13 @@ def list_main_shifts(
     elif status == "voided":
         q = q.filter(ShiftDetails.voided.is_(True))
 
+    if opened_by_user_id is not None:
+        q = q.filter(ShiftDetails.opened_by_user_id == opened_by_user_id)
+    if from_date is not None:
+        q = q.filter(ShiftDetails.shift_start_time >= from_date)
+    if to_date is not None:
+        q = q.filter(ShiftDetails.shift_start_time <= to_date)
+
     total = q.count()
     shifts = (
         q.order_by(ShiftDetails.shift_start_time.desc())
@@ -358,6 +368,33 @@ def list_main_shifts(
         .all()
     )
     return shifts, total
+
+
+def list_main_shifts_for_employee(store_id: int) -> list[ShiftDetails]:
+    """Employee-scoped view: the current open shift + the most recent closed shift.
+
+    Voided shifts are excluded. Returns at most 2 items.
+    """
+    result = []
+
+    open_shift = (
+        ShiftDetails.query
+        .filter_by(store_id=store_id, main_shift_id=None, is_shift_open=True, voided=False)
+        .first()
+    )
+    if open_shift:
+        result.append(open_shift)
+
+    last_closed = (
+        ShiftDetails.query
+        .filter_by(store_id=store_id, main_shift_id=None, is_shift_open=False, voided=False)
+        .order_by(ShiftDetails.shift_start_time.desc())
+        .first()
+    )
+    if last_closed:
+        result.append(last_closed)
+
+    return result
 
 
 def get_main_shift(store_id: int, shift_id: int) -> ShiftDetails:

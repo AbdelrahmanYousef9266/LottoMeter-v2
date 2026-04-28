@@ -103,6 +103,12 @@ def login(data: dict) -> dict:
             "role": user.role,
             "store_id": store.store_id,
         },
+        "store": {
+            "store_id": store.store_id,
+            "store_name": store.store_name,
+            "store_code": store.store_code,
+            "scan_mode": store.scan_mode,
+        },
     }
 
 def verify_store_pin(store_id: int, user_id: int, pin: str) -> None:

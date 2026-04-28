@@ -8,6 +8,7 @@ from app.routes.scan import scan_bp
 from app.routes.extra_sales import extra_sales_bp
 from app.routes.report import report_bp
 from app.routes.user import user_bp
+from app.routes.dev import dev_bp
 
 
 def register_blueprints(app):
@@ -21,3 +22,5 @@ def register_blueprints(app):
     app.register_blueprint(extra_sales_bp)
     app.register_blueprint(report_bp)
     app.register_blueprint(user_bp)
+    if app.debug:
+        app.register_blueprint(dev_bp)

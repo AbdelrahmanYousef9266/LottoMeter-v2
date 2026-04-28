@@ -162,6 +162,19 @@ Admin-only. Update the store's scan mode preference.
 
 Admin-only endpoints. All queries scoped to JWT's `store_id`.
 
+### GET /api/users/active
+Admin-only. Returns a compact list of all non-deleted users for use in dropdown filters.
+
+**Response 200**
+```json
+{
+  "users": [
+    { "user_id": 1, "username": "admin",  "role": "admin" },
+    { "user_id": 3, "username": "alice",  "role": "employee" }
+  ]
+}
+```
+
 ### GET /api/users
 Lists all users (active and soft-deleted).
 
@@ -548,7 +561,19 @@ Opens a new main shift AND auto-creates Sub-shift 1 (FR-SHIFT-01).
 **Errors:** 409 `SHIFT_ALREADY_OPEN` — a main shift is already open for this store (FR-SHIFT-02).
 
 ### GET /api/shifts
-**Query params:** `from`, `to` (ISO dates), `status` (`open`/`closed`/`voided`), `limit`, `offset`
+Response is scoped by the caller's role.
+
+**Admin role** — full listing with optional filters:
+| Param | Type | Description |
+|---|---|---|
+| `status` | string | `open` / `closed` / `voided` |
+| `from` | ISO date | Inclusive start date (`YYYY-MM-DD`) |
+| `to` | ISO date | Inclusive end date (`YYYY-MM-DD`) |
+| `opened_by_user_id` | int | Filter to shifts opened by a specific user (400 if unknown) |
+| `limit` | int | Default 50 |
+| `offset` | int | Default 0 |
+
+**Employee role** — all query params are ignored. Returns at most 2 shifts: the currently open main shift (if any) and the most recently closed main shift (if any). Voided shifts are never included.
 
 **Response 200**
 ```json
@@ -571,6 +596,9 @@ Opens a new main shift AND auto-creates Sub-shift 1 (FR-SHIFT-01).
 ```
 
 Only main shifts returned.
+
+**Errors (admin only):**
+- 400 `VALIDATION_ERROR` — `from`/`to` not valid ISO dates, or `opened_by_user_id` not found in this store.
 
 ### GET /api/shifts/{id}
 **Response 200** — full main shift with nested sub-shifts and pending_scans for the current open sub-shift.
@@ -817,6 +845,8 @@ Any authenticated user. Requires store PIN.
 
 ### GET /api/reports/shift/{id}
 `id` is a **main shift** id.
+
+**Access control:** Employees may only fetch reports for shifts returned by `GET /api/shifts` (their open shift + most recent closed shift). Any other `shift_id` returns 404 `SHIFT_NOT_FOUND`. Admins have unrestricted access.
 
 **Response 200**
 ```json

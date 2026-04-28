@@ -27,6 +27,21 @@ def list_users_route():
     return jsonify({"users": [serialize_user(u) for u in users]}), 200
 
 
+@user_bp.get("/active")
+@jwt_required()
+@admin_required
+def list_active_users_route():
+    """GET /api/users/active — minimal user list for the employee filter dropdown."""
+    store_id = current_store_id()
+    users = user_service.list_users(store_id)
+    return jsonify({
+        "users": [
+            {"user_id": u.user_id, "username": u.username, "role": u.role}
+            for u in users
+        ]
+    }), 200
+
+
 @user_bp.post("")
 @jwt_required()
 @admin_required

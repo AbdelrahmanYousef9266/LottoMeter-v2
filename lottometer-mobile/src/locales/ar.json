@@ -242,7 +242,20 @@
     "statusCorrect": "صحيح",
     "statusOver": "زيادة",
     "statusShort": "نقص",
-    "statusVoided": "ملغاة"
+    "statusVoided": "ملغاة",
+    "filters": {
+      "pill": "فلاتر",
+      "from": "من",
+      "to": "إلى",
+      "datePlaceholder": "YYYY-MM-DD",
+      "status": "الحالة",
+      "statusAll": "الكل",
+      "statusClosed": "مغلقة",
+      "employee": "الموظف",
+      "allEmployees": "جميع الموظفين",
+      "apply": "تطبيق",
+      "clear": "مسح"
+    }
   },
 
   "report": {
@@ -272,7 +285,17 @@
     "soldBeforeReturn": "{{count}} بيعت قبل الإعادة",
     "reportNotFound": "التقرير غير موجود.",
     "errorLoadingReport": "تعذّر تحميل التقرير.",
-    "subshiftFooter": "{{count}} بيعت"
+    "subshiftFooter": "{{count}} بيعت",
+    "export": {
+      "button": "تصدير PDF",
+      "printButton": "طباعة",
+      "shareTitle": "مشاركة التقرير",
+      "errorTitle": "فشل التصدير",
+      "printErrorTitle": "فشلت الطباعة",
+      "generatedAt": "تم الإنشاء",
+      "savedTitle": "تم الحفظ",
+      "savedMessage": "تم حفظ {{filename}}."
+    }
   },
 
   "settings": {

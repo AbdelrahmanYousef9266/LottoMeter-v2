@@ -13,7 +13,7 @@ from app.schemas.shift_schema import (
 from app.schemas.void_schema import VoidShiftSchema
 from app.services import shift_service
 from app.errors import ValidationError
-from app.auth_helpers import admin_required, current_store_id, current_user_id
+from app.auth_helpers import admin_required, current_store_id, current_user_id, current_role
 from app.models.user import User
 from app.models.slot import Slot
 
@@ -76,6 +76,21 @@ def open_shift():
 @shift_bp.route("", methods=["GET"])
 @jwt_required()
 def list_shifts():
+    store_id = current_store_id()
+
+    if current_role() == "employee":
+        shifts = shift_service.list_main_shifts_for_employee(store_id)
+        user_ids = {s.opened_by_user_id for s in shifts}
+        users = {u.user_id: u for u in User.query.filter(User.user_id.in_(user_ids)).all()}
+        return jsonify({
+            "shifts": [
+                serialize_main_shift_summary(s, opened_by=users.get(s.opened_by_user_id))
+                for s in shifts
+            ],
+            "total": len(shifts),
+        }), 200
+
+    # Admin path — full listing with optional filters
     status = request.args.get("status")
     try:
         limit = int(request.args.get("limit", 50))
@@ -83,8 +98,46 @@ def list_shifts():
     except ValueError:
         raise ValidationError("limit and offset must be integers.")
 
+    # Optional: filter by who opened the shift
+    opened_by_user_id = None
+    if request.args.get("opened_by_user_id"):
+        try:
+            opened_by_user_id = int(request.args["opened_by_user_id"])
+        except ValueError:
+            raise ValidationError("opened_by_user_id must be an integer.")
+        target = User.query.filter_by(
+            store_id=store_id, user_id=opened_by_user_id, deleted_at=None
+        ).first()
+        if target is None:
+            raise ValidationError(
+                "opened_by_user_id refers to an unknown user.",
+                details={"opened_by_user_id": ["User not found in this store."]},
+            )
+
+    # Optional: date-range filters (inclusive, ISO date YYYY-MM-DD)
+    from_date = None
+    to_date = None
+    try:
+        from datetime import datetime as _dt, timezone
+        if request.args.get("from"):
+            from_date = _dt.strptime(request.args["from"], "%Y-%m-%d").replace(
+                tzinfo=timezone.utc
+            )
+        if request.args.get("to"):
+            to_date = _dt.strptime(request.args["to"], "%Y-%m-%d").replace(
+                hour=23, minute=59, second=59, tzinfo=timezone.utc
+            )
+    except ValueError:
+        raise ValidationError("from and to must be ISO dates (YYYY-MM-DD).")
+
     shifts, total = shift_service.list_main_shifts(
-        store_id=current_store_id(), status=status, limit=limit, offset=offset
+        store_id=store_id,
+        status=status,
+        limit=limit,
+        offset=offset,
+        opened_by_user_id=opened_by_user_id,
+        from_date=from_date,
+        to_date=to_date,
     )
 
     user_ids = {s.opened_by_user_id for s in shifts}

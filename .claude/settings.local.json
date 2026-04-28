@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python scripts/seed_edge_cases_a.py)",
+      "Bash(python -X utf8 scripts/seed_edge_cases_a.py)",
+      "Bash(sqlite3 *)",
+      "Bash(python *)",
+      "Bash(del *)"
+    ]
+  }
+}

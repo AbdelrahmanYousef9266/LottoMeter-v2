@@ -5,6 +5,11 @@ export async function listUsers() {
   return data.users || [];
 }
 
+export async function listActiveUsers() {
+  const { data } = await api.get('/users/active');
+  return data.users || [];
+}
+
 export async function createUser({ username, password, role }) {
   const { data } = await api.post('/users', { username, password, role });
   return data.user;
