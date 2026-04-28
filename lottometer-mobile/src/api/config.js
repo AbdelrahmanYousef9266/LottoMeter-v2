@@ -1,3 +1,4 @@
-const LOCAL_IP = '192.168.1.244';
+const PRODUCTION_API_URL = "https://lottometer-api.onrender.com/api";
+const BASE_URL = process.env.EXPO_PUBLIC_API_URL || PRODUCTION_API_URL;
 
-export const API_BASE_URL = `http://${LOCAL_IP}:5000/api`;
+export const API_BASE_URL = BASE_URL;
