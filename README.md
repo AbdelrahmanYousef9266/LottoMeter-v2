@@ -61,8 +61,8 @@ Stores that sell lottery tickets traditionally rely on manual paperwork to track
 
 | Model | Description |
 |---|---|
-| `Store` | Root tenant — holds store PIN; all data isolated by store_id |
-| `User` | Employees and admins with role-based access (enforced from v2.0) |
+| `Store` | Root tenant — holds store PIN and scan_mode preference; all data isolated by store_id |
+| `User` | Employees and admins with role-based access; soft-deletable (deleted_at) |
 | `Slot` | Physical location holding a book — fixed ticket price, soft-deletable |
 | `Book` | Lottery ticket book — created via slot assignment, tracked through lifecycle |
 | `BookAssignmentHistory` | Every assignment / reassignment / unassignment event |
@@ -134,12 +134,20 @@ Clean closes reward employees with fast handover. Discrepancies trigger full ver
 
 ## Features
 
-### v2.0 — Core (~95% complete)
-- Backend: 29 REST endpoints, 8 SQLAlchemy models, JWT auth, Marshmallow schemas, PIN rate-limiting, Docker
+### v2.0 — Core (complete)
+- Backend: 34 REST endpoints, 8 SQLAlchemy models, JWT auth, Marshmallow schemas, PIN rate-limiting, Docker
 - Mobile: full app — auth, scanning (camera + manual), slot management, shift lifecycle, history, reports
 - Admin bulk slot + book management with scan-to-assign + reassignment confirmation flow
+- Admin bulk slot creation (up to 500 per request) and bulk delete via dedicated endpoints
+- Admin user management: create, list, edit, soft-delete (self-protection rules enforced)
+- Store scan_mode preference (camera_single | camera_continuous | hardware_scanner)
 - Shift management with handover and final close, both with live cash preview
 - Barcode scanning via `expo-camera` with manual fallback on every screen
+- Continuous scan mode with deduplication guard (same barcode within 2 seconds ignored)
+- ITF-14 normalization: strips leading 0 from 13-digit barcodes for lottery scanner compatibility
+- Client-side L1 (book existence) and L2 (position range) validation before API call
+- Hardware scanner mode: hides camera UI, auto-focuses text input for keystroke-wedge devices
+- PIN change UI in Settings (admin-only — backend + mobile wired)
 - Smart scan_type auto-locking by sub-shift initialization state
 - Last-ticket detection refined to require close + real movement
 - Whole-book sale with store PIN
@@ -151,14 +159,13 @@ Clean closes reward employees with fast handover. Discrepancies trigger full ver
 - Bottom tab navigation, pull-to-refresh, status badges
 - Admin role enforcement from day 1
 - PIN rate-limiting (5 attempts / 10 min)
+- Multi-tenancy hardened: 19 security fixes — all queries scoped to store_id, cross-tenant returns 404
 
 ### v2.0 — Outstanding (deferred)
-- PIN change UI in Settings (admin-only mobile screen)
 - Custom splash screen
 - Onboarding flow
 - Theme picker (light/dark)
 - Toast notifications + skeleton loaders (polish)
-- Multi-tenancy audit (pre-deployment hardening)
 
 ### v2.1 — Growth (planned)
 - Store self-registration

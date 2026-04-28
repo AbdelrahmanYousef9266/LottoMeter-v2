@@ -6,7 +6,7 @@
 | Field | Value |
 |---|---|
 | **Project Name** | LottoMeter v2.0 |
-| **Document Version** | 5.2 |
+| **Document Version** | 5.3 |
 | **Author** | Abdelrahman Yousef |
 | **Date** | April 2026 |
 | **Status** | Final — Verified |
@@ -20,7 +20,8 @@
 | 4.0 | April 2026 | Initial verified SRS |
 | 5.0 | April 2026 | Design review revisions — see §18 Decision Log |
 | 5.1 | April 2026 | Clarified scan event model — scans happen only at shift open, last ticket, return-to-vendor, and shift close (not on every sale) |
-| 5.2 | April 2026 | Implementation revisions caught via end-to-end mobile testing: ShiftBooks PK changed to (shift_id, static_code, scan_type); last-ticket detection refined (close + position movement required); Rule 8 narrowed to rewrites only; mobile UX rules; i18n implemented ||
+| 5.2 | April 2026 | Implementation revisions caught via end-to-end mobile testing: ShiftBooks PK changed to (shift_id, static_code, scan_type); last-ticket detection refined (close + position movement required); Rule 8 narrowed to rewrites only; mobile UX rules; i18n implemented |
+| 5.3 | April 2026 | Multi-tenancy hardened (19 security fixes, cross-tenant audit complete); admin user management CRUD added (§6.12, FR-USER-01–07); bulk slot management (FR-SLOT-08–10); scan_mode preference (FR-STORE-05–06); FR-AUTH-06 security scoping requirement added; mobile: continuous scan, ITF-14 normalization, hardware scanner mode, bulk slot UI, PIN change complete |
 
 ---
 
@@ -116,7 +117,8 @@ Role enforcement is active from v2.0 — protected endpoints check the `role` cl
 - Assigns books to slots (bulk sequential workflow)
 - Reassigns books between slots (allowed anytime, including during open sub-shifts)
 - Sets and changes the store PIN
-- Manages users
+- Manages user accounts (create, list, edit role, deactivate — cannot deactivate own account)
+- Configures store scan mode (camera_single, camera_continuous, or hardware_scanner)
 - Voids sub-shifts or main shifts (with reason)
 - Views all shift reports
 
@@ -431,6 +433,8 @@ State transitions:
 | FR-STORE-02 | First-run setup creates store + first admin user + store PIN | High |
 | FR-STORE-03 | All API queries scoped to authenticated user's store_id | High |
 | FR-STORE-04 | Admin can change the store PIN anytime | High |
+| FR-STORE-05 | Admin can configure store scan_mode (camera_single \| camera_continuous \| hardware_scanner) | High |
+| FR-STORE-06 | scan_mode is returned in auth responses so the mobile client applies it immediately on login | High |
 
 ### 6.2 Authentication & Authorization
 
@@ -441,6 +445,7 @@ State transitions:
 | FR-AUTH-03 | All endpoints except login/setup require JWT | High |
 | FR-AUTH-04 | Admin-only endpoints reject non-admin JWTs with 403 | High |
 | FR-AUTH-05 | Logout blocklists the current token until its natural expiry | High |
+| FR-AUTH-06 | All endpoints scoped to caller's store_id; cross-store access returns 404 (existence not leaked) | High |
 
 ### 6.3 Slot Management
 
@@ -453,6 +458,9 @@ State transitions:
 | FR-SLOT-05 | ticket_price must be one of $1, $2, $3, $5, $10, $20 | High |
 | FR-SLOT-06 | Soft-delete slots (deleted_at); only when empty | High |
 | FR-SLOT-07 | Soft-deleted slots remain joinable for historical reports | High |
+| FR-SLOT-08 | Admin can bulk-create up to 500 slots in a single request | Medium |
+| FR-SLOT-09 | Admin can bulk-delete slots by id list (only empty, non-deleted slots) | Medium |
+| FR-SLOT-10 | Bulk operations are transactional — partial failure rolls back all changes | High |
 
 ### 6.4 Book Management
 
@@ -557,6 +565,18 @@ Scan events occur only at: shift open, last ticket of a book during shift, retur
 | FR-VOID-04 | Voided shifts excluded from main shift totals | High |
 | FR-VOID-05 | Voided shifts appear in reports with VOIDED badge + reason | High |
 | FR-VOID-06 | Voiding a sub-shift does not modify downstream carried-forward data | High |
+
+### 6.12 User Management
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-USER-01 | Admin can list all users (active and soft-deleted) in the store | High |
+| FR-USER-02 | Admin can create a new user (username, password, role) | High |
+| FR-USER-03 | Admin can edit a user's username, password, or role | High |
+| FR-USER-04 | Admin can soft-delete a user (sets deleted_at; login immediately blocked) | High |
+| FR-USER-05 | Admin cannot delete or deactivate their own account | High |
+| FR-USER-06 | username is unique within store among active (non-deleted) users | High |
+| FR-USER-07 | Soft-deleted users cannot log in | High |
 
 ---
 
@@ -764,8 +784,8 @@ Eight models. Full ERD with columns, constraints, and relationships is in `docs/
 
 | Model | Purpose |
 |---|---|
-| Store | Root tenant |
-| User | Employees and admins |
+| Store | Root tenant; holds store PIN and scan_mode preference |
+| User | Employees and admins; soft-deletable (deleted_at) |
 | Slot | Physical location for a book, holds ticket_price |
 | Book | Lottery ticket book — created via slot assignment |
 | BookAssignmentHistory | Every assignment / reassignment / unassignment event |
@@ -784,25 +804,36 @@ Full API contract is in `docs/API_Contract.md`.
 | POST | /api/auth/setup | — | — |
 | POST | /api/auth/login | — | — |
 | POST | /api/auth/logout | JWT | any |
+| GET | /api/auth/me | JWT | any |
+| GET | /api/users | JWT | admin |
+| POST | /api/users | JWT | admin |
+| GET | /api/users/{id} | JWT | admin |
+| PUT | /api/users/{id} | JWT | admin |
+| DELETE | /api/users/{id} | JWT | admin |
+| PUT | /api/store/settings/pin | JWT | admin |
+| PUT | /api/store/settings/scan-mode | JWT | admin |
 | GET | /api/slots | JWT | any |
 | POST | /api/slots | JWT | admin |
+| GET | /api/slots/{id} | JWT | any |
 | PUT | /api/slots/{id} | JWT | admin |
 | DELETE | /api/slots/{id} | JWT | admin |
+| POST | /api/slots/bulk | JWT | admin |
+| POST | /api/slots/bulk-delete | JWT | admin |
 | POST | /api/slots/{slot_id}/assign-book | JWT | admin |
-| POST | /api/books/{book_id}/unassign | JWT | admin |
-| POST | /api/books/{book_id}/return-to-vendor | JWT | any (PIN) |
 | GET | /api/books | JWT | any |
 | GET | /api/books/{id} | JWT | any |
-| PUT | /api/store/settings/pin | JWT | admin |
+| POST | /api/books/{book_id}/unassign | JWT | admin |
+| POST | /api/books/{book_id}/return-to-vendor | JWT | any (PIN) |
 | POST | /api/shifts | JWT | any |
 | GET | /api/shifts | JWT | any |
 | GET | /api/shifts/{id} | JWT | any |
+| GET | /api/shifts/{id}/summary | JWT | any |
 | POST | /api/shifts/{id}/subshifts | JWT | any |
 | PUT | /api/shifts/{id}/close | JWT | any |
-| POST | /api/scan | JWT | any |
-| POST | /api/shifts/{subshift_id}/whole-book-sale | JWT | any (PIN) |
 | POST | /api/shifts/{id}/void | JWT | admin |
 | POST | /api/shifts/{id}/subshifts/{sub_id}/void | JWT | admin |
+| POST | /api/scan | JWT | any |
+| POST | /api/shifts/{id}/whole-book-sale | JWT | any (PIN) |
 | GET | /api/reports/shift/{id} | JWT | any |
 
 ---
@@ -999,6 +1030,24 @@ Key decisions made during SRS v5.0 design review (April 2026):
 
 35. **Reassignment confirmation flow on mobile** — when a scanned barcode matches a book already active in another slot, the API returns `REASSIGN_CONFIRMATION_REQUIRED` (409). The mobile app catches this and shows a "Move it" / "Cancel" dialog before retrying with `confirm_reassign: true`. Implements the SRS Decision #22.
 
+### v5.3 revisions (April 2026 — Phase 5 pre-deployment hardening):
+
+36. **Multi-tenancy audit complete** — swept all 8 service files for queries touching multi-tenant tables that lacked `store_id` filtering. Found and fixed 19 gaps: 1 direct exploit (`GET /api/shifts/{id}/summary` had no ownership check on the subshift_id from the URL) and 18 depth-gap holes in internal helper functions. Cross-tenant test sequence T-01–T-10 verified. `FR-AUTH-06` added to §6.2.
+
+37. **Admin user management CRUD** — `GET|POST /api/users`, `GET|PUT|DELETE /api/users/{id}`. Admin can create, list, edit, and soft-delete users. Self-protection rules: admin cannot delete or deactivate their own account. Moved up from v2.1 scope.
+
+38. **User soft-delete (deleted_at column)** — consistent with Slot soft-delete pattern. Partial unique index `(store_id, username) WHERE deleted_at IS NULL` allows username reuse after deactivation while preserving historical login and audit rows. Soft-deleted users cannot log in.
+
+39. **Bulk slot management** — `POST /api/slots/bulk` (up to 500 slots per request, transactional) and `POST /api/slots/bulk-delete` (by id list, only empty non-deleted slots). Avoids one-at-a-time slot creation during initial store setup.
+
+40. **Store.scan_mode preference** — new column on Store, values: `camera_single | camera_continuous | hardware_scanner`, default `camera_single`. Returned in auth responses; mobile client reads on login and applies immediately. Admin changes via `PUT /api/store/settings/scan-mode`.
+
+41. **Mobile continuous scan mode** — camera stays open after a successful scan; 2-second deduplication guard prevents double-recording the same barcode in rapid succession. Activated when `scan_mode = camera_continuous`.
+
+42. **ITF-14 normalization on mobile** — 13-digit barcodes beginning with 0 are stripped of the leading 0 before barcode parsing. Lottery ticket barcodes may be wrapped in an ITF-14 carrier by scanner firmware; normalization ensures the correct `static_code` is extracted regardless.
+
+43. **Client-side L1 and L2 validation on mobile** — the scan screen pre-fetches the store's active-book map. Before calling `POST /api/scan`, the mobile client checks (L1) whether the `static_code` exists in the map and (L2) whether the extracted position is in `[0, length-1]` for the book's price. Immediate UI feedback without a round-trip; server still enforces all rules.
+
 ---
 
-*Document end — LottoMeter v2.0 SRS v5.1 — Verified & Final*
+*Document end — LottoMeter v2.0 SRS v5.3 — Verified & Final*

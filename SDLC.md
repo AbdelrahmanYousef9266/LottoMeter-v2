@@ -155,22 +155,27 @@ The complete REST API is implemented and tested end-to-end with both Thunder Cli
 - [x] Reports service + endpoint
 - [x] Sub-shift summary endpoint (`GET /api/shifts/{id}/summary`) for live preview
 - [x] Docker + docker-compose setup
+- [x] GET /api/auth/me endpoint
+- [x] Admin user management CRUD (list, create, edit, soft-delete) — 5 endpoints
+- [x] Bulk slot management (POST /api/slots/bulk up to 500, POST /api/slots/bulk-delete)
+- [x] Store scan_mode preference (PUT /api/store/settings/scan-mode)
+- [x] Multi-tenancy audit complete — 19 security fixes applied; T-01–T-10 cross-tenant tests pass
 
 ### Implementation Stats
 
 | Metric | Value |
 |---|---|
 | SQLAlchemy models | 8 |
-| API endpoints | 29 |
+| API endpoints | 34 |
 | Flask blueprints | 8 |
 | Marshmallow schemas | 7 |
 | Services | 9 |
 | Database migrations | 7 |
-| Lines of Python (approx) | 2,600 |
+| Lines of Python (approx) | 5,020 |
 
 ### Backend — Outstanding
 
-- [ ] Multi-tenancy audit (verify every internal query touching multi-tenant tables filters by `store_id`). `_compute_subshift_tickets_total` updated during Phase 4; full sweep deferred until pre-deployment.
+All backend items are complete. Multi-tenancy audit performed and all 19 identified gaps closed.
 
 
 ### Branching Strategy
@@ -232,15 +237,19 @@ Cross-platform mobile client built with Expo. Wires up the entire API end-to-end
 - [x] Arabic translation file (14 namespaces, full translation parity)
 - [x] RTL layout flip via `I18nManager.forceRTL` + restart-required prompt
 - [x] Reusable components: `CloseShiftModal`, `WholeBookSaleModal`, `ReturnBookModal`, `CameraScannerScreen`
+- [x] PIN change modal in Settings (admin only) — wired to PUT /api/store/settings/pin
+- [x] Continuous scan mode (camera stays open, 2-second deduplication guard)
+- [x] ITF-14 barcode normalization (strips leading 0 from 13-digit barcodes)
+- [x] Client-side L1 (book existence) and L2 (position range) validation before API call
+- [x] Hardware scanner mode (hides camera UI, auto-focuses text input for keystroke-wedge devices)
+- [x] Bulk slot UI: Bulk Add modal with Quick and Price Groups tabs, checkbox multi-select, floating delete bar
 
 ### Mobile App — Outstanding
 
-- [ ] PIN change UI in Settings (admin only) — backend endpoint exists; mobile wiring deferred
 - [ ] Custom splash screen (Expo default in use)
 - [ ] Onboarding screen (deferred to post-launch)
 - [ ] Theme picker (light/dark)
 - [ ] Toast notifications + skeleton loaders (polish, deferred)
-- [ ] Hardware scanner keystroke-wedge support (works incidentally; not explicitly tested)
 
 ### Mobile Stack
 | Layer | Library |
@@ -447,3 +456,11 @@ This validates the decision to do mobile + API in the same project rather than t
 | April 2026 | In-memory JWT blocklist for v2.0 | Same reasoning as PIN limiter |
 | April 2026 | Gunicorn 2 workers in Docker | Reasonable default for small deployments |
 | April 2026 | Migrations run on container startup | `flask db upgrade` in docker-compose command |
+| April 2026 | Multi-tenancy audit complete — 19 security fixes; all internal queries scoped to store_id; T-01–T-10 cross-tenant tests pass | Defense in depth; direct exploit on GET /api/shifts/{id}/summary also fixed |
+| April 2026 | Admin user management CRUD with soft-delete added | Required for v2.0 store operations; moved up from v2.1 scope |
+| April 2026 | User.deleted_at soft-delete with partial unique index on (store_id, username) WHERE deleted_at IS NULL | Consistent with Slot pattern; preserves login history; allows username reuse after deactivation |
+| April 2026 | Bulk slot creation: POST /api/slots/bulk (up to 500) and POST /api/slots/bulk-delete | Admin UX: avoids creating slots one at a time during initial store setup |
+| April 2026 | Store.scan_mode preference: camera_single / camera_continuous / hardware_scanner, default camera_single | Replaces incidental hardware scanner support with explicit, admin-configurable mode |
+| April 2026 | Mobile continuous scan mode with 2-second deduplication guard | Prevents accidental double-scan on same barcode in rapid succession |
+| April 2026 | ITF-14 normalization on mobile: strip leading 0 from 13-digit barcodes | Lottery ticket barcodes may be wrapped in ITF-14 by scanner firmware; normalization ensures correct static_code extraction |
+| April 2026 | Client-side L1 + L2 validation before scan API call | Immediate user feedback for inactive books and out-of-range positions without a round-trip |

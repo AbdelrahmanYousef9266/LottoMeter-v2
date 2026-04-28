@@ -1,8 +1,8 @@
 # Entity Relationship Diagram — LottoMeter v2.0
 
-**Version:** 2.1
+**Version:** 2.2
 **Date:** April 2026
-**Status:** Final — aligned with SRS v5.2
+**Status:** Final — aligned with SRS v5.3
 
 ---
 
@@ -45,6 +45,7 @@ erDiagram
         string store_name
         string store_code UK
         string store_pin_hash "nullable"
+        string scan_mode "camera_single|camera_continuous|hardware_scanner"
         datetime created_at
     }
 
@@ -55,6 +56,7 @@ erDiagram
         string role "admin or employee"
         int store_id FK
         datetime created_at
+        datetime deleted_at "soft delete"
     }
 
     Slot {
@@ -120,7 +122,7 @@ erDiagram
 
     ShiftBooks {
         int shift_id PK
-        string barcode PK
+        string static_code PK
         string scan_type PK "open or close"
         int start_at_scan
         boolean is_last_ticket
@@ -159,6 +161,7 @@ Root tenant entity.
 | store_name | String(150) | Not Null | |
 | store_code | String(50) | Unique, Not Null | Human-readable identifier |
 | store_pin_hash | String(256) | Nullable | bcrypt hash of 4-digit PIN; set at setup |
+| scan_mode | String(50) | Not Null, default 'camera_single' | `camera_single` \| `camera_continuous` \| `hardware_scanner` |
 | created_at | DateTime | Not Null, default now() | UTC |
 
 ### 2. User
@@ -171,8 +174,14 @@ Root tenant entity.
 | role | String(50) | Not Null, default 'employee' | `admin` or `employee` |
 | store_id | Integer | FK → Store, Not Null, Indexed | |
 | created_at | DateTime | Not Null, default now() | |
+| deleted_at | DateTime | Nullable | Soft-delete timestamp; null = active |
 
-**Composite unique:** `(store_id, username)`
+**Partial unique index** (SQLite 3.8+ / PostgreSQL):
+```sql
+CREATE UNIQUE INDEX uq_users_store_username_active
+  ON users (store_id, username)
+  WHERE deleted_at IS NULL;
+```
 
 ### 3. Slot
 
@@ -457,3 +466,6 @@ LIMIT 1;
 11. **BookAssignmentHistory new table** — assignment audit trail
 12. **ShiftExtraSales new table** — whole-book sales without Book row
 13. **Composite unique constraints** — (store_id, X) for barcode, static_code, slot_name, username
+14. **User soft-delete with partial unique index on (store_id, username) WHERE deleted_at IS NULL** — consistent with Slot soft-delete; allows username reuse after deactivation while preserving login history rows.
+15. **Store.scan_mode column** — admin-configurable preference returned on login so the mobile client applies it immediately; avoids a separate API call per session.
+16. **Admin user management CRUD** — moved up from v2.1; required for multi-store commercialization readiness and day-1 store operations.

@@ -1,6 +1,6 @@
 # API Contract — LottoMeter v2.0
 
-**Version:** 2.1
+**Version:** 2.2
 **Base URL:** `/api`
 **Auth:** JWT in `Authorization: Bearer <token>` header (except where noted)
 **Content-Type:** `application/json`
@@ -60,16 +60,18 @@ First-run only. Creates store + first admin + store PIN. Rejected (409) if any s
   "store_code": "LM001",
   "admin_username": "admin",
   "admin_password": "securepass123",
-  "store_pin": "4271"
+  "store_pin": "4271",
+  "scan_mode": "camera_single"
 }
 ```
 
 - `store_pin` must be exactly 4 digits. Hashed before storage.
+- `scan_mode` optional — defaults to `"camera_single"`. Must be one of `"camera_single"`, `"camera_continuous"`, `"hardware_scanner"`.
 
 **Response 201**
 ```json
 {
-  "store": { "store_id": 1, "store_name": "Lucky Mart", "store_code": "LM001" },
+  "store": { "store_id": 1, "store_name": "Lucky Mart", "store_code": "LM001", "scan_mode": "camera_single" },
   "user": { "user_id": 1, "username": "admin", "role": "admin" },
   "token": "eyJhbGci..."
 }
@@ -86,6 +88,7 @@ First-run only. Creates store + first admin + store PIN. Rejected (409) if any s
 {
   "token": "eyJhbGci...",
   "user": { "user_id": 1, "username": "admin", "role": "admin", "store_id": 1 },
+  "store": { "store_id": 1, "store_name": "Lucky Mart", "scan_mode": "camera_single" },
   "expires_at": "2026-04-24T22:00:00Z"
 }
 ```
@@ -96,6 +99,17 @@ First-run only. Creates store + first admin + store PIN. Rejected (409) if any s
 Adds current JWT's `jti` to the server-side blocklist until its natural expiry.
 
 **Response 204**
+
+### GET /api/auth/me
+Returns the authenticated user's profile and store info.
+
+**Response 200**
+```json
+{
+  "user": { "user_id": 1, "username": "admin", "role": "admin", "store_id": 1 },
+  "store": { "store_id": 1, "store_name": "Lucky Mart", "scan_mode": "camera_single" }
+}
+```
 
 ---
 
@@ -124,9 +138,104 @@ Admin-only. Change the store's 4-digit PIN.
 - 401 `INVALID_PIN` — current_pin mismatch
 - 400 `INVALID_PIN_FORMAT` — not 4 digits
 
+### PUT /api/store/settings/scan-mode
+Admin-only. Update the store's scan mode preference.
+
+**Request**
+```json
+{ "scan_mode": "camera_continuous" }
+```
+
+- `scan_mode` must be one of `"camera_single"`, `"camera_continuous"`, `"hardware_scanner"`
+
+**Response 200**
+```json
+{ "scan_mode": "camera_continuous", "message": "Scan mode updated." }
+```
+
+**Errors:**
+- 400 `INVALID_SCAN_MODE` — value not in allowed set
+
 ---
 
-## 3. Slots
+## 3. Users
+
+Admin-only endpoints. All queries scoped to JWT's `store_id`.
+
+### GET /api/users
+Lists all users (active and soft-deleted).
+
+**Response 200**
+```json
+{
+  "users": [
+    {
+      "user_id": 1,
+      "username": "admin",
+      "role": "admin",
+      "created_at": "2026-04-24T08:00:00Z",
+      "deleted_at": null
+    }
+  ]
+}
+```
+
+### POST /api/users
+Create a new user.
+
+**Request**
+```json
+{
+  "username": "alice",
+  "password": "pass1234",
+  "role": "employee"
+}
+```
+
+- `role` must be `"admin"` or `"employee"`
+
+**Response 201**
+```json
+{ "user": { "user_id": 3, "username": "alice", "role": "employee", "created_at": "2026-04-24T09:00:00Z", "deleted_at": null } }
+```
+
+**Errors:**
+- 409 `USERNAME_TAKEN` — username already exists in this store (among active users)
+- 400 `INVALID_ROLE` — role not in allowed set
+
+### GET /api/users/{id}
+**Response 200** — single user object as above.
+
+**Errors:** 404 `USER_NOT_FOUND`
+
+### PUT /api/users/{id}
+Edit a user's username, password, or role. Any subset of fields accepted.
+
+**Request**
+```json
+{ "username": "alice2", "password": "newpass", "role": "admin" }
+```
+
+**Response 200** — updated user object.
+
+**Errors:**
+- 409 `USERNAME_TAKEN`
+- 403 `CANNOT_EDIT_SELF_ROLE` — admin cannot change their own role
+- 404 `USER_NOT_FOUND`
+
+### DELETE /api/users/{id}
+Soft-deletes a user. Sets `deleted_at`; login immediately blocked.
+
+**Response 204**
+
+**Errors:**
+- 403 `CANNOT_DELETE_SELF` — admin cannot delete their own account
+- 404 `USER_NOT_FOUND`
+- 422 `USER_ALREADY_DELETED`
+
+---
+
+## 4. Slots
 
 All slot endpoints require auth. Queries scoped to JWT's `store_id`.
 
@@ -196,9 +305,49 @@ Admin-only. Soft delete — sets `deleted_at`.
 **Response 204**
 **Errors:** 422 `SLOT_OCCUPIED` — cannot delete slot with active book.
 
+### POST /api/slots/bulk
+Admin-only. Create multiple slots in a single transactional request (max 500).
+
+**Request**
+```json
+{
+  "slots": [
+    { "slot_name": "Slot A", "ticket_price": "5.00" },
+    { "slot_name": "Slot B", "ticket_price": "10.00" }
+  ]
+}
+```
+
+**Response 201**
+```json
+{ "created": 2, "slots": [ "...slot objects..." ] }
+```
+
+**Errors:**
+- 400 `EXCEEDS_BULK_LIMIT` — more than 500 slots in request
+- 409 `SLOT_NAME_TAKEN` — one or more names conflict (entire batch rolls back)
+- 400 `INVALID_PRICE` — one or more prices not in valid set
+
+### POST /api/slots/bulk-delete
+Admin-only. Soft-delete multiple slots by id list. Only empty, non-deleted slots may be deleted. Transactional — if any slot is occupied or already deleted, the entire batch fails.
+
+**Request**
+```json
+{ "slot_ids": [1, 2, 3] }
+```
+
+**Response 200**
+```json
+{ "deleted": 3 }
+```
+
+**Errors:**
+- 422 `SLOT_OCCUPIED` — one or more slots have active books (entire batch rolls back)
+- 404 `SLOT_NOT_FOUND` — one or more ids not found or already deleted
+
 ---
 
-## 4. Books
+## 5. Books
 
 ### GET /api/books
 Lists active and historically-relevant books. Scoped to store.
@@ -356,7 +505,7 @@ Any authenticated user (employee-friendly). Requires store PIN. Records book ret
 
 ---
 
-## 5. Shifts
+## 6. Shifts
 
 ### POST /api/shifts
 Opens a new main shift AND auto-creates Sub-shift 1 (FR-SHIFT-01).
@@ -531,7 +680,7 @@ Admin-only. Voids a specific sub-shift.
 
 ---
 
-## 6. Scanning
+## 7. Scanning
 
 ### POST /api/scan
 Records a ticket scan during an open sub-shift.
@@ -608,7 +757,7 @@ When `pending_scans_remaining = 0` and `is_initialized = true`, sale scans are u
 
 ---
 
-## 7. Whole-Book Sale
+## 8. Whole-Book Sale
 
 ### POST /api/shifts/{subshift_id}/whole-book-sale
 
@@ -664,7 +813,7 @@ Any authenticated user. Requires store PIN.
 
 ---
 
-## 8. Reports
+## 9. Reports
 
 ### GET /api/reports/shift/{id}
 `id` is a **main shift** id.
@@ -761,7 +910,7 @@ Voided sub-shifts appear in `voided_subshifts` separately (not in totals).
 
 ---
 
-## 9. Barcode Parsing Contract
+## 10. Barcode Parsing Contract
 
 Barcode format: `<static_code><3-digit-position>`
 
@@ -777,7 +926,7 @@ Example: `1234567890149` with `ticket_price=1.00`
 
 ---
 
-## 10. PIN Rate Limiting
+## 11. PIN Rate Limiting
 
 Applies to: `POST /api/books/{id}/return-to-vendor`, `POST /api/shifts/{subshift_id}/whole-book-sale`
 
@@ -791,31 +940,40 @@ Implementation: in-memory counter for v2.0; Redis-backed for production later.
 
 ---
 
-## 11. Versioning
+## 12. Versioning
 
 - v2.0 uses `/api/` prefix
 - v2.1 may introduce `/api/v2/` for breaking changes; current endpoints remain as default
 
 ---
 
-## 12. Endpoint Quick Reference
+## 13. Endpoint Quick Reference
 
 | Method | Endpoint | Auth | Role |
 |---|---|---|---|
 | POST | /api/auth/setup | — | — |
 | POST | /api/auth/login | — | — |
 | POST | /api/auth/logout | JWT | any |
+| GET | /api/auth/me | JWT | any |
+| GET | /api/users | JWT | admin |
+| POST | /api/users | JWT | admin |
+| GET | /api/users/{id} | JWT | admin |
+| PUT | /api/users/{id} | JWT | admin |
+| DELETE | /api/users/{id} | JWT | admin |
 | PUT | /api/store/settings/pin | JWT | admin |
+| PUT | /api/store/settings/scan-mode | JWT | admin |
 | GET | /api/slots | JWT | any |
 | POST | /api/slots | JWT | admin |
 | GET | /api/slots/{id} | JWT | any |
 | PUT | /api/slots/{id} | JWT | admin |
 | DELETE | /api/slots/{id} | JWT | admin |
-| POST | /api/slots/{id}/assign-book | JWT | admin |
+| POST | /api/slots/bulk | JWT | admin |
+| POST | /api/slots/bulk-delete | JWT | admin |
+| POST | /api/slots/{slot_id}/assign-book | JWT | admin |
 | GET | /api/books | JWT | any |
 | GET | /api/books/{id} | JWT | any |
-| POST | /api/books/{id}/unassign | JWT | admin |
-| POST | /api/books/{id}/return-to-vendor | JWT | any (PIN) |
+| POST | /api/books/{book_id}/unassign | JWT | admin |
+| POST | /api/books/{book_id}/return-to-vendor | JWT | any (PIN) |
 | POST | /api/shifts | JWT | any |
 | GET | /api/shifts | JWT | any |
 | GET | /api/shifts/{id} | JWT | any |
