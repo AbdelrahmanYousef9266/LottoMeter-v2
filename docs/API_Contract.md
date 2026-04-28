@@ -1,6 +1,6 @@
 # API Contract — LottoMeter v2.0
 
-**Version:** 2.2
+**Version:** 2.3
 **Base URL:** `/api`
 **Auth:** JWT in `Authorization: Bearer <token>` header (except where noted)
 **Content-Type:** `application/json`
@@ -990,6 +990,7 @@ Implementation: in-memory counter for v2.0; Redis-backed for production later.
 | GET | /api/users/{id} | JWT | admin |
 | PUT | /api/users/{id} | JWT | admin |
 | DELETE | /api/users/{id} | JWT | admin |
+| GET | /api/users/active | JWT | admin |
 | PUT | /api/store/settings/pin | JWT | admin |
 | PUT | /api/store/settings/scan-mode | JWT | admin |
 | GET | /api/slots | JWT | any |

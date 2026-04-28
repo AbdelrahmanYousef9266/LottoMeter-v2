@@ -166,7 +166,7 @@ The complete REST API is implemented and tested end-to-end with both Thunder Cli
 | Metric | Value |
 |---|---|
 | SQLAlchemy models | 8 |
-| API endpoints | 34 |
+| API endpoints | 35 |
 | Flask blueprints | 8 |
 | Marshmallow schemas | 7 |
 | Services | 9 |
@@ -243,6 +243,10 @@ Cross-platform mobile client built with Expo. Wires up the entire API end-to-end
 - [x] Client-side L1 (book existence) and L2 (position range) validation before API call
 - [x] Hardware scanner mode (hides camera UI, auto-focuses text input for keystroke-wedge devices)
 - [x] Bulk slot UI: Bulk Add modal with Quick and Price Groups tabs, checkbox multi-select, floating delete bar
+- [x] History screen: admin filter bar (date range, status, employee dropdown)
+- [x] History screen: employee view restricted to current open + most recent closed shift in store
+- [x] Report detail: PDF export via expo-print + OS share sheet
+- [x] i18n: new translation keys added for history filters and export labels (en + ar)
 
 ### Mobile App — Outstanding
 
@@ -464,3 +468,6 @@ This validates the decision to do mobile + API in the same project rather than t
 | April 2026 | Mobile continuous scan mode with 2-second deduplication guard | Prevents accidental double-scan on same barcode in rapid succession |
 | April 2026 | ITF-14 normalization on mobile: strip leading 0 from 13-digit barcodes | Lottery ticket barcodes may be wrapped in ITF-14 by scanner firmware; normalization ensures correct static_code extraction |
 | April 2026 | Client-side L1 + L2 validation before scan API call | Immediate user feedback for inactive books and out-of-range positions without a round-trip |
+| April 2026 | Shift history role-based scoping: admin sees all shifts with filters (date range, status, employee), employee sees current open + most recent closed shift in store | Simpler logic and sufficient for small-store trust model; employee needs visibility of their work without full history access |
+| April 2026 | PDF export client-side via expo-print for v2.0; server-side PDF generation deferred to v2.1 dashboard | No new backend endpoint required; OS share sheet covers print, save, and email in a single action |
+| April 2026 | Single share-sheet export button rather than separate print/save/email actions | OS share sheet already exposes all output options natively; separate buttons would duplicate the sheet UI |

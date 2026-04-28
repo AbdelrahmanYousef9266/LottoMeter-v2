@@ -6,7 +6,7 @@
 | Field | Value |
 |---|---|
 | **Project Name** | LottoMeter v2.0 |
-| **Document Version** | 5.3 |
+| **Document Version** | 5.4 |
 | **Author** | Abdelrahman Yousef |
 | **Date** | April 2026 |
 | **Status** | Final — Verified |
@@ -22,6 +22,7 @@
 | 5.1 | April 2026 | Clarified scan event model — scans happen only at shift open, last ticket, return-to-vendor, and shift close (not on every sale) |
 | 5.2 | April 2026 | Implementation revisions caught via end-to-end mobile testing: ShiftBooks PK changed to (shift_id, static_code, scan_type); last-ticket detection refined (close + position movement required); Rule 8 narrowed to rewrites only; mobile UX rules; i18n implemented |
 | 5.3 | April 2026 | Multi-tenancy hardened (19 security fixes, cross-tenant audit complete); admin user management CRUD added (§6.12, FR-USER-01–07); bulk slot management (FR-SLOT-08–10); scan_mode preference (FR-STORE-05–06); FR-AUTH-06 security scoping requirement added; mobile: continuous scan, ITF-14 normalization, hardware scanner mode, bulk slot UI, PIN change complete |
+| 5.4 | April 2026 | Shift history role-based scoping added (§6.13, FR-HIST-01–06): admin filter bar (date range, status, employee), employee view restricted to current open + most recent closed shift in store, voided shifts excluded from employee view; client-side PDF export of shift reports via expo-print + OS share sheet; GET /api/users/active endpoint added to §12 |
 
 ---
 
@@ -578,6 +579,17 @@ Scan events occur only at: shift open, last ticket of a book during shift, retur
 | FR-USER-06 | username is unique within store among active (non-deleted) users | High |
 | FR-USER-07 | Soft-deleted users cannot log in | High |
 
+### 6.13 Shift History & Reporting
+
+| ID | Requirement | Priority |
+|---|---|---|
+| FR-HIST-01 | Admin can filter shift history by date range, status (open/closed/voided), and opened_by user | High |
+| FR-HIST-02 | Employee shift history shows only the current open main shift and the most recently closed main shift in the store | High |
+| FR-HIST-03 | Voided shifts are excluded from the employee shift history view | High |
+| FR-HIST-04 | Both admin and employee can export any visible shift report as PDF | High |
+| FR-HIST-05 | PDF export uses client-side rendering (expo-print) and the OS share sheet for output (print, save, email, etc.) | High |
+| FR-HIST-06 | PDF export respects the user's current language and applies RTL layout for Arabic | High |
+
 ---
 
 ## 7. UI & UX Requirements
@@ -616,9 +628,11 @@ The scan screen is used at shift open, end-of-book (last ticket), return-to-vend
 - "Done" button to exit bulk flow early
 
 ### 7.5 History Screen
+- **Admin view:** filter bar with date range picker, status selector (open/closed/voided), and employee dropdown (populated from `GET /api/users/active`); all main shifts in the store are shown with filters applied
+- **Employee view:** static list of at most 2 shifts — the currently open main shift (if any) and the most recently closed main shift in the store; voided shifts never shown; query filters are not exposed
 - Shift cards with date, totals, status badge (correct/over/short/voided)
-- Filter by date range
 - Tap shift → full report with sub-shift breakdown
+- Export PDF button on report detail screen — triggers client-side rendering via expo-print and opens the OS share sheet (print / save / email)
 
 ### 7.6 Settings Screen
 - Language selector
@@ -810,6 +824,7 @@ Full API contract is in `docs/API_Contract.md`.
 | GET | /api/users/{id} | JWT | admin |
 | PUT | /api/users/{id} | JWT | admin |
 | DELETE | /api/users/{id} | JWT | admin |
+| GET | /api/users/active | JWT | admin |
 | PUT | /api/store/settings/pin | JWT | admin |
 | PUT | /api/store/settings/scan-mode | JWT | admin |
 | GET | /api/slots | JWT | any |
@@ -970,6 +985,7 @@ Employee opens Settings, picks a language. App switches instantly, RTL applied i
 | i18n | Internationalization — multilingual support |
 | store_id | Foreign key scoping all data to a specific store |
 | RBAC | Role-Based Access Control |
+| PDF export | Client-side generation of a printable shift report via expo-print, delivered through the OS share sheet for print, save, or email |
 
 ---
 
@@ -1048,6 +1064,16 @@ Key decisions made during SRS v5.0 design review (April 2026):
 
 43. **Client-side L1 and L2 validation on mobile** — the scan screen pre-fetches the store's active-book map. Before calling `POST /api/scan`, the mobile client checks (L1) whether the `static_code` exists in the map and (L2) whether the extracted position is in `[0, length-1]` for the book's price. Immediate UI feedback without a round-trip; server still enforces all rules.
 
+### v5.4 revisions (April 2026):
+
+44. **Role-based scoping on GET /api/shifts** — admin receives all main shifts in the store with full filter support (date range, status, opened_by user); employee receives at most 2 shifts (current open + most recent closed in the store), all query params ignored except pagination, voided shifts excluded.
+
+45. **Store-wide "most recent closed" for employee view rather than per-employee** — returns the most recently closed main shift in the store, not the most recent one opened by that employee. Simpler and sufficient for the small-store trust model; avoids ambiguity when multiple employees share a device.
+
+46. **Client-side PDF export for v2.0 via expo-print + OS share sheet** — server-side PDF generation deferred to v2.1 dashboard work. Client-side approach requires no new backend endpoint and covers print, save, and email through the OS share sheet in a single action.
+
+47. **Single share-sheet export button rather than separate print/save/email actions** — the OS share sheet already exposes all output options natively; separate buttons would duplicate the sheet's own UI and clutter the report detail screen.
+
 ---
 
-*Document end — LottoMeter v2.0 SRS v5.3 — Verified & Final*
+*Document end — LottoMeter v2.0 SRS v5.4 — Verified & Final*

@@ -135,7 +135,7 @@ Clean closes reward employees with fast handover. Discrepancies trigger full ver
 ## Features
 
 ### v2.0 — Core (complete)
-- Backend: 34 REST endpoints, 8 SQLAlchemy models, JWT auth, Marshmallow schemas, PIN rate-limiting, Docker
+- Backend: 35 REST endpoints, 8 SQLAlchemy models, JWT auth, Marshmallow schemas, PIN rate-limiting, Docker
 - Mobile: full app — auth, scanning (camera + manual), slot management, shift lifecycle, history, reports
 - Admin bulk slot + book management with scan-to-assign + reassignment confirmation flow
 - Admin bulk slot creation (up to 500 per request) and bulk delete via dedicated endpoints
@@ -160,6 +160,9 @@ Clean closes reward employees with fast handover. Discrepancies trigger full ver
 - Admin role enforcement from day 1
 - PIN rate-limiting (5 attempts / 10 min)
 - Multi-tenancy hardened: 19 security fixes — all queries scoped to store_id, cross-tenant returns 404
+- Admin shift history filters (date range, status, employee)
+- Employee shift history restricted to current open + most recent closed shift in the store
+- PDF export of shift reports via expo-print + OS share sheet
 
 ### v2.0 — Outstanding (deferred)
 - Custom splash screen
