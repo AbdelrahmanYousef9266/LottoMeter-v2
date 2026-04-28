@@ -5,7 +5,8 @@ FROM python:3.13-slim
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    FLASK_APP=run.py
 
 # Install system deps for psycopg2 + bcrypt
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -26,4 +27,4 @@ COPY . .
 EXPOSE 5000
 
 # Production entrypoint — Gunicorn runs the Flask app factory
-CMD ["gunicorn", "--bind", "0.0.0.0:5000", "--workers", "2", "--access-logfile", "-", "run:app"]
+CMD ["sh", "-c", "flask db upgrade && gunicorn --bind 0.0.0.0:$PORT --workers 2 --timeout 120 --access-logfile - run:app"]
