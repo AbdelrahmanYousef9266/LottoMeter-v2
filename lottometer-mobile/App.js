@@ -1,3 +1,16 @@
+import * as Sentry from "@sentry/react-native";
+
+const sentryDsn = process.env.EXPO_PUBLIC_SENTRY_DSN;
+if (sentryDsn) {
+  Sentry.init({
+    dsn: sentryDsn,
+    enableInExpoDevelopment: false,
+    debug: false,
+    tracesSampleRate: 0.1,
+    environment: __DEV__ ? "development" : "production",
+  });
+}
+
 import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
@@ -7,7 +20,7 @@ import { AuthProvider } from './src/context/AuthContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import { initI18n } from './src/i18n';
 
-export default function App() {
+function App() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
@@ -34,3 +47,5 @@ export default function App() {
     </SafeAreaProvider>
   );
 }
+
+export default Sentry.wrap(App);
