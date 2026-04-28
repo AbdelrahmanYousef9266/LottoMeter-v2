@@ -1,7 +1,9 @@
 """Flask app factory."""
 
 import os
+import sentry_sdk
 from flask import Flask, jsonify
+from sentry_sdk.integrations.flask import FlaskIntegration
 
 from app.config import config_by_name
 from app.extensions import db, migrate, jwt, cors
@@ -11,6 +13,17 @@ from app.token_blocklist import is_blocked
 
 def create_app(config_name: str = None) -> Flask:
     """Build and return a configured Flask app."""
+
+    sentry_dsn = os.getenv("SENTRY_DSN")
+    if sentry_dsn:
+        sentry_sdk.init(
+            dsn=sentry_dsn,
+            integrations=[FlaskIntegration()],
+            traces_sample_rate=0.1,
+            send_default_pii=False,
+            environment=os.getenv("FLASK_ENV", "development"),
+            release=os.getenv("RENDER_GIT_COMMIT", "unknown")[:7] if os.getenv("RENDER_GIT_COMMIT") else None,
+        )
 
     if config_name is None:
         config_name = os.getenv("FLASK_ENV", "development")
