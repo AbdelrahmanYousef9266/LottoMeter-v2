@@ -44,25 +44,25 @@ def _get_subshift(store_id: int, shift_id: int) -> ShiftDetails:
     return sub
 
 
-def _has_any_close_scan_in_subshift(shift_id: int) -> bool:
+def _has_any_close_scan_in_subshift(shift_id: int, store_id: int) -> bool:
     return (
         ShiftBooks.query
-        .filter_by(shift_id=shift_id, scan_type="close")
+        .filter_by(shift_id=shift_id, store_id=store_id, scan_type="close")
         .first()
         is not None
     )
 
 
-def _existing_scan(shift_id: int, static_code: str, scan_type: str) -> ShiftBooks | None:
+def _existing_scan(shift_id: int, static_code: str, scan_type: str, store_id: int) -> ShiftBooks | None:
     return (
         ShiftBooks.query
-        .filter_by(shift_id=shift_id, static_code=static_code, scan_type=scan_type)
+        .filter_by(shift_id=shift_id, static_code=static_code, scan_type=scan_type, store_id=store_id)
         .first()
     )
 
 
-def _open_scan_for(shift_id: int, static_code: str) -> ShiftBooks | None:
-    return _existing_scan(shift_id, static_code, "open")
+def _open_scan_for(shift_id: int, static_code: str, store_id: int) -> ShiftBooks | None:
+    return _existing_scan(shift_id, static_code, "open", store_id)
 
 
 def record_scan(
@@ -117,8 +117,8 @@ def record_scan(
     # Rule 8: cannot REWRITE an existing open scan after any close scan has started.
     # New opens for newly-assigned books are still allowed (they have no prior open
     # scan in this sub-shift, so this isn't a "rewrite").
-    if scan_type == "open" and _has_any_close_scan_in_subshift(shift_id):
-        prior_open = _open_scan_for(shift_id, static_code)
+    if scan_type == "open" and _has_any_close_scan_in_subshift(shift_id, store_id):
+        prior_open = _open_scan_for(shift_id, static_code, store_id)
         if prior_open is not None:
             raise ConflictError(
                 "Cannot rewrite open scan after closing has started on this sub-shift.",
@@ -127,7 +127,7 @@ def record_scan(
 
     # Rule 7: close position >= open position
     if scan_type == "close":
-        open_row = _open_scan_for(shift_id, static_code)
+        open_row = _open_scan_for(shift_id, static_code, store_id)
         if open_row is None:
             raise BusinessRuleError(
                 "Cannot record close scan: no open scan exists for this book in this sub-shift.",
@@ -142,7 +142,7 @@ def record_scan(
 
     # Rule 5: duplicate (same shift + book + scan_type) → overwrite
     is_last_ticket = (position == book_length - 1)
-    existing = _existing_scan(shift_id, static_code, scan_type)
+    existing = _existing_scan(shift_id, static_code, scan_type, store_id)
 
     if existing is not None:
         existing.barcode = barcode
@@ -172,7 +172,7 @@ def record_scan(
     # the last position represents an actual sale this shift.
     sold_this_scan = False
     if is_last_ticket and scan_type == "close":
-        open_row = _open_scan_for(shift_id, static_code)
+        open_row = _open_scan_for(shift_id, static_code, store_id)
         if open_row is not None and position > open_row.start_at_scan:
             sold_this_scan = True
 
@@ -196,16 +196,16 @@ def record_scan(
     return scan_row, book, sub
 
 
-def get_running_totals(shift_id: int) -> dict:
+def get_running_totals(shift_id: int, store_id: int) -> dict:
     """Compact stats for the sub-shift: scan counts."""
     open_count = (
         ShiftBooks.query
-        .filter_by(shift_id=shift_id, scan_type="open")
+        .filter_by(shift_id=shift_id, store_id=store_id, scan_type="open")
         .count()
     )
     close_count = (
         ShiftBooks.query
-        .filter_by(shift_id=shift_id, scan_type="close")
+        .filter_by(shift_id=shift_id, store_id=store_id, scan_type="close")
         .count()
     )
     return {
@@ -223,6 +223,6 @@ def pending_scans_remaining(store_id: int, shift_id: int) -> int:
     )
     open_static_codes = {
         s.static_code for s in
-        ShiftBooks.query.filter_by(shift_id=shift_id, scan_type="open").all()
+        ShiftBooks.query.filter_by(shift_id=shift_id, store_id=store_id, scan_type="open").all()
     }
     return sum(1 for b in active if b.static_code not in open_static_codes)

@@ -150,7 +150,7 @@ def assign_book_to_slot(
             # Close history on old slot
             old_history = (
                 BookAssignmentHistory.query
-                .filter_by(book_id=existing.book_id, unassigned_at=None)
+                .filter_by(book_id=existing.book_id, store_id=store_id, unassigned_at=None)
                 .order_by(BookAssignmentHistory.assigned_at.desc())
                 .first()
             )
@@ -241,7 +241,7 @@ def find_next_empty_slot(store_id: int) -> Slot | None:
 def get_assignment_history(book: Book) -> list[BookAssignmentHistory]:
     return (
         BookAssignmentHistory.query
-        .filter_by(book_id=book.book_id)
+        .filter_by(book_id=book.book_id, store_id=book.store_id)
         .order_by(BookAssignmentHistory.assigned_at.desc())
         .all()
     )
@@ -267,7 +267,7 @@ def unassign_book(store_id: int, book_id: int, user_id: int) -> Book:
 
     history = (
         BookAssignmentHistory.query
-        .filter_by(book_id=book_id, unassigned_at=None)
+        .filter_by(book_id=book_id, store_id=store_id, unassigned_at=None)
         .order_by(BookAssignmentHistory.assigned_at.desc())
         .first()
     )
@@ -340,7 +340,7 @@ def return_to_vendor(
     if open_main is not None:
         open_sub = (
             ShiftDetails.query
-            .filter_by(main_shift_id=open_main.shift_id, is_shift_open=True)
+            .filter_by(store_id=store_id, main_shift_id=open_main.shift_id, is_shift_open=True)
             .order_by(ShiftDetails.shift_number.desc())
             .first()
         )
@@ -348,7 +348,7 @@ def return_to_vendor(
             open_scan = (
                 ShiftBooks.query
                 .filter_by(
-                    shift_id=open_sub.shift_id, static_code=book.static_code, scan_type="open"
+                    shift_id=open_sub.shift_id, store_id=store_id, static_code=book.static_code, scan_type="open"
                 )
                 .first()
             )
@@ -364,7 +364,7 @@ def return_to_vendor(
                 existing_close = (
                     ShiftBooks.query
                     .filter_by(
-                        shift_id=open_sub.shift_id, static_code=book.static_code, scan_type="close"
+                        shift_id=open_sub.shift_id, store_id=store_id, static_code=book.static_code, scan_type="close"
                     )
                     .first()
                 )
@@ -400,7 +400,7 @@ def return_to_vendor(
 
     history = (
         BookAssignmentHistory.query
-        .filter_by(book_id=book_id, unassigned_at=None)
+        .filter_by(book_id=book_id, store_id=store_id, unassigned_at=None)
         .order_by(BookAssignmentHistory.assigned_at.desc())
         .first()
     )

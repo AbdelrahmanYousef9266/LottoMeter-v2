@@ -103,7 +103,7 @@ def list_shifts():
 @jwt_required()
 def get_shift(shift_id):
     main = shift_service.get_main_shift(current_store_id(), shift_id)
-    subs = shift_service._get_subshifts_for(main.shift_id)
+    subs = shift_service._get_subshifts_for(current_store_id(), main.shift_id)
 
     user_ids = {main.opened_by_user_id, main.closed_by_user_id}
     for s in subs:
@@ -172,7 +172,7 @@ def close_shift(shift_id):
         cash_out=data["cash_out"],
     )
 
-    subs = shift_service._get_subshifts_for(main.shift_id)
+    subs = shift_service._get_subshifts_for(current_store_id(), main.shift_id)
     user_ids = {main.opened_by_user_id, main.closed_by_user_id}
     for s in subs:
         user_ids.add(s.opened_by_user_id)

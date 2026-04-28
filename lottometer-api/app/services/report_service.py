@@ -70,11 +70,11 @@ def _per_book_lines_for_subshift(
     """
     open_scans = {
         s.static_code: s for s in
-        ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="open").all()
+        ShiftBooks.query.filter_by(shift_id=subshift_id, store_id=store_id, scan_type="open").all()
     }
     close_scans = {
         s.static_code: s for s in
-        ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="close").all()
+        ShiftBooks.query.filter_by(shift_id=subshift_id, store_id=store_id, scan_type="close").all()
     }
     static_codes = set(open_scans) | set(close_scans)
     book_map = _build_book_map_by_static_code(static_codes, store_id)
@@ -139,11 +139,11 @@ def _per_book_lines_for_subshift(
 
 
 def _whole_book_sales_for_subshift(
-    subshift_id: int, user_map: dict
+    subshift_id: int, store_id: int, user_map: dict
 ) -> list[dict]:
     extras = (
         ShiftExtraSales.query
-        .filter_by(shift_id=subshift_id)
+        .filter_by(shift_id=subshift_id, store_id=store_id)
         .order_by(ShiftExtraSales.created_at)
         .all()
     )
@@ -173,9 +173,9 @@ def _ticket_breakdown_for_subshift(
     # Gather scanned sales
     open_scans = {
         s.static_code: s for s in
-        ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="open").all()
+        ShiftBooks.query.filter_by(shift_id=subshift_id, store_id=store_id, scan_type="open").all()
     }
-    close_scans = ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="close").all()
+    close_scans = ShiftBooks.query.filter_by(shift_id=subshift_id, store_id=store_id, scan_type="close").all()
     static_codes = set(open_scans) | {c.static_code for c in close_scans}
     book_map = _build_book_map_by_static_code(static_codes, store_id)
 
@@ -196,7 +196,7 @@ def _ticket_breakdown_for_subshift(
 
     # Whole-book sales totals
     whole_totals: dict[Decimal, int] = defaultdict(int)
-    for e in ShiftExtraSales.query.filter_by(shift_id=subshift_id).all():
+    for e in ShiftExtraSales.query.filter_by(shift_id=subshift_id, store_id=store_id).all():
         whole_totals[e.ticket_price] += e.ticket_count
 
     lines = []
@@ -259,7 +259,7 @@ def build_main_shift_report(store_id: int, main_shift_id: int) -> dict:
 
     subs = (
         ShiftDetails.query
-        .filter_by(main_shift_id=main_shift_id)
+        .filter_by(store_id=store_id, main_shift_id=main_shift_id)
         .order_by(ShiftDetails.shift_number)
         .all()
     )
@@ -271,7 +271,7 @@ def build_main_shift_report(store_id: int, main_shift_id: int) -> dict:
     # Plus return-to-vendor users from books referenced in scans
     static_codes_in_subs = set()
     for s in subs:
-        for sb in ShiftBooks.query.filter_by(shift_id=s.shift_id).all():
+        for sb in ShiftBooks.query.filter_by(shift_id=s.shift_id, store_id=store_id).all():
             static_codes_in_subs.add(sb.static_code)
     if static_codes_in_subs:
         for b in Book.query.filter(
@@ -282,7 +282,7 @@ def build_main_shift_report(store_id: int, main_shift_id: int) -> dict:
     # Cleanup the leftover variable name no longer used
     # Plus whole-book-sale creators
     for s in subs:
-        for e in ShiftExtraSales.query.filter_by(shift_id=s.shift_id).all():
+        for e in ShiftExtraSales.query.filter_by(shift_id=s.shift_id, store_id=store_id).all():
             user_ids.add(e.created_by_user_id)
 
     user_map = _build_user_map(user_ids)
@@ -290,7 +290,7 @@ def build_main_shift_report(store_id: int, main_shift_id: int) -> dict:
     # Collect slot_ids
     slot_ids = set()
     for s in subs:
-        for sb in ShiftBooks.query.filter_by(shift_id=s.shift_id).all():
+        for sb in ShiftBooks.query.filter_by(shift_id=s.shift_id, store_id=store_id).all():
             if sb.slot_id is not None:
                 slot_ids.add(sb.slot_id)
     slot_map = _build_slot_name_map(slot_ids)
@@ -304,7 +304,7 @@ def build_main_shift_report(store_id: int, main_shift_id: int) -> dict:
         regular_books, returned_books = _per_book_lines_for_subshift(
             s.shift_id, store_id, user_map, slot_map
         )
-        whole_book_sales = _whole_book_sales_for_subshift(s.shift_id, user_map)
+        whole_book_sales = _whole_book_sales_for_subshift(s.shift_id, store_id, user_map)
         breakdown = _ticket_breakdown_for_subshift(s.shift_id, store_id)
 
         entry = {

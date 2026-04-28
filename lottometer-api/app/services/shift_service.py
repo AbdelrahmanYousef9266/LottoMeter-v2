@@ -33,28 +33,28 @@ def _get_open_main_shift(store_id: int) -> ShiftDetails | None:
     )
 
 
-def _get_subshifts_for(main_shift_id: int) -> list[ShiftDetails]:
+def _get_subshifts_for(store_id: int, main_shift_id: int) -> list[ShiftDetails]:
     return (
         ShiftDetails.query
-        .filter_by(main_shift_id=main_shift_id)
+        .filter_by(store_id=store_id, main_shift_id=main_shift_id)
         .order_by(ShiftDetails.shift_number)
         .all()
     )
 
 
-def _get_current_open_subshift(main_shift_id: int) -> ShiftDetails | None:
+def _get_current_open_subshift(store_id: int, main_shift_id: int) -> ShiftDetails | None:
     return (
         ShiftDetails.query
-        .filter_by(main_shift_id=main_shift_id, is_shift_open=True)
+        .filter_by(store_id=store_id, main_shift_id=main_shift_id, is_shift_open=True)
         .order_by(ShiftDetails.shift_number.desc())
         .first()
     )
 
 
-def _next_subshift_number(main_shift_id: int) -> int:
+def _next_subshift_number(store_id: int, main_shift_id: int) -> int:
     last = (
         ShiftDetails.query
-        .filter_by(main_shift_id=main_shift_id)
+        .filter_by(store_id=store_id, main_shift_id=main_shift_id)
         .order_by(ShiftDetails.shift_number.desc())
         .first()
     )
@@ -77,7 +77,7 @@ def get_pending_scans_for_subshift(
     """Books that are active and don't yet have an open scan in this sub-shift."""
     open_static_codes = {
         s.static_code for s in
-        ShiftBooks.query.filter_by(shift_id=subshift.shift_id, scan_type="open").all()
+        ShiftBooks.query.filter_by(shift_id=subshift.shift_id, store_id=store_id, scan_type="open").all()
     }
     return [b for b in _all_active_books(store_id) if b.static_code not in open_static_codes]
 
@@ -147,6 +147,11 @@ def get_running_summary(store_id: int, subshift_id: int) -> dict:
     from app.models.shift_extra_sales import ShiftExtraSales
     from decimal import Decimal
 
+    # #1: validate sub-shift ownership before any queries run
+    sub = ShiftDetails.query.filter_by(shift_id=subshift_id, store_id=store_id).first()
+    if sub is None or sub.main_shift_id is None:
+        raise NotFoundError("Sub-shift not found.", code="SUBSHIFT_NOT_FOUND")
+
     tickets_total = _compute_subshift_tickets_total(subshift_id, store_id)
 
     # Whole-book sales
@@ -165,7 +170,7 @@ def get_running_summary(store_id: int, subshift_id: int) -> dict:
     )
     close_static_codes = {
         s.static_code for s in
-        ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="close").all()
+        ShiftBooks.query.filter_by(shift_id=subshift_id, store_id=store_id, scan_type="close").all()
     }
     books_with_close = sum(1 for b in active_books if b.static_code in close_static_codes)
 
@@ -188,7 +193,7 @@ def _verify_all_active_books_have_close_scan(store_id: int, subshift_id: int) ->
 
     close_static_codes = {
         s.static_code for s in
-        ShiftBooks.query.filter_by(shift_id=subshift_id, scan_type="close").all()
+        ShiftBooks.query.filter_by(shift_id=subshift_id, store_id=store_id, scan_type="close").all()
     }
     missing = [b for b in active_books if b.static_code not in close_static_codes]
     if missing:
@@ -236,7 +241,7 @@ def _close_subshift_in_place(
 
 
 def _aggregate_main_shift_totals(main: ShiftDetails) -> None:
-    subs = [s for s in _get_subshifts_for(main.shift_id) if not s.voided]
+    subs = [s for s in _get_subshifts_for(main.store_id, main.shift_id) if not s.voided]
     main.tickets_total = sum((s.tickets_total or Decimal("0.00")) for s in subs)
     main.gross_sales = sum((s.gross_sales or Decimal("0.00")) for s in subs)
     main.cash_in_hand = sum((s.cash_in_hand or Decimal("0.00")) for s in subs)
@@ -262,7 +267,7 @@ def _carry_forward_open_scans(
     Returns: number of rows carried forward.
     """
     prev_close_scans = ShiftBooks.query.filter_by(
-        shift_id=prev_subshift_id, scan_type="close"
+        shift_id=prev_subshift_id, store_id=store_id, scan_type="close"
     ).all()
 
     count = 0
@@ -384,7 +389,7 @@ def close_main_shift(
             code="SHIFT_ALREADY_CLOSED",
         )
 
-    sub = _get_current_open_subshift(main_shift_id)
+    sub = _get_current_open_subshift(store_id, main_shift_id)
     if sub is None:
         raise BusinessRuleError(
             "No open sub-shift found for this main shift.",
@@ -425,7 +430,7 @@ def handover_subshift(
             code="SHIFT_ALREADY_CLOSED",
         )
 
-    current = _get_current_open_subshift(main_shift_id)
+    current = _get_current_open_subshift(store_id, main_shift_id)
     if current is None:
         raise BusinessRuleError(
             "No open sub-shift to hand over.",
@@ -447,7 +452,7 @@ def handover_subshift(
         opened_by_user_id=user_id,
         is_shift_open=True,
         main_shift_id=main_shift_id,
-        shift_number=_next_subshift_number(main_shift_id),
+        shift_number=_next_subshift_number(store_id, main_shift_id),
     )
     db.session.add(new_sub)
     db.session.flush()
@@ -533,7 +538,7 @@ def void_main_shift(
     now = datetime.now(timezone.utc)
 
     # Cascade to all sub-shifts (skip already-voided ones)
-    subs = _get_subshifts_for(main_shift_id)
+    subs = _get_subshifts_for(store_id, main_shift_id)
     for s in subs:
         if not s.voided:
             s.voided = True
