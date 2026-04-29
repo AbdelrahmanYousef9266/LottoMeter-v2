@@ -488,11 +488,19 @@
   },
 
   "booksDashboard": {
-    "title": "Books",
+    "title": "Books Dashboard",
     "active": "Active",
     "sold": "Sold",
     "returned": "Returned",
-    "viewAll": "View all"
+    "viewAll": "View all ({{total}})",
+    "errorTapRetry": "Couldn't load data.",
+    "activity": "Activity",
+    "period": {
+      "week": "Week",
+      "month": "Month",
+      "year": "Year",
+      "all": "All time"
+    }
   },
 
   "booksList": {

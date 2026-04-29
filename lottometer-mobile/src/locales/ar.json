@@ -488,11 +488,19 @@
   },
 
   "booksDashboard": {
-    "title": "الدفاتر",
+    "title": "لوحة الكتب",
     "active": "نشطة",
     "sold": "مبيعة",
     "returned": "مُعادة",
-    "viewAll": "عرض الكل"
+    "viewAll": "عرض الكل ({{total}})",
+    "errorTapRetry": "تعذّر تحميل البيانات.",
+    "activity": "النشاط",
+    "period": {
+      "week": "أسبوع",
+      "month": "شهر",
+      "year": "سنة",
+      "all": "كل الوقت"
+    }
   },
 
   "booksList": {

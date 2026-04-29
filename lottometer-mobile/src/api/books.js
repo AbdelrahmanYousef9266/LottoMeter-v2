@@ -5,6 +5,11 @@ export async function getBooksSummary() {
   return data; // { active, sold, returned, total }
 }
 
+export async function getBooksActivity(period) {
+  const { data } = await api.get(`/books/activity?period=${period}`);
+  return data; // { period, from, to, sold, returned, previous_period: { sold, returned } | null }
+}
+
 export async function getBooks(filters = {}) {
   const params = new URLSearchParams();
   if (filters.status === 'active')   params.set('is_active', 'true');
