@@ -13,7 +13,8 @@
     "yes": "نعم",
     "no": "لا",
     "dash": "—",
-    "networkError": "فشل طلب الشبكة."
+    "networkError": "فشل طلب الشبكة.",
+    "done": "تم"
   },
 
   "auth": {
@@ -198,7 +199,25 @@
     "emptyAdminSubtitle": "الفتحات هي المكان الذي تُعيّن فيه الدفاتر وتتتبع المبيعات. أنشئ فتحتك الأولى للبدء.",
     "emptyAdminAction": "أضف فتحتك الأولى",
     "emptyEmployeeTitle": "لا توجد فتحات بعد",
-    "emptyEmployeeSubtitle": "يحتاج مديرك إلى إضافة فتحات قبل أن تتمكن من مسح الدفاتر."
+    "emptyEmployeeSubtitle": "يحتاج مديرك إلى إضافة فتحات قبل أن تتمكن من مسح الدفاتر.",
+    "bulkScanBooks": "مسح كتب بالجملة",
+    "addSlot": "إضافة فتحة",
+    "bulkAddSlots": "إضافة فتحات بالجملة"
+  },
+
+  "bulkAssign": {
+    "title": "تعيين كتب بالجملة",
+    "currentSlot": "الفتحة الحالية",
+    "scanBarcodeLabel": "امسح أو أدخل الباركود",
+    "barcodePlaceholder": "باركود مكون من 13 رقماً",
+    "submit": "تعيين ومتابعة",
+    "assignedCount": "تم تعيين {{count}} كتاب",
+    "exitEarly": "خروج",
+    "allDoneTitle": "تم تعيين جميع الفتحات",
+    "allDoneBody": "تم تعيين {{count}} كتاب في هذه الجلسة.",
+    "loadFailedTitle": "تعذر تحميل الفتحات",
+    "loadFailedBody": "حاول مرة أخرى أو تحقق من اتصالك.",
+    "cameraHint": "وجّه الكاميرا نحو الباركود"
   },
 
   
@@ -466,6 +485,25 @@
     "bookReturned": "تمت إعادة الدفتر",
     "revenuePreserved": "تم الحفاظ على الإيرادات قبل الإعادة عند الموضع {{position}}.",
     "noRevenue": "تم إلغاء تعيين الدفتر ووسمه كمُعاد."
+  },
+
+  "booksDashboard": {
+    "title": "الدفاتر",
+    "active": "نشطة",
+    "sold": "مبيعة",
+    "returned": "مُعادة",
+    "viewAll": "عرض الكل"
+  },
+
+  "booksList": {
+    "title": "الدفاتر",
+    "filter_all": "الكل",
+    "filter_active": "نشطة",
+    "filter_sold": "مبيعة",
+    "filter_returned": "مُعادة",
+    "inactive": "غير نشطة",
+    "unassigned": "غير مُعيَّن",
+    "empty": "لا توجد دفاتر."
   },
 
   "camera": {

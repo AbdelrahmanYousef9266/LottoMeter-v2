@@ -13,7 +13,8 @@
     "yes": "Yes",
     "no": "No",
     "dash": "—",
-    "networkError": "Network request failed."
+    "networkError": "Network request failed.",
+    "done": "Done"
   },
 
   "auth": {
@@ -198,7 +199,25 @@
     "emptyAdminSubtitle": "Slots are where you assign books and track sales. Create your first slot to get started.",
     "emptyAdminAction": "Add your first slot",
     "emptyEmployeeTitle": "No slots yet",
-    "emptyEmployeeSubtitle": "Your admin needs to add slots before you can scan books."
+    "emptyEmployeeSubtitle": "Your admin needs to add slots before you can scan books.",
+    "bulkScanBooks": "Bulk scan books",
+    "addSlot": "Add slot",
+    "bulkAddSlots": "Bulk add slots"
+  },
+
+  "bulkAssign": {
+    "title": "Bulk Assign Books",
+    "currentSlot": "Current slot",
+    "scanBarcodeLabel": "Scan or enter barcode",
+    "barcodePlaceholder": "13-digit barcode",
+    "submit": "Assign and continue",
+    "assignedCount": "{{count}} books assigned",
+    "exitEarly": "Exit",
+    "allDoneTitle": "All slots assigned",
+    "allDoneBody": "{{count}} books were assigned in this session.",
+    "loadFailedTitle": "Couldn't load slots",
+    "loadFailedBody": "Try again or check your connection.",
+    "cameraHint": "Point camera at barcode"
   },
 
   
@@ -466,6 +485,25 @@
     "bookReturned": "Book returned",
     "revenuePreserved": "Pre-return revenue preserved at position {{position}}.",
     "noRevenue": "Book unassigned and marked returned."
+  },
+
+  "booksDashboard": {
+    "title": "Books",
+    "active": "Active",
+    "sold": "Sold",
+    "returned": "Returned",
+    "viewAll": "View all"
+  },
+
+  "booksList": {
+    "title": "Books",
+    "filter_all": "All",
+    "filter_active": "Active",
+    "filter_sold": "Sold",
+    "filter_returned": "Returned",
+    "inactive": "Inactive",
+    "unassigned": "Unassigned",
+    "empty": "No books found."
   },
 
   "camera": {

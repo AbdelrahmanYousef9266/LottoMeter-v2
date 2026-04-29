@@ -17,8 +17,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { listSlots, createSlot, bulkDeleteSlots } from '../api/slots';
+import ActionPopupMenu from '../components/ActionPopupMenu';
 import BulkCreateSlotsModal from '../components/BulkCreateSlotsModal';
 import EmptyState from '../components/EmptyState';
 
@@ -35,6 +37,7 @@ export default function BooksScreen() {
   const [slots, setSlots] = useState([]);
   const [createOpen, setCreateOpen] = useState(false);
   const [bulkOpen, setBulkOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
 
   // Selection mode state
   const [selectMode, setSelectMode] = useState(false);
@@ -188,20 +191,35 @@ export default function BooksScreen() {
           <>
             <Text style={styles.title}>{t('books.title')}</Text>
             {isAdmin && (
-              <View style={styles.headerButtons}>
+              <>
                 <TouchableOpacity
-                  style={styles.bulkButton}
-                  onPress={() => setBulkOpen(true)}
+                  style={styles.headerButton}
+                  onPress={() => setMenuOpen(true)}
                 >
-                  <Text style={styles.bulkButtonText}>{t('books.bulkAdd')}</Text>
+                  <Ionicons name="add" size={28} color="#1a73e8" />
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.addButton}
-                  onPress={() => setCreateOpen(true)}
-                >
-                  <Text style={styles.addButtonText}>{t('books.newSlot')}</Text>
-                </TouchableOpacity>
-              </View>
+                <ActionPopupMenu
+                  visible={menuOpen}
+                  onClose={() => setMenuOpen(false)}
+                  actions={[
+                    {
+                      label: t('books.addSlot'),
+                      icon: 'add-circle-outline',
+                      onPress: () => setCreateOpen(true),
+                    },
+                    {
+                      label: t('books.bulkAddSlots'),
+                      icon: 'add-outline',
+                      onPress: () => setBulkOpen(true),
+                    },
+                    {
+                      label: t('books.bulkScanBooks'),
+                      icon: 'scan-outline',
+                      onPress: () => navigation.navigate('BulkAssign'),
+                    },
+                  ]}
+                />
+              </>
             )}
           </>
         )}
@@ -454,24 +472,9 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
   title: { fontSize: 28, fontWeight: '700' },
-  addButton: {
-    backgroundColor: '#1a73e8',
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    borderRadius: 8,
+  headerButton: {
+    padding: 4,
   },
-  addButtonText: { color: '#fff', fontWeight: '600' },
-
-  headerButtons: { flexDirection: 'row', gap: 6 },
-  bulkButton: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#1a73e8',
-  },
-  bulkButtonText: { color: '#1a73e8', fontWeight: '600', fontSize: 13 },
 
   cancelSelectBtn: {
     paddingHorizontal: 14,

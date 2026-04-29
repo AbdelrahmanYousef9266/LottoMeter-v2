@@ -24,11 +24,13 @@ import {
 import CloseShiftModal from '../components/CloseShiftModal';
 import WholeBookSaleModal from '../components/WholeBookSaleModal';
 import ReturnBookModal from '../components/ReturnBookModal';
+import BooksDashboard from '../components/BooksDashboard';
 
 export default function HomeScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
   const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -163,6 +165,8 @@ export default function HomeScreen() {
         <Text style={styles.greeting}>
           {t('home.greeting', { name: user?.username || '' })}
         </Text>
+
+        {isAdmin && <BooksDashboard />}
 
         {!shiftDetail ? (
           <NoShiftView onOpen={handleOpenShift} busy={busy} t={t} />

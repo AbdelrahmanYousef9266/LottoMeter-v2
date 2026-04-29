@@ -9,6 +9,8 @@ import CameraScannerScreen from '../screens/CameraScannerScreen';
 import SlotDetailScreen from '../screens/SlotDetailScreen';
 import ReportDetailScreen from '../screens/ReportDetailScreen';
 import UsersScreen from '../screens/UsersScreen';
+import BulkAssignScreen from '../screens/BulkAssignScreen';
+import BooksListScreen from '../screens/BooksListScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -30,6 +32,12 @@ export default function RootNavigator() {
             <Stack.Screen name="SlotDetail" component={SlotDetailScreen} />
             <Stack.Screen name="ReportDetail" component={ReportDetailScreen} />
             <Stack.Screen name="Users" component={UsersScreen} />
+            <Stack.Screen
+              name="BulkAssign"
+              component={BulkAssignScreen}
+              options={{ gestureEnabled: false }}
+            />
+            <Stack.Screen name="BooksList" component={BooksListScreen} />
             <Stack.Screen
               name="CameraScanner"
               component={CameraScannerScreen}
