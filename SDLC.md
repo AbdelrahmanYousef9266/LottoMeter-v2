@@ -319,23 +319,23 @@ This validates the decision to do mobile + API in the same project rather than t
 
 ---
 
-## Phase 6 — Deployment ⏳
+## Phase 6 — Deployment ✅
 
-**Status:** Pending
-
-### Plan
-- Docker + docker-compose for local dev (Flask + PostgreSQL) ✅ already done in Phase 4
-- Deploy to cloud (Railway / Render / VPS)
-- GitHub Actions CI/CD pipeline
-- Automated database backups
+**Status:** Complete | **Date:** April 2026
 
 ### Deliverables
-- [x] Dockerfile for Flask API
-- [x] docker-compose.yml
-- [ ] GitHub Actions CI workflow
-- [ ] Deployment guide
-- [x] .env.example with all required variables
-- [ ] Production environment checklist
+
+- [x] Production-ready Dockerfile (env-driven port, migrations on startup, Gunicorn)
+- [x] Render Web Service ($7/mo Starter tier, Ohio region)
+- [x] Render Postgres ($6/mo Basic-256mb, daily backups)
+- [x] Custom domain api.lottometer.com via Cloudflare Registrar + DNS
+- [x] HTTPS via Render's automatic Let's Encrypt
+- [x] Sentry error tracking (Flask + React Native projects)
+- [x] UptimeRobot uptime monitoring (5-min interval, email alerts)
+- [x] EAS Build pipeline configured (preview profile, Android APK, internal distribution)
+- [x] Mobile app pointed at production API
+- [x] First production store created via /api/auth/setup
+- [x] Deployment runbook published at docs/DEPLOYMENT_RUNBOOK.md
 
 ---
 
@@ -471,3 +471,11 @@ This validates the decision to do mobile + API in the same project rather than t
 | April 2026 | Shift history role-based scoping: admin sees all shifts with filters (date range, status, employee), employee sees current open + most recent closed shift in store | Simpler logic and sufficient for small-store trust model; employee needs visibility of their work without full history access |
 | April 2026 | PDF export client-side via expo-print for v2.0; server-side PDF generation deferred to v2.1 dashboard | No new backend endpoint required; OS share sheet covers print, save, and email in a single action |
 | April 2026 | Single share-sheet export button rather than separate print/save/email actions | OS share sheet already exposes all output options natively; separate buttons would duplicate the sheet UI |
+| April 2026 | Render over Railway/Fly | Simpler Docker deployment, automatic HTTPS, low operational overhead for single-store pilot |
+| April 2026 | Custom domain api.lottometer.com (subdomain pattern) | Leaves apex domain free for future marketing site or web admin |
+| April 2026 | Cloudflare Registrar | At-cost domain pricing (~$10/yr for .com), free DNS, free WHOIS privacy |
+| April 2026 | DNS-only (gray cloud) for api.lottometer.com | Render manages its own SSL via Let's Encrypt; Cloudflare proxy adds complexity without benefit at this scale |
+| April 2026 | EAS preview build, internal distribution | One-tap install for testers without App Store/Play Store overhead; production build deferred to v2.1 |
+| April 2026 | Skip mobile Sentry verification before launch | Integration follows Sentry's documented pattern; first real error will validate; not worth a 20-min EAS rebuild for confirmation |
+| April 2026 | Sentry over alternatives (Bugsnag, Rollbar) | Free tier sufficient for single-store pilot, deploy SHA tagging via RENDER_GIT_COMMIT, mature React Native + Flask integrations |
+| April 2026 | Single in-memory PIN rate-limiter and JWT blocklist | Acceptable for single-instance pilot; Redis-backed implementation deferred to v2.1 (multi-store SaaS) |

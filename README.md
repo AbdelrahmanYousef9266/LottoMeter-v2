@@ -164,6 +164,12 @@ Clean closes reward employees with fast handover. Discrepancies trigger full ver
 - Employee shift history restricted to current open + most recent closed shift in the store
 - PDF export of shift reports via expo-print + OS share sheet
 
+### Production deployment
+- Backend: https://api.lottometer.com (Render)
+- Database: Render Postgres with daily backups
+- Mobile: EAS Build distributable APK (Android)
+- Monitoring: Sentry (error tracking) + UptimeRobot (uptime)
+
 ### v2.0 — Outstanding (deferred)
 - Custom splash screen
 - Onboarding flow
@@ -177,7 +183,6 @@ Clean closes reward employees with fast handover. Discrepancies trigger full ver
 - Print layout customization, Bluetooth thermal printer
 - Hindi, Spanish, French, Urdu languages
 - PDF & Excel export, font size preference
-- Sentry + uptime monitoring
 
 ### v2.2 — Expansion
 - Push notifications (enables alternate auth flows)
@@ -217,7 +222,7 @@ The i18n architecture (i18next + JSON translation files + AsyncStorage persisten
 | Implementation — Backend | ✅ Complete |
 | Implementation — Mobile | ✅ ~95% complete |
 | Testing | ⏳ Pending (Phase 5) |
-| Deployment | ⏳ Pending (Phase 6) |
+| Deployment | ✅ Complete |
 | Maintenance | ⏳ Pending (Phase 7) |
 | Commercialization | 🗺️ Planned (Phase 8) |
 
@@ -229,7 +234,8 @@ The i18n architecture (i18next + JSON translation files + AsyncStorage persisten
 LottoMeter-v2/
 ├── docs/
 │   ├── ERD.md
-│   └── API_Contract.md
+│   ├── API_Contract.md
+│   └── DEPLOYMENT_RUNBOOK.md
 ├── lottometer-api/         ← Flask REST API
 │   ├── app/
 │   │   ├── models/
@@ -255,6 +261,7 @@ LottoMeter-v2/
 │   │   ├── utils/
 │   │   └── i18n.js
 │   ├── App.js
+│   ├── eas.json
 │   └── package.json
 ├── README.md
 ├── SDLC.md
@@ -271,6 +278,7 @@ LottoMeter-v2/
 | [SDLC.md](./SDLC.md) | SDLC phase tracker + decision log + commercialization roadmap |
 | [docs/ERD.md](./docs/ERD.md) | Entity Relationship Diagram v2.1 — 8 models |
 | [docs/API_Contract.md](./docs/API_Contract.md) | Full API endpoint and JSON contract v2.1 |
+| [docs/DEPLOYMENT_RUNBOOK.md](./docs/DEPLOYMENT_RUNBOOK.md) | Operational guide for production environment |
 
 ---
 
