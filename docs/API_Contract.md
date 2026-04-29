@@ -1,6 +1,6 @@
 # API Contract — LottoMeter v2.0
 
-**Version:** 2.5
+**Version:** 2.6
 **Base URL:** `/api`
 **Auth:** JWT in `Authorization: Bearer <token>` header (except where noted)
 **Content-Type:** `application/json`
@@ -439,6 +439,63 @@ the full book list to compute dashboard counts client-side.
 
 **Errors:**
 - 401 — not authenticated
+
+---
+
+### GET /api/books/activity
+
+Rolling time-windowed counts of sold and returned books, with a previous-period snapshot for trend comparison (e.g. trend arrows in the dashboard).
+
+**Auth:** Required (admin only)
+**Multi-tenancy:** Scoped to user's store via JWT `store_id` claim
+
+**Query params:**
+
+| Param | Values | Required |
+|---|---|---|
+| `period` | `week` \| `month` \| `year` \| `all` | yes |
+
+**Response 200 (period = "week" \| "month" \| "year")**
+```json
+{
+  "period": "week",
+  "from": "2026-04-22T10:00:00+00:00",
+  "to":   "2026-04-29T10:00:00+00:00",
+  "sold": 15,
+  "returned": 3,
+  "previous_period": {
+    "sold": 8,
+    "returned": 0
+  }
+}
+```
+
+**Response 200 (period = "all")**
+```json
+{
+  "period": "all",
+  "from": null,
+  "to":   "2026-04-29T10:00:00+00:00",
+  "sold": 120,
+  "returned": 11,
+  "previous_period": null
+}
+```
+
+| Field | Definition |
+|---|---|
+| `from` | Window start (UTC ISO 8601). `null` when `period="all"` |
+| `to` | Window end — always `now` (UTC ISO 8601) |
+| `sold` | Books with `sold_at` in `[from, to]` |
+| `returned` | Books with `returned_at` in `[from, to]` |
+| `previous_period` | Same counts for the equal-length window immediately before `from`. `null` when `period="all"` |
+
+Window lengths: `week` = 7 days, `month` = 30 days, `year` = 365 days.
+
+**Errors:**
+- 400 `INVALID_PERIOD` — `period` not one of the allowed values
+- 401 — not authenticated
+- 403 `ADMIN_REQUIRED` — authenticated but not admin
 
 ---
 

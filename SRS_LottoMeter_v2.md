@@ -6,7 +6,7 @@
 | Field | Value |
 |---|---|
 | **Project Name** | LottoMeter v2.0 |
-| **Document Version** | 5.6 |
+| **Document Version** | 5.7 |
 | **Author** | Abdelrahman Yousef |
 | **Date** | April 2026 |
 | **Status** | Final — Verified |
@@ -25,6 +25,7 @@
 | 5.4 | April 2026 | Shift history role-based scoping added (§6.13, FR-HIST-01–06): admin filter bar (date range, status, employee), employee view restricted to current open + most recent closed shift in store, voided shifts excluded from employee view; client-side PDF export of shift reports via expo-print + OS share sheet; GET /api/users/active endpoint added to §12 |
 | 5.5 | April 2026 | `force_sold` parameter added to scan API (§5.8, API Contract §7) to disambiguate "sell last ticket" from "record close at last position without selling"; three new error codes; mobile confirmation gate wired to client-side last-ticket detection |
 | 5.6 | April 2026 | `GET /api/books/summary` endpoint added for mobile books dashboard widget (aggregate counts: active, sold, returned, total); API Contract bumped to v2.5 |
+| 5.7 | April 2026 | `GET /api/books/activity` endpoint added for rolling time-windowed sold/returned counts with previous-period comparison; `sold_at` column added to `books` table; API Contract bumped to v2.6 |
 
 ---
 
@@ -845,6 +846,7 @@ Full API contract is in `docs/API_Contract.md`.
 | GET | /api/books | JWT | any |
 | GET | /api/books/{id} | JWT | any |
 | GET | /api/books/summary | JWT | any |
+| GET | /api/books/activity | JWT | admin |
 | POST | /api/books/{book_id}/unassign | JWT | admin |
 | POST | /api/books/{book_id}/return-to-vendor | JWT | any (PIN) |
 | POST | /api/shifts | JWT | any |
@@ -1085,6 +1087,10 @@ Key decisions made during SRS v5.0 design review (April 2026):
 ### v5.6 revisions (April 2026):
 
 50. **Books summary endpoint added** — `GET /api/books/summary` returns aggregate counts (`active`, `sold`, `returned`, `total`) scoped to the store. Added to support the mobile books-dashboard chip widget without fetching the full book list on every navigation. Lightweight aggregate query (four `.count()` calls on the same base query); cheaper than returning all book rows and computing counts client-side. Read-only; no writes. Any authenticated role may call it.
+
+### v5.7 revisions (April 2026):
+
+51. **Books activity endpoint and `sold_at` column** — `GET /api/books/activity?period=<week|month|year|all>` returns rolling time-windowed counts of sold and returned books, plus an equal-length previous-period snapshot to power trend arrows in the mobile home dashboard. `sold_at` (nullable DateTime) was added to the `books` table and stamped by `scan_service` at the moment `is_sold` is set; this keeps the activity query a simple `COUNT` with a range filter on an indexed column rather than a derived join against `shift_books`. `returned_at` was already present. Admin-only because activity trends are a management concern, not operational. Calendar-day rolling windows (7/30/365) chosen over ISO calendar weeks/months for implementation simplicity.
 
 ### v5.5 revisions (April 2026):
 

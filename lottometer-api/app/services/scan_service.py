@@ -209,6 +209,7 @@ def record_scan(
 
     if sold_this_scan:
         book.is_sold = True
+        book.sold_at = datetime.now(timezone.utc)
         book.is_active = False
         book.slot_id = None
 

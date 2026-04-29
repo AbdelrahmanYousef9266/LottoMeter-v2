@@ -62,6 +62,15 @@ def get_books_summary():
     return jsonify(summary), 200
 
 
+@book_bp.route("/books/activity", methods=["GET"])
+@admin_required
+def get_books_activity():
+    """Admin-only: rolling time-windowed sold/returned counts with previous-period comparison."""
+    period = request.args.get("period", "week")
+    activity = book_service.get_books_activity(current_store_id(), period)
+    return jsonify(activity), 200
+
+
 @book_bp.route("/books/<int:book_id>", methods=["GET"])
 @jwt_required()
 def get_book(book_id):

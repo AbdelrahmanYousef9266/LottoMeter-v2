@@ -1,7 +1,7 @@
 """Book service — assign-to-slot, reassign, unassign workflows."""
 
 from decimal import Decimal
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from app.extensions import db
 from app.models.slot import Slot
@@ -60,6 +60,60 @@ def get_books_summary(store_id: int) -> dict:
         "sold": sold,
         "returned": returned,
         "total": total,
+    }
+
+
+_PERIOD_DAYS = {"week": 7, "month": 30, "year": 365}
+
+
+def get_books_activity(store_id: int, period: str) -> dict:
+    """Return rolling time-windowed counts for sold and returned books.
+
+    For periods other than 'all', also returns previous-period counts for
+    trend comparison. sold_at / returned_at are the timestamp sources.
+    """
+    from app.errors import ValidationError as _VE
+
+    if period not in (*_PERIOD_DAYS, "all"):
+        raise _VE(
+            f"period must be one of {list(_PERIOD_DAYS)} or 'all'.",
+            code="INVALID_PERIOD",
+        )
+
+    now = datetime.now(timezone.utc)
+    base = Book.query.filter_by(store_id=store_id)
+
+    if period == "all":
+        sold_current = base.filter(Book.sold_at.isnot(None)).count()
+        returned_current = base.filter(Book.returned_at.isnot(None)).count()
+        return {
+            "period": "all",
+            "from": None,
+            "to": now.isoformat(),
+            "sold": sold_current,
+            "returned": returned_current,
+            "previous_period": None,
+        }
+
+    days = _PERIOD_DAYS[period]
+    from_dt = now - timedelta(days=days)
+    prev_from = from_dt - timedelta(days=days)
+
+    def _count(field, start, end):
+        return (
+            base.filter(field.isnot(None), field >= start, field <= end).count()
+        )
+
+    return {
+        "period": period,
+        "from": from_dt.isoformat(),
+        "to": now.isoformat(),
+        "sold": _count(Book.sold_at, from_dt, now),
+        "returned": _count(Book.returned_at, from_dt, now),
+        "previous_period": {
+            "sold": _count(Book.sold_at, prev_from, from_dt),
+            "returned": _count(Book.returned_at, prev_from, from_dt),
+        },
     }
 
 

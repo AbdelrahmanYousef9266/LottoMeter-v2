@@ -28,6 +28,7 @@ class Book(db.Model):
     )
     is_active = db.Column(db.Boolean, nullable=False, default=False)
     is_sold = db.Column(db.Boolean, nullable=False, default=False)
+    sold_at = db.Column(db.DateTime, nullable=True)
     returned_at = db.Column(db.DateTime, nullable=True)
     returned_by_user_id = db.Column(
         db.Integer,
