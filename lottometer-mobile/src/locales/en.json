@@ -137,7 +137,33 @@
     "fieldSource": "Source",
     "invalidBarcode": "Invalid barcode",
     "invalidBarcodeHint": "Enter at least 4 characters.",
-    "scanFailed": "Scan failed"
+    "scanFailed": "Scan failed",
+    "shiftOpenedToast": "Shift opened. Start scanning open positions.",
+    "allOpensDoneTitle": "All set!",
+    "allOpensDoneBody": "All tickets scanned. Enjoy your shift.",
+    "allClosesDoneTitle": "Ready to close?",
+    "allClosesDoneBody": "All closing scans done.",
+    "notYet": "Not yet",
+    "yesClose": "Yes, close",
+    "done": "Done Scanning",
+    "lastTicketTitle": "Last ticket",
+    "lastTicketBody1": "Was this the final sale?",
+    "recordOnly": "No, record only",
+    "yesSellBook": "Yes, sell book",
+    "confirmSaleTitle": "Confirm sale",
+    "confirmSaleBody": "Slot {{slotName}} ({{price}} book) will be marked sold. This cannot be undone.",
+    "yesMarkSold": "Yes, mark sold",
+    "errors": {
+      "bookNotFound": "Book not found. Check the barcode and try again.",
+      "bookNotActive": "This book is not active in any slot.",
+      "bookAlreadySold": "This book has already been fully sold.",
+      "invalidPosition": "Ticket position is out of range for this book.",
+      "positionBeforeOpen": "This position was already scanned as open — close scan rejected.",
+      "openRescanBlocked": "This book already has an open scan for this sub-shift.",
+      "shiftClosed": "The sub-shift is no longer open.",
+      "shiftVoided": "This sub-shift has been voided.",
+      "salesBlockedPendingInit": "Finish all opening scans before recording sales."
+    }
   },
 
   "books": {

@@ -12,17 +12,31 @@ import {
   Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect, useNavigation } from '@react-navigation/native';
+import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
 import { getCurrentOpenShift } from '../api/shifts';
 import { recordScan } from '../api/scan';
+import { listSlots } from '../api/slots';
 import { useAuth } from '../context/AuthContext';
 import { useFeedback } from '../hooks/useFeedback';
+import { friendlyScanError } from '../utils/scanErrorMessages';
+import { lastPositionFor, parseBarcode } from '../utils/bookConstants';
+
+function detectLastTicket(trimmedBarcode, scanType, slots) {
+  if (scanType !== 'close') return false;
+  const parsed = parseBarcode(trimmedBarcode);
+  if (!parsed || isNaN(parsed.position)) return false;
+  const slot = slots.find((s) => s.current_book?.static_code === parsed.static_code);
+  if (!slot) return false;
+  const last = lastPositionFor(slot.ticket_price);
+  return last !== null && parsed.position === last;
+}
 
 export default function ScanScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
+  const route = useRoute();
   const { scanMode } = useAuth();
   const [loading, setLoading] = useState(true);
   const [shift, setShift] = useState(null);
@@ -30,13 +44,19 @@ export default function ScanScreen() {
   const [pendingCount, setPendingCount] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
 
+  const [slots, setSlots] = useState([]);
+
   const [barcode, setBarcode] = useState('');
-  const [scanType, setScanType] = useState('open');
+  const initialScanType = route.params?.scanType ?? 'open';
+  const justOpened = route.params?.justOpened ?? false;
+  const [scanType, setScanType] = useState(initialScanType);
+  const [toastVisible, setToastVisible] = useState(false);
   const [busy, setBusy] = useState(false);
   const [lastScan, setLastScan] = useState(null);
   const [scanCount, setScanCount] = useState(0);
 
   const inputRef = useRef(null);
+  const lastScanRef = useRef({ barcode: null, timestamp: 0 });
   const fireFeedback = useFeedback();
 
   const loadShift = useCallback(async () => {
@@ -71,28 +91,43 @@ export default function ScanScreen() {
     }, [loadShift])
   );
 
+  const loadSlots = useCallback(async () => {
+    try {
+      const result = await listSlots();
+      setSlots(result.slots || []);
+    } catch (err) {
+      console.warn('[ScanScreen] failed to load slots:', err);
+    }
+  }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadSlots();
+    }, [loadSlots])
+  );
+
   useEffect(() => {
     setScanType(isInitialized ? 'close' : 'open');
   }, [isInitialized]);
 
-  const submitScan = useCallback(
-    async (rawBarcode) => {
-      const code = (rawBarcode || '').trim();
-      if (!code || code.length < 4) {
-        Alert.alert(t('scan.invalidBarcode'), t('scan.invalidBarcodeHint'));
-        return;
-      }
-      if (!openSubId) {
-        Alert.alert(t('scan.noOpenShift'), t('scan.noOpenShiftHint'));
-        return;
-      }
+  useEffect(() => {
+    if (justOpened) {
+      setToastVisible(true);
+      const timer = setTimeout(() => setToastVisible(false), 3000);
+      navigation.setParams({ justOpened: undefined });
+      return () => clearTimeout(timer);
+    }
+  }, [justOpened]);
 
+  const proceedWithScan = useCallback(
+    async (code, force_sold = null) => {
       setBusy(true);
       try {
         const result = await recordScan({
           shift_id: openSubId,
           barcode: code,
           scan_type: scanType,
+          force_sold,
         });
         setLastScan({
           scan: result.scan,
@@ -102,26 +137,121 @@ export default function ScanScreen() {
           is_initialized: result.is_initialized,
         });
         fireFeedback(result.scan?.is_last_ticket ? 'last_ticket' : 'success');
+        setToastVisible(false);
         setScanCount((c) => c + 1);
+
+        const wasPending = pendingCount > 0;
+        const isNowZero = result.pending_scans_remaining === 0;
         setPendingCount(result.pending_scans_remaining);
         setIsInitialized(result.is_initialized);
         setBarcode('');
         setTimeout(() => inputRef.current?.focus(), 50);
+
+        if (wasPending && isNowZero && scanType === 'open') {
+          Alert.alert(
+            t('scan.allOpensDoneTitle'),
+            t('scan.allOpensDoneBody'),
+            [{ text: t('common.ok') }]
+          );
+        }
       } catch (err) {
         fireFeedback('error');
-        Alert.alert(
-          err.code || t('scan.scanFailed'),
-          err.message || t('common.tryAgain')
-        );
+        Alert.alert(t('scan.scanFailed'), friendlyScanError(err, t));
       } finally {
         setBusy(false);
       }
     },
-    [openSubId, scanType, t, fireFeedback]
+    [openSubId, scanType, t, fireFeedback, pendingCount]
+  );
+
+  const submitScan = useCallback(
+    async (rawBarcode) => {
+      const code = (rawBarcode || '').trim();
+      if (!/^\d{13}$/.test(code)) return;
+
+      const now = Date.now();
+      if (code === lastScanRef.current.barcode && now - lastScanRef.current.timestamp < 2000) {
+        setBarcode('');
+        setTimeout(() => inputRef.current?.focus(), 50);
+        return;
+      }
+      lastScanRef.current = { barcode: code, timestamp: now };
+
+      if (!openSubId) {
+        Alert.alert(t('scan.noOpenShift'), t('scan.noOpenShiftHint'));
+        return;
+      }
+
+      if (detectLastTicket(code, scanType, slots)) {
+        const staticCode = code.slice(0, -3);
+        const slot = slots.find((s) => s.current_book?.static_code === staticCode);
+
+        function showLastTicketDialog1() {
+          Alert.alert(
+            t('scan.lastTicketTitle'),
+            t('scan.lastTicketBody1'),
+            [
+              {
+                text: t('scan.recordOnly'),
+                style: 'cancel',
+                onPress: () => proceedWithScan(code, false),
+              },
+              {
+                text: t('scan.yesSellBook'),
+                onPress: () => showLastTicketDialog2(),
+              },
+            ]
+          );
+        }
+
+        function showLastTicketDialog2() {
+          const slotName = slot?.slot_name || '?';
+          const price = slot?.ticket_price || '?';
+          Alert.alert(
+            t('scan.confirmSaleTitle'),
+            t('scan.confirmSaleBody', { slotName, price: `$${price}` }),
+            [
+              {
+                text: t('common.cancel'),
+                style: 'cancel',
+                onPress: () => showLastTicketDialog1(),
+              },
+              {
+                text: t('scan.yesMarkSold'),
+                style: 'destructive',
+                onPress: () => proceedWithScan(code, true),
+              },
+            ]
+          );
+        }
+
+        showLastTicketDialog1();
+        return;
+      }
+
+      await proceedWithScan(code);
+    },
+    [openSubId, scanType, t, slots, proceedWithScan]
   );
 
   function handleManualScan() {
-    submitScan(barcode);
+    const trimmedBarcode = barcode.trim();
+    if (!/^\d{13}$/.test(trimmedBarcode)) return;
+    submitScan(trimmedBarcode);
+  }
+
+  function handleDonePress() {
+    Alert.alert(
+      t('scan.allClosesDoneTitle'),
+      t('scan.allClosesDoneBody'),
+      [
+        { text: t('scan.notYet'), style: 'cancel' },
+        {
+          text: t('scan.yesClose'),
+          onPress: () => navigation.navigate('Home'),
+        },
+      ]
+    );
   }
 
   function handleOpenCamera() {
@@ -163,6 +293,8 @@ export default function ScanScreen() {
       </SafeAreaView>
     );
   }
+
+  const isBarcodeValid = /^\d{13}$/.test(barcode.trim());
 
   return (
     <SafeAreaView style={styles.container}>
@@ -258,9 +390,9 @@ export default function ScanScreen() {
             />
 
             <TouchableOpacity
-              style={[styles.scanButton, busy && styles.disabled]}
+              style={[styles.scanButton, (!isBarcodeValid || busy) && styles.disabled]}
               onPress={handleManualScan}
-              disabled={busy}
+              disabled={!isBarcodeValid || busy}
             >
               {busy ? (
                 <ActivityIndicator color="#fff" />
@@ -291,6 +423,12 @@ export default function ScanScreen() {
             </View>
           )}
 
+          {isInitialized && (
+            <TouchableOpacity style={styles.doneButton} onPress={handleDonePress}>
+              <Text style={styles.doneButtonText}>{t('scan.done')}</Text>
+            </TouchableOpacity>
+          )}
+
           <View style={styles.footer}>
             <Text style={styles.footerText}>
               {t('scan.scansThisSession', { count: scanCount })}
@@ -298,6 +436,11 @@ export default function ScanScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+      {toastVisible && (
+        <View style={styles.toast}>
+          <Text style={styles.toastText}>{t('scan.shiftOpenedToast')}</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 }
@@ -411,6 +554,34 @@ const styles = StyleSheet.create({
   kvKey: { color: '#666', fontSize: 13 },
   kvValue: { color: '#222', fontSize: 13, fontWeight: '600' },
 
+  doneButton: {
+    backgroundColor: '#16a34a',
+    padding: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  doneButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+
   footer: { alignItems: 'center', marginTop: 8 },
   footerText: { color: '#888', fontSize: 12 },
+
+  toast: {
+    position: 'absolute',
+    bottom: 24,
+    left: 16,
+    right: 16,
+    backgroundColor: '#1a73e8',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    zIndex: 1000,
+    elevation: 4,
+  },
+  toastText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+    textAlign: 'center',
+  },
 });

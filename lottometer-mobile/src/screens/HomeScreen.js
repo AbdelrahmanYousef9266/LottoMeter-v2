@@ -10,7 +10,7 @@ import {
   Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../context/AuthContext';
@@ -27,6 +27,7 @@ import ReturnBookModal from '../components/ReturnBookModal';
 
 export default function HomeScreen() {
   const { t } = useTranslation();
+  const navigation = useNavigation();
   const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -70,6 +71,7 @@ export default function HomeScreen() {
     try {
       await openShift();
       await loadCurrentShift();
+      navigation.navigate('Scan', { scanType: 'open', justOpened: true });
     } catch (err) {
       Alert.alert(t('home.couldNotOpenShift'), err.message || t('common.tryAgain'));
     } finally {
@@ -84,6 +86,7 @@ export default function HomeScreen() {
       setCloseMode(null);
       await loadCurrentShift();
       Alert.alert(t('home.subshiftEnded'), t('home.subshiftEndedHint'));
+      navigation.navigate('Scan', { scanType: 'open', justOpened: true });
     } catch (err) {
       handleCloseError(err);
       throw err;

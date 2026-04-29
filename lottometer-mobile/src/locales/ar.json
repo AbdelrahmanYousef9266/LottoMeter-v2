@@ -137,7 +137,33 @@
     "fieldSource": "المصدر",
     "invalidBarcode": "باركود غير صالح",
     "invalidBarcodeHint": "أدخل ٤ أحرف على الأقل.",
-    "scanFailed": "فشل المسح"
+    "scanFailed": "فشل المسح",
+    "shiftOpenedToast": "تم فتح المناوبة. ابدأ بمسح المواقع الافتتاحية.",
+    "allOpensDoneTitle": "كل شيء جاهز!",
+    "allOpensDoneBody": "تم مسح جميع التذاكر. استمتع بمناوبتك.",
+    "allClosesDoneTitle": "جاهز للإغلاق؟",
+    "allClosesDoneBody": "تم الانتهاء من جميع مسحات الإغلاق.",
+    "notYet": "ليس الآن",
+    "yesClose": "نعم، أغلق",
+    "done": "انتهيت من المسح",
+    "lastTicketTitle": "آخر تذكرة",
+    "lastTicketBody1": "هل كانت هذه هي البيعة الأخيرة؟",
+    "recordOnly": "لا، سجل فقط",
+    "yesSellBook": "نعم، بع الكتاب",
+    "confirmSaleTitle": "تأكيد البيع",
+    "confirmSaleBody": "سيتم تحديد الفتحة {{slotName}} (كتاب {{price}}) كمباع. لا يمكن التراجع عن هذا الإجراء.",
+    "yesMarkSold": "نعم، حدد كمباع",
+    "errors": {
+      "bookNotFound": "الدفتر غير موجود. تحقق من الباركود وأعد المحاولة.",
+      "bookNotActive": "هذا الدفتر غير نشط في أي فتحة.",
+      "bookAlreadySold": "تم بيع هذا الدفتر بالكامل بالفعل.",
+      "invalidPosition": "موضع التذكرة خارج النطاق لهذا الدفتر.",
+      "positionBeforeOpen": "تم مسح هذا الموضع مسبقًا كفتح — رُفض مسح الإغلاق.",
+      "openRescanBlocked": "هذا الدفتر لديه بالفعل مسح فتح لهذه الوردية الفرعية.",
+      "shiftClosed": "الوردية الفرعية لم تعد مفتوحة.",
+      "shiftVoided": "تم إلغاء هذه الوردية الفرعية.",
+      "salesBlockedPendingInit": "أنهِ جميع مسحات الفتح قبل تسجيل المبيعات."
+    }
   },
 
   "books": {
