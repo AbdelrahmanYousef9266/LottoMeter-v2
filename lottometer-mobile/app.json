@@ -16,6 +16,7 @@
       "supportsTablet": true
     },
     "android": {
+      "package": "com.lottometer.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -26,10 +27,28 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-secure-store",
-      "expo-localization",
-      "@react-native-community/datetimepicker",
-      "@sentry/react-native"
-    ]
+  "expo-secure-store",
+  "expo-localization",
+  "@react-native-community/datetimepicker",
+  [
+    "@sentry/react-native",
+    {
+      "organization": "lottometer",
+      "project": "lottometer-mobile"
+    }
+  ]
+],
+    "extra": {
+      "eas": {
+        "projectId": "e100a58f-8393-4995-a06c-7903b8b3d05d"
+      }
+    },
+    "owner": "almomani",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/e100a58f-8393-4995-a06c-7903b8b3d05d"
+    }
   }
 }
