@@ -6,7 +6,7 @@
 | Field | Value |
 |---|---|
 | **Project Name** | LottoMeter v2.0 |
-| **Document Version** | 5.5 |
+| **Document Version** | 5.6 |
 | **Author** | Abdelrahman Yousef |
 | **Date** | April 2026 |
 | **Status** | Final — Verified |
@@ -24,6 +24,7 @@
 | 5.3 | April 2026 | Multi-tenancy hardened (19 security fixes, cross-tenant audit complete); admin user management CRUD added (§6.12, FR-USER-01–07); bulk slot management (FR-SLOT-08–10); scan_mode preference (FR-STORE-05–06); FR-AUTH-06 security scoping requirement added; mobile: continuous scan, ITF-14 normalization, hardware scanner mode, bulk slot UI, PIN change complete |
 | 5.4 | April 2026 | Shift history role-based scoping added (§6.13, FR-HIST-01–06): admin filter bar (date range, status, employee), employee view restricted to current open + most recent closed shift in store, voided shifts excluded from employee view; client-side PDF export of shift reports via expo-print + OS share sheet; GET /api/users/active endpoint added to §12 |
 | 5.5 | April 2026 | `force_sold` parameter added to scan API (§5.8, API Contract §7) to disambiguate "sell last ticket" from "record close at last position without selling"; three new error codes; mobile confirmation gate wired to client-side last-ticket detection |
+| 5.6 | April 2026 | `GET /api/books/summary` endpoint added for mobile books dashboard widget (aggregate counts: active, sold, returned, total); API Contract bumped to v2.5 |
 
 ---
 
@@ -843,6 +844,7 @@ Full API contract is in `docs/API_Contract.md`.
 | POST | /api/slots/{slot_id}/assign-book | JWT | admin |
 | GET | /api/books | JWT | any |
 | GET | /api/books/{id} | JWT | any |
+| GET | /api/books/summary | JWT | any |
 | POST | /api/books/{book_id}/unassign | JWT | admin |
 | POST | /api/books/{book_id}/return-to-vendor | JWT | any (PIN) |
 | POST | /api/shifts | JWT | any |
@@ -1079,6 +1081,10 @@ Key decisions made during SRS v5.0 design review (April 2026):
 46. **Client-side PDF export for v2.0 via expo-print + OS share sheet** — server-side PDF generation deferred to v2.1 dashboard work. Client-side approach requires no new backend endpoint and covers print, save, and email through the OS share sheet in a single action.
 
 47. **Single share-sheet export button rather than separate print/save/email actions** — the OS share sheet already exposes all output options natively; separate buttons would duplicate the sheet's own UI and clutter the report detail screen.
+
+### v5.6 revisions (April 2026):
+
+50. **Books summary endpoint added** — `GET /api/books/summary` returns aggregate counts (`active`, `sold`, `returned`, `total`) scoped to the store. Added to support the mobile books-dashboard chip widget without fetching the full book list on every navigation. Lightweight aggregate query (four `.count()` calls on the same base query); cheaper than returning all book rows and computing counts client-side. Read-only; no writes. Any authenticated role may call it.
 
 ### v5.5 revisions (April 2026):
 

@@ -54,6 +54,14 @@ def list_books():
     return jsonify({"books": out}), 200
 
 
+@book_bp.route("/books/summary", methods=["GET"])
+@jwt_required()
+def get_books_summary():
+    """Any authenticated user: aggregate counts of books in the store."""
+    summary = book_service.get_books_summary(current_store_id())
+    return jsonify(summary), 200
+
+
 @book_bp.route("/books/<int:book_id>", methods=["GET"])
 @jwt_required()
 def get_book(book_id):

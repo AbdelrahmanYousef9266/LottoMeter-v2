@@ -1,6 +1,6 @@
 # API Contract — LottoMeter v2.0
 
-**Version:** 2.4
+**Version:** 2.5
 **Base URL:** `/api`
 **Auth:** JWT in `Authorization: Bearer <token>` header (except where noted)
 **Content-Type:** `application/json`
@@ -411,6 +411,36 @@ Lists active and historically-relevant books. Scoped to store.
   ]
 }
 ```
+
+### GET /api/books/summary
+
+Aggregate counts of books in the store, grouped by status. Cheaper than fetching
+the full book list to compute dashboard counts client-side.
+
+**Auth:** Required (any role)
+**Multi-tenancy:** Scoped to user's store via JWT `store_id` claim
+
+**Response 200**
+```json
+{
+  "active":   42,
+  "sold":     10,
+  "returned":  5,
+  "total":    57
+}
+```
+
+| Field | Definition |
+|---|---|
+| `active` | `is_active=true AND is_sold=false AND returned_at IS NULL` |
+| `sold` | `is_sold=true` (any value of `returned_at`) |
+| `returned` | `returned_at IS NOT NULL` |
+| `total` | All book rows in the store |
+
+**Errors:**
+- 401 — not authenticated
+
+---
 
 ### POST /api/slots/{slot_id}/assign-book
 Admin-only. Assigns a book to a slot. Creates the Book if new, reassigns if existing.
@@ -1011,6 +1041,7 @@ Implementation: in-memory counter for v2.0; Redis-backed for production later.
 | POST | /api/slots/{slot_id}/assign-book | JWT | admin |
 | GET | /api/books | JWT | any |
 | GET | /api/books/{id} | JWT | any |
+| GET | /api/books/summary | JWT | any |
 | POST | /api/books/{book_id}/unassign | JWT | admin |
 | POST | /api/books/{book_id}/return-to-vendor | JWT | any (PIN) |
 | POST | /api/shifts | JWT | any |

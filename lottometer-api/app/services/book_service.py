@@ -41,6 +41,28 @@ def parse_barcode(barcode: str) -> tuple[str, int]:
 
 # ---------- Lookups ----------
 
+def get_books_summary(store_id: int) -> dict:
+    """Return aggregate counts of books in the store by status."""
+    base = Book.query.filter_by(store_id=store_id)
+
+    active = base.filter(
+        Book.is_active == True,
+        Book.is_sold == False,
+        Book.returned_at.is_(None),
+    ).count()
+
+    sold = base.filter(Book.is_sold == True).count()
+    returned = base.filter(Book.returned_at.isnot(None)).count()
+    total = base.count()
+
+    return {
+        "active": active,
+        "sold": sold,
+        "returned": returned,
+        "total": total,
+    }
+
+
 def list_books(store_id: int, is_active=None, is_sold=None, returned=None) -> list[Book]:
     q = Book.query.filter_by(store_id=store_id)
     if is_active is not None:
