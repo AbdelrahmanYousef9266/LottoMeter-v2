@@ -19,6 +19,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../context/AuthContext';
 import { listUsers, createUser, updateUser, deleteUser } from '../api/users';
+import EmptyState from '../components/EmptyState';
 
 export default function UsersScreen() {
   const { t } = useTranslation();
@@ -209,8 +210,14 @@ export default function UsersScreen() {
           <Text style={styles.addButtonText}>{t('users.addUser')}</Text>
         </TouchableOpacity>
 
-        {users.length === 0 ? (
-          <Text style={styles.emptyText}>{t('users.noUsers')}</Text>
+        {users.length <= 1 ? (
+          <EmptyState
+            icon="people-outline"
+            title={t('users.emptyTitle')}
+            subtitle={t('users.emptySubtitle')}
+            actionLabel={t('users.emptyAction')}
+            onAction={openCreate}
+          />
         ) : (
           users.map((u) => {
             const isMe = u.user_id === currentUser?.user_id;
@@ -391,8 +398,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   addButtonText: { color: '#fff', fontWeight: '600', fontSize: 15 },
-
-  emptyText: { textAlign: 'center', color: '#888', marginTop: 32 },
 
   userCard: {
     backgroundColor: '#fff',

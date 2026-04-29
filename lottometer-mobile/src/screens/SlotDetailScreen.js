@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { getSlot, assignBook, unassignBook, deleteSlot } from '../api/slots';
 import ReturnBookModal from '../components/ReturnBookModal';
+import { useFeedback } from '../hooks/useFeedback';
 
 export default function SlotDetailScreen({ route }) {
   const { t } = useTranslation();
@@ -27,6 +28,8 @@ export default function SlotDetailScreen({ route }) {
   const navigation = useNavigation();
   const { user, scanMode } = useAuth();
   const isAdmin = user?.role === 'admin';
+
+  const fireFeedback = useFeedback();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -74,9 +77,11 @@ export default function SlotDetailScreen({ route }) {
         barcode,
         confirm_reassign: confirmReassign,
       });
+      fireFeedback('success');
       await loadSlot();
     } catch (err) {
       if (err.code === 'REASSIGN_CONFIRMATION_REQUIRED') {
+        fireFeedback('error');
         Alert.alert(
           t('slotDetail.reassignTitle'),
           t('slotDetail.reassignMessage'),
@@ -90,6 +95,7 @@ export default function SlotDetailScreen({ route }) {
           ]
         );
       } else {
+        fireFeedback('error');
         Alert.alert(err.code || t('slotDetail.couldNotAssign'), err.message || t('common.tryAgain'));
       }
     } finally {

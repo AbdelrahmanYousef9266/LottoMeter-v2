@@ -15,6 +15,7 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { getSubshiftSummary } from '../api/shifts';
+import { useFeedback } from '../hooks/useFeedback';
 
 export default function CloseShiftModal({
   visible,
@@ -23,12 +24,17 @@ export default function CloseShiftModal({
   subshiftId,
   onCancel,
   onSubmit,
+  closedSubshiftCount = 0,
+  voidedSubshiftCount = 0,
 }) {
   const { t } = useTranslation();
+  const fireFeedback = useFeedback();
+
   const [cashInHand, setCashInHand] = useState('');
   const [grossSales, setGrossSales] = useState('');
   const [cashOut, setCashOut] = useState('');
   const [busy, setBusy] = useState(false);
+  const [confirmingClose, setConfirmingClose] = useState(false);
 
   const [summary, setSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -38,6 +44,7 @@ export default function CloseShiftModal({
       setCashInHand('');
       setGrossSales('');
       setCashOut('');
+      setConfirmingClose(false);
       loadSummary();
     }
   }, [visible]);
@@ -64,16 +71,20 @@ export default function CloseShiftModal({
 
   let status = '—';
   let statusColor = '#888';
+  let statusBgColor = '#f0f0f0';
   if (cashInHand) {
     if (Math.abs(difference) < 0.005) {
       status = t('closeShift.statusCorrect');
       statusColor = '#16a34a';
+      statusBgColor = '#dcfce7';
     } else if (difference > 0) {
       status = t('closeShift.statusOver');
       statusColor = '#d97706';
+      statusBgColor = '#fef9c3';
     } else {
       status = t('closeShift.statusShort');
       statusColor = '#dc2626';
+      statusBgColor = '#fef2f2';
     }
   }
 
@@ -83,6 +94,23 @@ export default function CloseShiftModal({
   const isHandover = mode === 'handover';
   const titleText = isHandover ? t('closeShift.handoverTitle') : t('closeShift.finalTitle');
   const submitText = isHandover ? t('closeShift.endSubshift') : t('closeShift.endMainShift');
+
+  async function doClose() {
+    setBusy(true);
+    try {
+      await onSubmit({
+        cash_in_hand: cashInHand,
+        gross_sales: grossSales,
+        cash_out: cashOut,
+      });
+      fireFeedback('shift_closed');
+    } catch (err) {
+      fireFeedback('error');
+    } finally {
+      setBusy(false);
+      setConfirmingClose(false);
+    }
+  }
 
   async function handleSubmit() {
     if (cashInHand === '' || grossSales === '' || cashOut === '') {
@@ -94,17 +122,20 @@ export default function CloseShiftModal({
       return;
     }
 
-    setBusy(true);
-    try {
-      await onSubmit({
-        cash_in_hand: cashInHand,
-        gross_sales: grossSales,
-        cash_out: cashOut,
-      });
-    } catch (err) {
-      // parent handles
-    } finally {
-      setBusy(false);
+    if (isHandover) {
+      const diffText = difference >= 0
+        ? `+$${difference.toFixed(2)}`
+        : `-$${Math.abs(difference).toFixed(2)}`;
+      Alert.alert(
+        t('closeShift.confirmHandoverTitle'),
+        t('closeShift.confirmHandoverBody', { status, diff: diffText }),
+        [
+          { text: t('common.cancel'), style: 'cancel' },
+          { text: t('closeShift.endSubshift'), onPress: doClose },
+        ]
+      );
+    } else {
+      setConfirmingClose(true);
     }
   }
 
@@ -121,90 +152,145 @@ export default function CloseShiftModal({
       >
         <View style={styles.card}>
           <ScrollView keyboardShouldPersistTaps="handled">
-            <Text style={styles.title}>{titleText}</Text>
+            {confirmingClose ? (
+              <>
+                <Text style={styles.title}>{t('closeShift.confirmFinalTitle')}</Text>
+                <Text style={styles.confirmSubtitle}>{t('closeShift.confirmFinalSubtitle')}</Text>
 
-            {summaryLoading ? (
-              <View style={styles.banner}>
-                <ActivityIndicator />
-              </View>
-            ) : blockedByPendingCloses ? (
-              <View style={[styles.banner, styles.bannerError]}>
-                <Text style={styles.bannerErrorText}>
-                  {t('closeShift.pendingClosesWarning', { count: booksPending })}
+                <View style={[styles.statusBadge, { backgroundColor: statusBgColor }]}>
+                  <Text style={[styles.statusBadgeText, { color: statusColor }]}>{status}</Text>
+                </View>
+
+                <View style={styles.previewCard}>
+                  <KV k={t('closeShift.ticketsTotal')} v={`$${ticketsTotal.toFixed(2)}`} />
+                  <KV k={t('closeShift.expectedCash')} v={`$${expectedCash.toFixed(2)}`} />
+                  <KV
+                    k={t('closeShift.difference')}
+                    v={`$${difference.toFixed(2)}`}
+                    vColor={statusColor}
+                  />
+                </View>
+
+                <Text style={styles.confirmInfoText}>
+                  {t('closeShift.confirmFinalInfo', {
+                    closed: closedSubshiftCount,
+                    voided: voidedSubshiftCount,
+                  })}
                 </Text>
-                <Text style={styles.bannerErrorHint}>
-                  {t('closeShift.pendingClosesHint')}
-                </Text>
-              </View>
+
+                <View style={styles.actions}>
+                  <TouchableOpacity
+                    style={[styles.button, styles.cancelButton]}
+                    onPress={() => setConfirmingClose(false)}
+                    disabled={busy}
+                  >
+                    <Text style={styles.cancelText}>{t('common.back')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.button,
+                      styles.submitButton,
+                      busy && styles.disabled,
+                    ]}
+                    onPress={doClose}
+                    disabled={busy}
+                  >
+                    {busy ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.submitText}>{t('closeShift.endMainShift')}</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
             ) : (
-              <View style={[styles.banner, styles.bannerOk]}>
-                <Text style={styles.bannerOkText}>{t('closeShift.allBooksClosed')}</Text>
-              </View>
-            )}
+              <>
+                <Text style={styles.title}>{titleText}</Text>
 
-            <Text style={styles.label}>{t('closeShift.cashInHand')}</Text>
-            <TextInput
-              style={styles.input}
-              value={cashInHand}
-              onChangeText={setCashInHand}
-              placeholder="0.00"
-              keyboardType="decimal-pad"
-            />
-
-            <Text style={styles.label}>{t('closeShift.grossSales')}</Text>
-            <TextInput
-              style={styles.input}
-              value={grossSales}
-              onChangeText={setGrossSales}
-              placeholder="0.00"
-              keyboardType="decimal-pad"
-            />
-
-            <Text style={styles.label}>{t('closeShift.cashOut')}</Text>
-            <TextInput
-              style={styles.input}
-              value={cashOut}
-              onChangeText={setCashOut}
-              placeholder="0.00"
-              keyboardType="decimal-pad"
-            />
-
-            <View style={styles.previewCard}>
-              <Text style={styles.previewTitle}>{t('closeShift.livePreview')}</Text>
-              <KV k={t('closeShift.ticketsTotal')} v={`$${ticketsTotal.toFixed(2)}`} />
-              <KV k={t('closeShift.expectedCash')} v={`$${expectedCash.toFixed(2)}`} />
-              <KV
-                k={t('closeShift.difference')}
-                v={`$${difference.toFixed(2)}`}
-                vColor={statusColor}
-              />
-              <KV k={t('closeShift.status')} v={status} vColor={statusColor} />
-            </View>
-
-            <View style={styles.actions}>
-              <TouchableOpacity
-                style={[styles.button, styles.cancelButton]}
-                onPress={onCancel}
-                disabled={busy}
-              >
-                <Text style={styles.cancelText}>{t('common.cancel')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[
-                  styles.button,
-                  styles.submitButton,
-                  (busy || blockedByPendingCloses) && styles.disabled,
-                ]}
-                onPress={handleSubmit}
-                disabled={busy || blockedByPendingCloses}
-              >
-                {busy ? (
-                  <ActivityIndicator color="#fff" />
+                {summaryLoading ? (
+                  <View style={styles.banner}>
+                    <ActivityIndicator />
+                  </View>
+                ) : blockedByPendingCloses ? (
+                  <View style={[styles.banner, styles.bannerError]}>
+                    <Text style={styles.bannerErrorText}>
+                      {t('closeShift.pendingClosesWarning', { count: booksPending })}
+                    </Text>
+                    <Text style={styles.bannerErrorHint}>
+                      {t('closeShift.pendingClosesHint')}
+                    </Text>
+                  </View>
                 ) : (
-                  <Text style={styles.submitText}>{submitText}</Text>
+                  <View style={[styles.banner, styles.bannerOk]}>
+                    <Text style={styles.bannerOkText}>{t('closeShift.allBooksClosed')}</Text>
+                  </View>
                 )}
-              </TouchableOpacity>
-            </View>
+
+                <Text style={styles.label}>{t('closeShift.cashInHand')}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={cashInHand}
+                  onChangeText={setCashInHand}
+                  placeholder="0.00"
+                  keyboardType="decimal-pad"
+                />
+
+                <Text style={styles.label}>{t('closeShift.grossSales')}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={grossSales}
+                  onChangeText={setGrossSales}
+                  placeholder="0.00"
+                  keyboardType="decimal-pad"
+                />
+
+                <Text style={styles.label}>{t('closeShift.cashOut')}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={cashOut}
+                  onChangeText={setCashOut}
+                  placeholder="0.00"
+                  keyboardType="decimal-pad"
+                />
+
+                <View style={styles.previewCard}>
+                  <Text style={styles.previewTitle}>{t('closeShift.livePreview')}</Text>
+                  <KV k={t('closeShift.ticketsTotal')} v={`$${ticketsTotal.toFixed(2)}`} />
+                  <KV k={t('closeShift.expectedCash')} v={`$${expectedCash.toFixed(2)}`} />
+                  <KV
+                    k={t('closeShift.difference')}
+                    v={`$${difference.toFixed(2)}`}
+                    vColor={statusColor}
+                  />
+                  <KV k={t('closeShift.status')} v={status} vColor={statusColor} />
+                </View>
+
+                <View style={styles.actions}>
+                  <TouchableOpacity
+                    style={[styles.button, styles.cancelButton]}
+                    onPress={onCancel}
+                    disabled={busy}
+                  >
+                    <Text style={styles.cancelText}>{t('common.cancel')}</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[
+                      styles.button,
+                      styles.submitButton,
+                      (busy || blockedByPendingCloses) && styles.disabled,
+                    ]}
+                    onPress={handleSubmit}
+                    disabled={busy || blockedByPendingCloses}
+                  >
+                    {busy ? (
+                      <ActivityIndicator color="#fff" />
+                    ) : (
+                      <Text style={styles.submitText}>{submitText}</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
           </ScrollView>
         </View>
       </KeyboardAvoidingView>
@@ -287,4 +373,28 @@ const styles = StyleSheet.create({
   submitButton: { backgroundColor: '#1a73e8' },
   submitText: { color: '#fff', fontWeight: '600' },
   disabled: { opacity: 0.5 },
+
+  confirmSubtitle: {
+    fontSize: 14,
+    color: '#555',
+    marginBottom: 16,
+  },
+  confirmInfoText: {
+    fontSize: 13,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 12,
+    marginBottom: 4,
+  },
+  statusBadge: {
+    alignSelf: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    borderRadius: 999,
+    marginBottom: 16,
+  },
+  statusBadgeText: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
 });

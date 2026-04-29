@@ -78,7 +78,10 @@
     "userCreatedTitle": "User created",
     "userCreatedHint": "{{username}} can now log in.",
     "userUpdatedTitle": "User updated",
-    "userDeletedTitle": "User deleted"
+    "userDeletedTitle": "User deleted",
+    "emptyTitle": "Just you so far",
+    "emptySubtitle": "Add employees so they can run shifts and process scans.",
+    "emptyAction": "Add user"
   },
 
   "home": {
@@ -164,7 +167,12 @@
     "deleteConfirmMessage": "These slots will be removed. This cannot be undone, but historical reports will still reference them.",
     "deleteResultTitle": "Slots deleted",
     "deleteResultMessage": "{{deleted}} deleted. {{occupied}} skipped (had books).",
-    "deleteErrorTitle": "Could not delete"
+    "deleteErrorTitle": "Could not delete",
+    "emptyAdminTitle": "No slots yet",
+    "emptyAdminSubtitle": "Slots are where you assign books and track sales. Create your first slot to get started.",
+    "emptyAdminAction": "Add your first slot",
+    "emptyEmployeeTitle": "No slots yet",
+    "emptyEmployeeSubtitle": "Your admin needs to add slots before you can scan books."
   },
 
   
@@ -227,7 +235,9 @@
     "deleteSlotTitle": "Delete slot?",
     "deleteSlotMessage": "Permanently remove \"{{name}}\"? This cannot be undone, but historical reports will still reference this slot's name.",
     "cannotDeleteTitle": "Cannot delete",
-    "cannotDeleteHint": "Unassign the book from this slot before deleting it."
+    "cannotDeleteHint": "Unassign the book from this slot before deleting it.",
+    "emptyHistoryTitle": "No book history yet",
+    "emptyHistorySubtitle": "Books assigned to this slot will appear here."
   },
 
   "history": {
@@ -243,6 +253,13 @@
     "statusOver": "Over",
     "statusShort": "Short",
     "statusVoided": "Voided",
+    "emptyTitle": "No shifts yet",
+    "emptySubtitle": "Once you open and close shifts, they'll appear here.",
+    "emptyFilteredTitle": "No shifts match your filters",
+    "emptyFilteredSubtitle": "Try adjusting the date range, status, or employee filter.",
+    "emptyFilteredAction": "Clear filters",
+    "emptyEmployeeTitle": "No shifts to display",
+    "emptyEmployeeSubtitle": "Your admin or another employee needs to open a shift first.",
     "filters": {
       "pill": "Filters",
       "from": "From",
@@ -334,7 +351,11 @@
     "scanModeHardware": "Hardware Scanner",
     "scanModeHardwareDesc": "Use a USB or Bluetooth barcode scanner. Phone shows an input that captures keystrokes.",
     "scanModeUpdatedTitle": "Scan mode updated",
-    "scanModeUpdatedHint": "All scan screens will use the new mode."
+    "scanModeUpdatedHint": "All scan screens will use the new mode.",
+    "scan_feedback": "Scan feedback",
+    "scan_feedback_subtitle": "Plays a sound and/or vibrates on each scan",
+    "scan_feedback_sound": "Sound",
+    "scan_feedback_vibration": "Vibration"
   },
 
   "closeShift": {
@@ -361,7 +382,12 @@
     "booksNotClosedHint": "Some active books still need close scans. Go to the Scan tab and record final positions.",
     "statusCorrect": "Correct",
     "statusOver": "Over",
-    "statusShort": "Short"
+    "statusShort": "Short",
+    "confirmHandoverTitle": "Close Sub-shift?",
+    "confirmHandoverBody": "Status: {{status}} · Difference: {{diff}}\n\nClose this sub-shift and hand over to the next employee?",
+    "confirmFinalTitle": "Close Main Shift?",
+    "confirmFinalSubtitle": "Review the summary below before closing.",
+    "confirmFinalInfo": "{{closed}} sub-shift(s) closed · {{voided}} voided"
   },
 
   "wholeBook": {

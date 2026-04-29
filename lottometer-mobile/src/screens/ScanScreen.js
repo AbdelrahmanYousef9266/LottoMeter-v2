@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { getCurrentOpenShift } from '../api/shifts';
 import { recordScan } from '../api/scan';
 import { useAuth } from '../context/AuthContext';
+import { useFeedback } from '../hooks/useFeedback';
 
 export default function ScanScreen() {
   const { t } = useTranslation();
@@ -36,6 +37,7 @@ export default function ScanScreen() {
   const [scanCount, setScanCount] = useState(0);
 
   const inputRef = useRef(null);
+  const fireFeedback = useFeedback();
 
   const loadShift = useCallback(async () => {
     try {
@@ -99,12 +101,14 @@ export default function ScanScreen() {
           pending_scans_remaining: result.pending_scans_remaining,
           is_initialized: result.is_initialized,
         });
+        fireFeedback(result.scan?.is_last_ticket ? 'last_ticket' : 'success');
         setScanCount((c) => c + 1);
         setPendingCount(result.pending_scans_remaining);
         setIsInitialized(result.is_initialized);
         setBarcode('');
         setTimeout(() => inputRef.current?.focus(), 50);
       } catch (err) {
+        fireFeedback('error');
         Alert.alert(
           err.code || t('scan.scanFailed'),
           err.message || t('common.tryAgain')
@@ -113,7 +117,7 @@ export default function ScanScreen() {
         setBusy(false);
       }
     },
-    [openSubId, scanType, t]
+    [openSubId, scanType, t, fireFeedback]
   );
 
   function handleManualScan() {

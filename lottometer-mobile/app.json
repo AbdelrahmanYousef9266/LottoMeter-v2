@@ -27,17 +27,18 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-  "expo-secure-store",
-  "expo-localization",
-  "@react-native-community/datetimepicker",
-  [
-    "@sentry/react-native",
-    {
-      "organization": "lottometer",
-      "project": "lottometer-mobile"
-    }
-  ]
-],
+      "expo-secure-store",
+      "expo-localization",
+      "@react-native-community/datetimepicker",
+      [
+        "@sentry/react-native",
+        {
+          "organization": "lottometer",
+          "project": "lottometer-mobile"
+        }
+      ],
+      "expo-audio"
+    ],
     "extra": {
       "eas": {
         "projectId": "e100a58f-8393-4995-a06c-7903b8b3d05d"

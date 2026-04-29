@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { useAuth } from '../context/AuthContext';
 import { listSlots, createSlot, bulkDeleteSlots } from '../api/slots';
 import BulkCreateSlotsModal from '../components/BulkCreateSlotsModal';
+import EmptyState from '../components/EmptyState';
 
 const VALID_PRICES = ['1.00', '2.00', '3.00', '5.00', '10.00', '20.00'];
 
@@ -56,6 +57,15 @@ export default function BooksScreen() {
     }, [loadSlots])
   );
 
+  useFocusEffect(
+    useCallback(() => {
+      return () => {
+        setSelectMode(false);
+        setSelectedIds(new Set());
+      };
+    }, [])
+  );
+
   async function handleRefresh() {
     setRefreshing(true);
     await loadSlots();
@@ -83,6 +93,21 @@ export default function BooksScreen() {
       }
       return next;
     });
+  }
+
+  // Auto-exit selection mode when the last item is deselected
+  useEffect(() => {
+    if (selectMode && selectedIds.size === 0) {
+      setSelectMode(false);
+    }
+  }, [selectMode, selectedIds]);
+
+  function handleLongPress(slot) {
+    if (selectMode) return;
+    if (!isAdmin) return;
+    if (slot.current_book) return; // slots with books aren't selectable
+    enterSelectMode();
+    toggleSelected(slot.slot_id, false);
   }
 
   function handleSlotPress(slot) {
@@ -164,14 +189,6 @@ export default function BooksScreen() {
             <Text style={styles.title}>{t('books.title')}</Text>
             {isAdmin && (
               <View style={styles.headerButtons}>
-                {slots.length > 0 && (
-                  <TouchableOpacity
-                    style={styles.selectButton}
-                    onPress={enterSelectMode}
-                  >
-                    <Text style={styles.selectButtonText}>{t('books.select')}</Text>
-                  </TouchableOpacity>
-                )}
                 <TouchableOpacity
                   style={styles.bulkButton}
                   onPress={() => setBulkOpen(true)}
@@ -210,10 +227,13 @@ export default function BooksScreen() {
         }
       >
         {slots.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>{t('books.noSlots')}</Text>
-            {isAdmin && <Text style={styles.emptyHint}>{t('books.noSlotsHint')}</Text>}
-          </View>
+          <EmptyState
+            icon="grid-outline"
+            title={t(isAdmin ? 'books.emptyAdminTitle' : 'books.emptyEmployeeTitle')}
+            subtitle={t(isAdmin ? 'books.emptyAdminSubtitle' : 'books.emptyEmployeeSubtitle')}
+            actionLabel={isAdmin ? t('books.emptyAdminAction') : undefined}
+            onAction={isAdmin ? () => setCreateOpen(true) : undefined}
+          />
         ) : (
           slots.map((slot) => (
             <SlotCard
@@ -223,6 +243,7 @@ export default function BooksScreen() {
               selectMode={selectMode}
               selected={selectedIds.has(slot.slot_id)}
               onPress={() => handleSlotPress(slot)}
+              onLongPress={() => handleLongPress(slot)}
             />
           ))
         )}
@@ -269,7 +290,7 @@ export default function BooksScreen() {
   );
 }
 
-function SlotCard({ slot, t, selectMode, selected, onPress }) {
+function SlotCard({ slot, t, selectMode, selected, onPress, onLongPress }) {
   const hasBook = !!slot.current_book;
   const disabled = selectMode && hasBook;
 
@@ -282,6 +303,7 @@ function SlotCard({ slot, t, selectMode, selected, onPress }) {
         disabled && styles.slotCardDisabled,
       ]}
       onPress={onPress}
+      onLongPress={onLongPress}
       disabled={disabled}
       activeOpacity={disabled ? 1 : 0.7}
     >
@@ -451,16 +473,6 @@ const styles = StyleSheet.create({
   },
   bulkButtonText: { color: '#1a73e8', fontWeight: '600', fontSize: 13 },
 
-  selectButton: {
-    backgroundColor: '#fff',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#666',
-  },
-  selectButtonText: { color: '#444', fontWeight: '600', fontSize: 13 },
-
   cancelSelectBtn: {
     paddingHorizontal: 14,
     paddingVertical: 8,
@@ -477,15 +489,6 @@ const styles = StyleSheet.create({
   selectionHintText: { color: '#92400e', fontSize: 12 },
 
   scroll: { padding: 16, paddingBottom: 32 },
-
-  emptyCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 24,
-    alignItems: 'center',
-  },
-  emptyText: { fontSize: 16, color: '#666', marginBottom: 4 },
-  emptyHint: { fontSize: 13, color: '#888' },
 
   slotCard: {
     backgroundColor: '#fff',

@@ -3,6 +3,7 @@ import { Text } from 'react-native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
 
 import HomeScreen from '../screens/HomeScreen';
 import ScanScreen from '../screens/ScanScreen';
@@ -12,12 +13,12 @@ import SettingsScreen from '../screens/SettingsScreen';
 
 const Tab = createBottomTabNavigator();
 
-const ICONS = {
-  Home: '🏠',
-  Scan: '📷',
-  Books: '📚',
-  History: '🕒',
-  Settings: '⚙️',
+const TAB_ICONS = {
+  Home:     { outline: 'home-outline',     filled: 'home'     },
+  Scan:     { outline: 'scan-outline',     filled: 'scan'     },
+  Books:    { outline: 'book-outline',     filled: 'book'     },
+  History:  { outline: 'time-outline',     filled: 'time'     },
+  Settings: { outline: 'settings-outline', filled: 'settings' },
 };
 
 export default function MainTabs() {
@@ -37,16 +38,27 @@ export default function MainTabs() {
       screenOptions={({ route }) => ({
         headerShown: false,
         tabBarActiveTintColor: '#1a73e8',
-        tabBarInactiveTintColor: '#888',
-        tabBarLabel: tabLabels[route.name],
+        tabBarInactiveTintColor: '#5f6368',
+        tabBarLabel: ({ focused, color }) => (
+          <Text style={{ fontSize: 12, fontWeight: focused ? '600' : '400', color }}>
+            {tabLabels[route.name]}
+          </Text>
+        ),
         tabBarStyle: {
           paddingTop: 6,
           paddingBottom: insets.bottom + 6,
           height: 60 + insets.bottom,
         },
-        tabBarIcon: ({ focused }) => (
-          <Text style={{ fontSize: focused ? 22 : 20 }}>{ICONS[route.name]}</Text>
-        ),
+        tabBarIcon: ({ focused, color }) => {
+          const { outline, filled } = TAB_ICONS[route.name];
+          return (
+            <Ionicons
+              name={focused ? filled : outline}
+              size={focused ? 28 : 24}
+              color={color}
+            />
+          );
+        },
       })}
     >
       <Tab.Screen name="Home" component={HomeScreen} />

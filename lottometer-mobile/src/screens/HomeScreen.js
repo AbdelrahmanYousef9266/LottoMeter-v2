@@ -184,6 +184,8 @@ export default function HomeScreen() {
         onSubmit={
           closeMode === 'final' ? handleFinalCloseSubmit : handleHandoverSubmit
         }
+        closedSubshiftCount={shiftDetail?.subshifts?.filter((s) => !s.voided && !s.is_shift_open).length ?? 0}
+        voidedSubshiftCount={shiftDetail?.subshifts?.filter((s) => s.voided).length ?? 0}
       />
 
       <WholeBookSaleModal

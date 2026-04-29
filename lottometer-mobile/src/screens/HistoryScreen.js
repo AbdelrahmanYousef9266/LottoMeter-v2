@@ -19,6 +19,7 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import { listShifts } from '../api/shifts';
 import { listActiveUsers } from '../api/users';
 import { useAuth } from '../context/AuthContext';
+import EmptyState from '../components/EmptyState';
 
 export default function HistoryScreen() {
   const { t } = useTranslation();
@@ -158,10 +159,27 @@ export default function HistoryScreen() {
         }
       >
         {shifts.length === 0 ? (
-          <View style={styles.emptyCard}>
-            <Text style={styles.emptyText}>{t('history.noShifts')}</Text>
-            <Text style={styles.emptyHint}>{t('history.noShiftsHint')}</Text>
-          </View>
+          activeFilterCount > 0 ? (
+            <EmptyState
+              icon="funnel-outline"
+              title={t('history.emptyFilteredTitle')}
+              subtitle={t('history.emptyFilteredSubtitle')}
+              actionLabel={t('history.emptyFilteredAction')}
+              onAction={handleClear}
+            />
+          ) : isAdmin ? (
+            <EmptyState
+              icon="time-outline"
+              title={t('history.emptyTitle')}
+              subtitle={t('history.emptySubtitle')}
+            />
+          ) : (
+            <EmptyState
+              icon="time-outline"
+              title={t('history.emptyEmployeeTitle')}
+              subtitle={t('history.emptyEmployeeSubtitle')}
+            />
+          )
         ) : (
           shifts.map((shift) => (
             <ShiftCard
@@ -461,15 +479,6 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 28, fontWeight: '700' },
   scroll: { padding: 16, paddingBottom: 32 },
-
-  emptyCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 24,
-    alignItems: 'center',
-  },
-  emptyText: { fontSize: 16, color: '#666', marginBottom: 4 },
-  emptyHint: { fontSize: 13, color: '#888' },
 
   // ── Filter pill ──────────────────────────────
   filterPill: {

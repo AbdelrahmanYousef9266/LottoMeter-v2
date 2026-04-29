@@ -78,7 +78,10 @@
     "userCreatedTitle": "تم إنشاء المستخدم",
     "userCreatedHint": "يمكن لـ {{username}} الآن تسجيل الدخول.",
     "userUpdatedTitle": "تم تحديث المستخدم",
-    "userDeletedTitle": "تم حذف المستخدم"
+    "userDeletedTitle": "تم حذف المستخدم",
+    "emptyTitle": "أنت فقط حتى الآن",
+    "emptySubtitle": "أضف موظفين حتى يتمكنوا من تشغيل الورديات ومعالجة المسح.",
+    "emptyAction": "إضافة مستخدم"
   },
 
   "home": {
@@ -164,7 +167,12 @@
     "deleteConfirmMessage": "ستُحذف هذه الفتحات. لا يمكن التراجع، لكن التقارير السابقة ستستمر في الإشارة إليها.",
     "deleteResultTitle": "تم حذف الفتحات",
     "deleteResultMessage": "تم حذف {{deleted}}. تم تخطّي {{occupied}} (تحتوي دفاتر).",
-    "deleteErrorTitle": "تعذّر الحذف"
+    "deleteErrorTitle": "تعذّر الحذف",
+    "emptyAdminTitle": "لا توجد فتحات بعد",
+    "emptyAdminSubtitle": "الفتحات هي المكان الذي تُعيّن فيه الدفاتر وتتتبع المبيعات. أنشئ فتحتك الأولى للبدء.",
+    "emptyAdminAction": "أضف فتحتك الأولى",
+    "emptyEmployeeTitle": "لا توجد فتحات بعد",
+    "emptyEmployeeSubtitle": "يحتاج مديرك إلى إضافة فتحات قبل أن تتمكن من مسح الدفاتر."
   },
 
   
@@ -227,7 +235,9 @@
     "deleteSlotTitle": "حذف الفتحة؟",
     "deleteSlotMessage": "إزالة \"{{name}}\" نهائيًا؟ لا يمكن التراجع، لكن التقارير السابقة ستستمر في الإشارة إلى اسم هذه الفتحة.",
     "cannotDeleteTitle": "لا يمكن الحذف",
-    "cannotDeleteHint": "ألغ تعيين الدفتر من هذه الفتحة قبل حذفها."
+    "cannotDeleteHint": "ألغ تعيين الدفتر من هذه الفتحة قبل حذفها.",
+    "emptyHistoryTitle": "لا يوجد سجل دفاتر بعد",
+    "emptyHistorySubtitle": "ستظهر الدفاتر المخصصة لهذه الفتحة هنا."
   },
 
   "history": {
@@ -243,6 +253,13 @@
     "statusOver": "زيادة",
     "statusShort": "نقص",
     "statusVoided": "ملغاة",
+    "emptyTitle": "لا توجد ورديات بعد",
+    "emptySubtitle": "بمجرد فتح وإغلاق الورديات، ستظهر هنا.",
+    "emptyFilteredTitle": "لا توجد ورديات تطابق المرشحات",
+    "emptyFilteredSubtitle": "حاول تعديل النطاق الزمني أو الحالة أو مرشح الموظف.",
+    "emptyFilteredAction": "مسح المرشحات",
+    "emptyEmployeeTitle": "لا توجد ورديات للعرض",
+    "emptyEmployeeSubtitle": "يحتاج مديرك أو موظف آخر إلى فتح وردية أولاً.",
     "filters": {
       "pill": "فلاتر",
       "from": "من",
@@ -334,7 +351,11 @@
     "scanModeHardware": "ماسح خارجي",
     "scanModeHardwareDesc": "استخدم ماسح باركود USB أو بلوتوث. يظهر حقل إدخال يلتقط ضربات المفاتيح.",
     "scanModeUpdatedTitle": "تم تحديث وضع المسح",
-    "scanModeUpdatedHint": "ستستخدم جميع شاشات المسح الوضع الجديد."
+    "scanModeUpdatedHint": "ستستخدم جميع شاشات المسح الوضع الجديد.",
+    "scan_feedback": "ردود الفعل عند المسح",
+    "scan_feedback_subtitle": "يصدر صوتاً و/أو يهتز عند كل مسح",
+    "scan_feedback_sound": "الصوت",
+    "scan_feedback_vibration": "الاهتزاز"
   },
 
   "closeShift": {
@@ -361,7 +382,12 @@
     "booksNotClosedHint": "بعض الدفاتر النشطة لا تزال تحتاج مسح إغلاق. اذهب إلى تبويب المسح وسجّل المواضع النهائية.",
     "statusCorrect": "صحيح",
     "statusOver": "زيادة",
-    "statusShort": "نقص"
+    "statusShort": "نقص",
+    "confirmHandoverTitle": "إغلاق الوردية الفرعية؟",
+    "confirmHandoverBody": "الحالة: {{status}} · الفرق: {{diff}}\n\nهل تريد إغلاق هذه الوردية الفرعية وتسليمها للموظف التالي؟",
+    "confirmFinalTitle": "إغلاق الوردية الرئيسية؟",
+    "confirmFinalSubtitle": "راجع الملخص أدناه قبل الإغلاق.",
+    "confirmFinalInfo": "{{closed}} وردية فرعية مغلقة · {{voided}} ملغاة"
   },
 
   "wholeBook": {

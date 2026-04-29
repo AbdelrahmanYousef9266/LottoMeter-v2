@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Alert,
   ActivityIndicator,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScrollView } from 'react-native';
@@ -18,6 +19,7 @@ import { changeStorePin, changeScanMode } from '../api/store';
 import { useAuth } from '../context/AuthContext';
 import { setStoredLanguage } from '../i18n';
 import { syncRTL } from '../utils/rtl';
+import { getSoundEnabled, setSoundEnabled, getVibrationEnabled, setVibrationEnabled } from '../hooks/useFeedback';
 
 const LANGUAGES = [
   { code: 'en', label: 'English', native: 'English' },
@@ -31,6 +33,23 @@ export default function SettingsScreen() {
   const isAdmin = user?.role === 'admin';
 
   const [busy, setBusy] = useState(false);
+  const [soundEnabled, setSoundEnabledState] = useState(true);
+  const [vibrationEnabled, setVibrationEnabledState] = useState(true);
+
+  useEffect(() => {
+    getSoundEnabled().then(setSoundEnabledState);
+    getVibrationEnabled().then(setVibrationEnabledState);
+  }, []);
+
+  async function handleSoundToggle(value) {
+    setSoundEnabledState(value);
+    await setSoundEnabled(value);
+  }
+
+  async function handleVibrationToggle(value) {
+    setVibrationEnabledState(value);
+    await setVibrationEnabled(value);
+  }
 
   // PIN change state
   const [pinFormOpen, setPinFormOpen] = useState(false);
@@ -113,7 +132,7 @@ export default function SettingsScreen() {
     }
   }
 
-async function handleScanModeChange(newMode) {
+  async function handleScanModeChange(newMode) {
     if (newMode === scanMode || scanModeSaving) return;
     setScanModeSaving(true);
     try {
@@ -131,12 +150,12 @@ async function handleScanModeChange(newMode) {
     }
   }
 
-
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>{t('settings.title')}</Text>
 
+        {/* 1. Account */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{t('settings.account')}</Text>
           <Text style={styles.text}>
@@ -150,32 +169,7 @@ async function handleScanModeChange(newMode) {
           </Text>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>{t('settings.language')}</Text>
-          <Text style={styles.helperText}>{t('settings.languageHint')}</Text>
-          {LANGUAGES.map((lang) => {
-            const isActive = i18n.language === lang.code;
-            return (
-              <TouchableOpacity
-                key={lang.code}
-                style={[styles.langOption, isActive && styles.langOptionActive]}
-                onPress={() => handleLanguageChange(lang.code)}
-                disabled={busy}
-              >
-                <Text
-                  style={[
-                    styles.langText,
-                    isActive && styles.langTextActive,
-                  ]}
-                >
-                  {lang.native}
-                </Text>
-                {isActive && <Text style={styles.checkmark}>✓</Text>}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
+        {/* 2. Manage Users (admin only) */}
         {isAdmin && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{t('users.manageUsers')}</Text>
@@ -189,38 +183,7 @@ async function handleScanModeChange(newMode) {
           </View>
         )}
 
-        {isAdmin && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>{t('settings.scanMode')}</Text>
-            <Text style={styles.helperText}>{t('settings.scanModeHint')}</Text>
-
-            <ScanModeOption
-              code="camera_single"
-              label={t('settings.scanModeSingle')}
-              description={t('settings.scanModeSingleDesc')}
-              active={scanMode === 'camera_single'}
-              onPress={() => handleScanModeChange('camera_single')}
-              disabled={scanModeSaving}
-            />
-            <ScanModeOption
-              code="camera_continuous"
-              label={t('settings.scanModeContinuous')}
-              description={t('settings.scanModeContinuousDesc')}
-              active={scanMode === 'camera_continuous'}
-              onPress={() => handleScanModeChange('camera_continuous')}
-              disabled={scanModeSaving}
-            />
-            <ScanModeOption
-              code="hardware_scanner"
-              label={t('settings.scanModeHardware')}
-              description={t('settings.scanModeHardwareDesc')}
-              active={scanMode === 'hardware_scanner'}
-              onPress={() => handleScanModeChange('hardware_scanner')}
-              disabled={scanModeSaving}
-            />
-          </View>
-        )}
-
+        {/* 3. Store PIN (admin only) */}
         {isAdmin && (
           <View style={styles.card}>
             <Text style={styles.cardTitle}>{t('settings.storePin')}</Text>
@@ -307,6 +270,94 @@ async function handleScanModeChange(newMode) {
             )}
           </View>
         )}
+
+        {/* 4. Scan Feedback (always shown) */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t('settings.scan_feedback')}</Text>
+          <Text style={styles.helperText}>{t('settings.scan_feedback_subtitle')}</Text>
+
+          <View style={[styles.feedbackRow, { marginTop: 16 }]}>
+            <View style={styles.feedbackTextWrap}>
+              <Text style={styles.toggleLabel}>{t('settings.scan_feedback_sound')}</Text>
+            </View>
+            <Switch
+              value={soundEnabled}
+              onValueChange={handleSoundToggle}
+              trackColor={{ false: '#ddd', true: '#1a73e8' }}
+              thumbColor="#fff"
+            />
+          </View>
+
+          <View style={[styles.feedbackRow, { marginTop: 12 }]}>
+            <View style={styles.feedbackTextWrap}>
+              <Text style={styles.toggleLabel}>{t('settings.scan_feedback_vibration')}</Text>
+            </View>
+            <Switch
+              value={vibrationEnabled}
+              onValueChange={handleVibrationToggle}
+              trackColor={{ false: '#ddd', true: '#1a73e8' }}
+              thumbColor="#fff"
+            />
+          </View>
+        </View>
+
+        {/* 5. Scan Mode (always shown) */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t('settings.scanMode')}</Text>
+          <Text style={styles.helperText}>{t('settings.scanModeHint')}</Text>
+
+          <ScanModeOption
+            code="camera_single"
+            label={t('settings.scanModeSingle')}
+            description={t('settings.scanModeSingleDesc')}
+            active={scanMode === 'camera_single'}
+            onPress={() => handleScanModeChange('camera_single')}
+            disabled={scanModeSaving}
+          />
+          <ScanModeOption
+            code="camera_continuous"
+            label={t('settings.scanModeContinuous')}
+            description={t('settings.scanModeContinuousDesc')}
+            active={scanMode === 'camera_continuous'}
+            onPress={() => handleScanModeChange('camera_continuous')}
+            disabled={scanModeSaving}
+          />
+          <ScanModeOption
+            code="hardware_scanner"
+            label={t('settings.scanModeHardware')}
+            description={t('settings.scanModeHardwareDesc')}
+            active={scanMode === 'hardware_scanner'}
+            onPress={() => handleScanModeChange('hardware_scanner')}
+            disabled={scanModeSaving}
+          />
+        </View>
+
+        {/* 6. Language */}
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{t('settings.language')}</Text>
+          <Text style={styles.helperText}>{t('settings.languageHint')}</Text>
+          {LANGUAGES.map((lang) => {
+            const isActive = i18n.language === lang.code;
+            return (
+              <TouchableOpacity
+                key={lang.code}
+                style={[styles.langOption, isActive && styles.langOptionActive]}
+                onPress={() => handleLanguageChange(lang.code)}
+                disabled={busy}
+              >
+                <Text
+                  style={[
+                    styles.langText,
+                    isActive && styles.langTextActive,
+                  ]}
+                >
+                  {lang.native}
+                </Text>
+                {isActive && <Text style={styles.checkmark}>✓</Text>}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
 
         <TouchableOpacity style={styles.logoutButton} onPress={confirmLogout}>
           <Text style={styles.logoutText}>{t('auth.logout')}</Text>
@@ -441,6 +492,14 @@ const styles = StyleSheet.create({
   saveButton: { backgroundColor: '#16a34a' },
   saveText: { color: '#fff', fontWeight: '600' },
   disabled: { opacity: 0.6 },
+
+  feedbackRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  feedbackTextWrap: { flex: 1, marginRight: 12 },
+  toggleLabel: { fontSize: 15, color: '#202124' },
 
   logoutButton: {
     backgroundColor: '#dc3545',
