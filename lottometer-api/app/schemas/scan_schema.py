@@ -12,6 +12,7 @@ class ScanRequestSchema(Schema):
         required=True,
         validate=validate.OneOf(["open", "close"]),
     )
+    force_sold = fields.Boolean(required=False, allow_none=True, load_default=None)
 
 
 def serialize_scan(scan) -> dict:

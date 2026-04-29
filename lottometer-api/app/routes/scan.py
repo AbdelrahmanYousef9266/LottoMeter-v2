@@ -29,6 +29,7 @@ def scan():
         shift_id=data["shift_id"],
         barcode=data["barcode"],
         scan_type=data["scan_type"],
+        force_sold=data["force_sold"],
     )
 
     totals = scan_service.get_running_totals(sub.shift_id, current_store_id())

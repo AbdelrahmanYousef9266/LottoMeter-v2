@@ -1,6 +1,6 @@
 # API Contract — LottoMeter v2.0
 
-**Version:** 2.3
+**Version:** 2.4
 **Base URL:** `/api`
 **Auth:** JWT in `Authorization: Bearer <token>` header (except where noted)
 **Content-Type:** `application/json`
@@ -718,12 +718,17 @@ Records a ticket scan during an open sub-shift.
 {
   "shift_id": 11,
   "barcode": "1234567890149",
-  "scan_type": "open"
+  "scan_type": "open",
+  "force_sold": null
 }
 ```
 
 - `shift_id` must be an open sub-shift
 - `scan_type`: `open` or `close`
+- `force_sold` (boolean, optional):
+  - `true` — mark book as sold; still requires: `scan_type=close`, position at last ticket, and `close_position > open_position`
+  - `false` — do NOT mark sold even if all auto-detection conditions are met
+  - `null` / omitted — auto-detect (default; backward-compatible)
 
 **Server logic (validates all 8 scan rules from SRS §5.7):**
 1. Find book by static_code; if not found → 404
@@ -782,6 +787,9 @@ When `pending_scans_remaining = 0` and `is_initialized = true`, sale scans are u
 - 422 `SHIFT_CLOSED` — target sub-shift is not open
 - 422 `SHIFT_VOIDED` — target sub-shift has been voided
 - 422 `SALES_BLOCKED_PENDING_INIT` — attempted sale scan before pending_scans empty
+- 422 `FORCE_SOLD_REQUIRES_CLOSE` — `force_sold=true` sent on a non-close scan
+- 422 `FORCE_SOLD_REQUIRES_LAST_POSITION` — `force_sold=true` sent at a position that is not the last ticket of the book
+- 422 `FORCE_SOLD_REQUIRES_MOVEMENT` — `force_sold=true` sent but close position ≤ open position (no real movement this shift)
 
 ---
 

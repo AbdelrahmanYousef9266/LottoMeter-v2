@@ -71,8 +71,14 @@ def record_scan(
     shift_id: int,
     barcode: str,
     scan_type: str,
+    force_sold: bool | None = None,
 ):
     """Process a scan with all 8 SRS rules.
+
+    force_sold:
+      True  — explicitly mark book sold (still validates: close, last position, movement)
+      False — explicitly do NOT mark sold even if auto-detection conditions are met
+      None  — auto-detect (default, backward-compatible)
 
     Returns: (scan_row, book, subshift)
     """
@@ -140,6 +146,25 @@ def record_scan(
                 code="POSITION_BEFORE_OPEN",
             )
 
+    # force_sold validation — structural prerequisites must hold when client opts in
+    if force_sold is True:
+        if scan_type != "close":
+            raise BusinessRuleError(
+                "force_sold can only be used on close scans.",
+                code="FORCE_SOLD_REQUIRES_CLOSE",
+            )
+        if position != book_length - 1:
+            raise BusinessRuleError(
+                "force_sold requires position to be the last ticket of the book.",
+                code="FORCE_SOLD_REQUIRES_LAST_POSITION",
+            )
+        open_row_chk = _open_scan_for(shift_id, static_code, store_id)
+        if open_row_chk is None or position <= open_row_chk.start_at_scan:
+            raise BusinessRuleError(
+                "force_sold requires the close position to be greater than the open position.",
+                code="FORCE_SOLD_REQUIRES_MOVEMENT",
+            )
+
     # Rule 5: duplicate (same shift + book + scan_type) → overwrite
     is_last_ticket = (position == book_length - 1)
     existing = _existing_scan(shift_id, static_code, scan_type, store_id)
@@ -168,13 +193,19 @@ def record_scan(
         )
         db.session.add(scan_row)
 
-    # Last-ticket detection: marks the book sold ONLY when a close scan at
-    # the last position represents an actual sale this shift.
-    sold_this_scan = False
-    if is_last_ticket and scan_type == "close":
-        open_row = _open_scan_for(shift_id, static_code, store_id)
-        if open_row is not None and position > open_row.start_at_scan:
-            sold_this_scan = True
+    # Determine whether to mark the book sold.
+    # force_sold=True/False overrides auto-detection; None falls back to auto.
+    if force_sold is True:
+        sold_this_scan = True  # structural prerequisites already validated above
+    elif force_sold is False:
+        sold_this_scan = False  # client explicitly opted out
+    else:
+        # Auto-detect: sold only when a close scan at the last position has movement
+        sold_this_scan = False
+        if is_last_ticket and scan_type == "close":
+            open_row = _open_scan_for(shift_id, static_code, store_id)
+            if open_row is not None and position > open_row.start_at_scan:
+                sold_this_scan = True
 
     if sold_this_scan:
         book.is_sold = True

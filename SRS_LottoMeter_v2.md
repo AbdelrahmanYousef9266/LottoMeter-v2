@@ -6,7 +6,7 @@
 | Field | Value |
 |---|---|
 | **Project Name** | LottoMeter v2.0 |
-| **Document Version** | 5.4 |
+| **Document Version** | 5.5 |
 | **Author** | Abdelrahman Yousef |
 | **Date** | April 2026 |
 | **Status** | Final — Verified |
@@ -23,6 +23,7 @@
 | 5.2 | April 2026 | Implementation revisions caught via end-to-end mobile testing: ShiftBooks PK changed to (shift_id, static_code, scan_type); last-ticket detection refined (close + position movement required); Rule 8 narrowed to rewrites only; mobile UX rules; i18n implemented |
 | 5.3 | April 2026 | Multi-tenancy hardened (19 security fixes, cross-tenant audit complete); admin user management CRUD added (§6.12, FR-USER-01–07); bulk slot management (FR-SLOT-08–10); scan_mode preference (FR-STORE-05–06); FR-AUTH-06 security scoping requirement added; mobile: continuous scan, ITF-14 normalization, hardware scanner mode, bulk slot UI, PIN change complete |
 | 5.4 | April 2026 | Shift history role-based scoping added (§6.13, FR-HIST-01–06): admin filter bar (date range, status, employee), employee view restricted to current open + most recent closed shift in store, voided shifts excluded from employee view; client-side PDF export of shift reports via expo-print + OS share sheet; GET /api/users/active endpoint added to §12 |
+| 5.5 | April 2026 | `force_sold` parameter added to scan API (§5.8, API Contract §7) to disambiguate "sell last ticket" from "record close at last position without selling"; three new error codes; mobile confirmation gate wired to client-side last-ticket detection |
 
 ---
 
@@ -252,12 +253,17 @@ When a ticket is scanned, the system checks whether this is the book's final tic
 is_last_ticket = (scanned_position == LENGTH_BY_PRICE[book.ticket_price] - 1)
 ```
 
-**The book is marked sold ONLY when all three conditions hold:**
+**The book is marked sold ONLY when all three conditions hold (auto-detect mode):**
 1. `scan_type == "close"` — open scans at the last position never sell the book (they just record the position)
 2. `position == LENGTH_BY_PRICE[ticket_price] - 1` — the scan is at the last ticket position
 3. `close_position > open_position` — at least one ticket was sold this sub-shift (rules out the edge case where a book sat at the last position with no movement)
 
-When all three hold:
+The client may override auto-detection via the `force_sold` parameter in the scan request:
+- `force_sold: true` — explicitly sell the book (all three structural conditions above are still validated server-side; the client cannot bypass them)
+- `force_sold: false` — record the close position without marking the book sold, even if all three conditions are met (used when the last ticket is still physically in the book)
+- `force_sold: null` / omitted — auto-detect (default, backward-compatible)
+
+When all three hold (or `force_sold: true`):
 - `ShiftBooks.is_last_ticket = true` on that scan row
 - `Book.is_sold = true`
 - `Book.slot_id = null` (slot becomes empty)
@@ -1074,6 +1080,12 @@ Key decisions made during SRS v5.0 design review (April 2026):
 
 47. **Single share-sheet export button rather than separate print/save/email actions** — the OS share sheet already exposes all output options natively; separate buttons would duplicate the sheet's own UI and clutter the report detail screen.
 
+### v5.5 revisions (April 2026):
+
+48. **`force_sold` parameter on scan API** — auto-detection of the "last ticket sold" event collapsed two distinct employee intents: (a) "I'm selling the final ticket — mark this book sold" and (b) "I'm recording the close position at N-1 but the last ticket is still in the book." Both produce a close scan at `position == length - 1` with movement, so auto-detect cannot distinguish them. The `force_sold` boolean lets the mobile client be explicit. `force_sold: true` sells the book (server still validates the three structural conditions); `force_sold: false` records the position without selling; `null`/omitted is unchanged auto-detect. Surfaced as a UX issue during mobile last-ticket confirmation testing.
+
+49. **Mobile last-ticket confirmation gate** — mobile ScanScreen now fetches the store's active slot list on focus to detect client-side when a close scan is at the last position of the book. When detected, a confirmation dialog is shown before submitting. On confirm, the scan is submitted with `force_sold: true`; on cancel, the input is cleared and no scan is sent. Falls back gracefully (no confirmation, auto-detect) if the slot list fails to load.
+
 ---
 
-*Document end — LottoMeter v2.0 SRS v5.4 — Verified & Final*
+*Document end — LottoMeter v2.0 SRS v5.5 — Verified & Final*
