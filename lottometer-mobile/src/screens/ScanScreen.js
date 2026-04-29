@@ -136,7 +136,7 @@ export default function ScanScreen() {
           pending_scans_remaining: result.pending_scans_remaining,
           is_initialized: result.is_initialized,
         });
-        fireFeedback(result.scan?.is_last_ticket ? 'last_ticket' : 'success');
+        fireFeedback(result.book?.is_sold ? 'last_ticket' : 'success');
         setToastVisible(false);
         setScanCount((c) => c + 1);
 
@@ -407,11 +407,11 @@ export default function ScanScreen() {
               style={[
                 styles.card,
                 styles.lastScanCard,
-                lastScan.scan?.is_last_ticket && styles.lastTicketCard,
+                lastScan.book?.is_sold && styles.lastTicketCard,
               ]}
             >
               <Text style={styles.lastScanTitle}>
-                {lastScan.scan?.is_last_ticket
+                {lastScan.book?.is_sold
                   ? t('scan.lastTicketSold')
                   : t('scan.scanRecorded')}
               </Text>
