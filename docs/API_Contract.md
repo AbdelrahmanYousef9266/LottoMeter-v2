@@ -1,6 +1,6 @@
 # API Contract — LottoMeter v2.0
 
-**Version:** 2.6
+**Version:** 3.0
 **Base URL:** `/api`
 **Auth:** JWT in `Authorization: Bearer <token>` header (except where noted)
 **Content-Type:** `application/json`
@@ -607,94 +607,93 @@ Any authenticated user (employee-friendly). Requires store PIN. Records book ret
 
 ## 6. Shifts
 
-### POST /api/shifts
-Opens a new main shift AND auto-creates Sub-shift 1 (FR-SHIFT-01).
+Each `{id}` in this section refers to an **EmployeeShift.id**. There is no longer a separate "main shift" or "sub-shift" concept — every shift is a direct employee session.
 
-**Request:** empty body `{}`.
+### POST /api/shifts
+Opens a new EmployeeShift for the caller's store. Auto-creates today's BusinessDay if one doesn't exist yet (BR-BD-02).
+
+**Request:** empty body or `{}`.
 
 **Response 201**
 ```json
 {
-  "main_shift": {
-    "shift_id": 10,
-    "shift_start_time": "2026-04-24T08:00:00Z",
-    "is_shift_open": true,
-    "opened_by": { "user_id": 2, "username": "alice" }
-  },
-  "current_subshift": {
-    "shift_id": 11,
-    "main_shift_id": 10,
+  "employee_shift": {
+    "id": 1,
+    "business_day_id": 1,
+    "store_id": 1,
+    "employee_id": 2,
     "shift_number": 1,
-    "shift_start_time": "2026-04-24T08:00:00Z",
-    "is_shift_open": true,
-    "opened_by": { "user_id": 2, "username": "alice" },
-    "pending_scans": [
-      {
-        "slot_id": 1,
-        "slot_name": "Slot A",
-        "book_id": 12,
-        "static_code": "1234567890",
-        "ticket_price": "5.00",
-        "book_name": null
-      }
-    ],
-    "is_initialized": false
-  }
+    "opened_at": "2026-04-30T08:00:00Z",
+    "closed_at": null,
+    "status": "open",
+    "cash_in_hand": null,
+    "gross_sales": null,
+    "cash_out": null,
+    "tickets_total": null,
+    "expected_cash": null,
+    "difference": null,
+    "shift_status": null,
+    "closed_by_user_id": null,
+    "voided": false,
+    "voided_at": null,
+    "voided_by_user_id": null,
+    "void_reason": null
+  },
+  "carried_forward_count": 0,
+  "pending_scans": [
+    {
+      "book_id": 12,
+      "book_name": null,
+      "static_code": "1234567890",
+      "slot_id": 1
+    }
+  ]
 }
 ```
 
-`is_initialized = false` means sale scans are blocked until all pending books scanned.
+- `carried_forward_count` — number of close-scan positions automatically carried from the previous shift's close positions (only runs when previous `shift_status == "correct"`, BR-ES-03)
+- `pending_scans` — active books that do not yet have an open scan in this shift
 
-**Errors:** 409 `SHIFT_ALREADY_OPEN` — a main shift is already open for this store (FR-SHIFT-02).
+**Errors:** 409 `SHIFT_ALREADY_OPEN` — an EmployeeShift is already open for this store (BR-ES-01).
 
 ### GET /api/shifts
-Response is scoped by the caller's role.
+List all shifts for the store, ordered most-recent first.
 
-**Admin role** — full listing with optional filters:
+**Query params:**
+
 | Param | Type | Description |
 |---|---|---|
-| `status` | string | `open` / `closed` / `voided` |
-| `from` | ISO date | Inclusive start date (`YYYY-MM-DD`) |
-| `to` | ISO date | Inclusive end date (`YYYY-MM-DD`) |
-| `opened_by_user_id` | int | Filter to shifts opened by a specific user (400 if unknown) |
-| `limit` | int | Default 50 |
-| `offset` | int | Default 0 |
-
-**Employee role** — all query params are ignored. Returns at most 2 shifts: the currently open main shift (if any) and the most recently closed main shift (if any). Voided shifts are never included.
+| `business_day_id` | int | Filter to shifts for a specific BusinessDay |
 
 **Response 200**
 ```json
 {
   "shifts": [
     {
-      "shift_id": 10,
-      "shift_start_time": "2026-04-24T08:00:00Z",
-      "shift_end_time": "2026-04-24T16:00:00Z",
-      "is_shift_open": false,
-      "voided": false,
-      "subshift_count": 2,
+      "id": 2,
+      "business_day_id": 1,
+      "store_id": 1,
+      "employee_id": 2,
+      "shift_number": 2,
+      "opened_at": "2026-04-30T12:00:00Z",
+      "closed_at": "2026-04-30T16:00:00Z",
+      "status": "closed",
       "tickets_total": "450.00",
       "difference": "0.00",
-      "shift_status": "correct"
+      "shift_status": "correct",
+      "voided": false
     }
-  ],
-  "total": 42
+  ]
 }
 ```
 
-Only main shifts returned.
-
-**Errors (admin only):**
-- 400 `VALIDATION_ERROR` — `from`/`to` not valid ISO dates, or `opened_by_user_id` not found in this store.
-
 ### GET /api/shifts/{id}
-**Response 200** — full main shift with nested sub-shifts and pending_scans for the current open sub-shift.
+**Response 200** — full EmployeeShift object as above.
+
+**Errors:** 404 `SHIFT_NOT_FOUND`
 
 ### GET /api/shifts/{id}/summary
-
-Returns live-preview totals for an OPEN sub-shift. Used by the mobile close-shift modal to compute `expected_cash` and `difference` as the employee types cash values, without committing the close.
-
-`{id}` is a **sub-shift** id.
+Live-preview totals for an open shift. Used by the mobile close-shift modal to compute expected values before committing the close.
 
 **Response 200**
 ```json
@@ -707,22 +706,16 @@ Returns live-preview totals for an OPEN sub-shift. Used by the mobile close-shif
 }
 ```
 
-- `tickets_total` — sum of (close − open) × ticket_price across paired scans, plus all whole-book sale values, all return-to-vendor partials. Same formula used at close time.
+- `tickets_total` — sum of (close − open) × ticket_price across paired scans, plus whole-book extras. Same formula used at close time.
 - `whole_book_total` — broken out for UI display.
 - `books_total_active` — count of currently-active books in the store.
-- `books_with_close` — count of those active books that have a close scan in this sub-shift.
-- `books_pending_close` — `books_total_active - books_with_close`. The mobile app blocks close-shift submission while this is > 0.
+- `books_with_close` — active books that have a close scan in this shift.
+- `books_pending_close` — `books_total_active - books_with_close`. Mobile blocks close submission while > 0.
 
-**Errors:**
-- 404 `SUBSHIFT_NOT_FOUND` — id doesn't match a sub-shift in this store
-- 422 `SHIFT_CLOSED` — sub-shift is already closed
-- 422 `SHIFT_VOIDED` — sub-shift has been voided
+**Errors:** 404 `SHIFT_NOT_FOUND`
 
-
-### POST /api/shifts/{id}/subshifts
-Closes the currently open sub-shift AND opens the next one (handover).
-
-`id` is the **main shift** id.
+### PUT /api/shifts/{id}/close
+Close an open EmployeeShift with financial reconciliation values.
 
 **Request**
 ```json
@@ -734,83 +727,163 @@ Closes the currently open sub-shift AND opens the next one (handover).
 ```
 
 **Server logic:**
-1. Find current open sub-shift on this main shift
-2. Verify all active books have close scans (FR-CLOSE-01)
-3. Compute `tickets_total`, `expected_cash`, `difference`, `shift_status`
-4. Close the current sub-shift
-5. Open a new sub-shift
-6. If closed status was `correct`: carry forward close positions (skipping is_sold)
-7. If closed status was `short`/`over`: no carry-forward
-8. Compute pending_scans for the new sub-shift
+1. Verify all active books have close scans (BR-ES-04)
+2. Compute `tickets_total`, `expected_cash = gross_sales + tickets_total - cash_out`
+3. Compute `difference = cash_in_hand - expected_cash`
+4. Set `shift_status`: `correct` (diff=0) / `over` (diff>0) / `short` (diff<0)
+5. Set `status = "closed"`, record `closed_at` and `closed_by_user_id`
 
 **Response 200**
 ```json
 {
-  "closed_subshift": { ... full report ... },
-  "new_subshift": {
-    "shift_id": 12,
-    "shift_number": 2,
-    "carried_forward_count": 5,
-    "pending_scans": [ ... any pending books ... ],
-    "is_initialized": false
+  "shift": { ...full EmployeeShift object... },
+  "report": {
+    "shift": {
+      "shift_id": 1,
+      "shift_number": 1,
+      "status": "closed",
+      "opened_at": "2026-04-30T08:00:00Z",
+      "closed_at": "2026-04-30T16:00:00Z",
+      "opened_by": { "user_id": 2, "username": "alice" },
+      "closed_by": { "user_id": 2, "username": "alice" },
+      "voided": false,
+      "cash_in_hand": "512.50",
+      "gross_sales": "380.00",
+      "cash_out": "20.00",
+      "tickets_total": "132.50",
+      "expected_cash": "492.50",
+      "difference": "20.00",
+      "shift_status": "over",
+      "ticket_breakdown": [
+        { "ticket_price": "5.00", "source": "scanned",    "tickets_sold": 14, "subtotal": "70.00" },
+        { "ticket_price": "5.00", "source": "whole_book", "tickets_sold": 60, "subtotal": "300.00" }
+      ],
+      "books": [ ...per-book lines... ],
+      "whole_book_sales": [ ...extra sales... ],
+      "returned_books": [ ...return-to-vendor close scans... ]
+    },
+    "business_day": {
+      "id": 1,
+      "business_date": "2026-04-30",
+      "status": "open"
+    }
   }
 }
 ```
 
 **Errors:**
-- 422 `BOOKS_NOT_CLOSED` — some active books don't have close scans
-- 422 `SHIFT_NOT_INITIALIZED` — current sub-shift has pending scans still (edge case)
-- 400 `INVALID_CASH_VALUES` — negative or malformed
-
-### PUT /api/shifts/{id}/close
-Closes the final sub-shift AND the main shift.
-
-**Request** — same shape as handover.
-
-**Response 200** — full main shift report (same shape as `GET /api/reports/shift/{id}`).
-
-**Errors:** same as handover.
+- 422 `BOOKS_NOT_CLOSED` — active books without close scans (details lists `missing_book_ids`)
+- 422 `SHIFT_ALREADY_CLOSED`
+- 422 `SHIFT_VOIDED`
+- 404 `SHIFT_NOT_FOUND`
 
 ### POST /api/shifts/{id}/void
-Admin-only. Voids a main shift (and cascades to all its sub-shifts).
+Admin-only. Voids an EmployeeShift. If the shift is open, it is implicitly closed first.
 
 **Request**
 ```json
 { "reason": "Accidentally opened during inventory count." }
 ```
 
-**Response 200** — voided main shift object.
+**Response 200** — voided EmployeeShift object.
 
-### POST /api/shifts/{id}/subshifts/{subshift_id}/void
-Admin-only. Voids a specific sub-shift.
-
-**Request**
-```json
-{ "reason": "Employee misscanned all open positions." }
-```
-
-**Response 200** — voided sub-shift.
-
-**Errors:** 400 `REASON_REQUIRED`.
+**Errors:**
+- 422 `SHIFT_ALREADY_VOIDED`
+- 400 `REASON_REQUIRED`
+- 404 `SHIFT_NOT_FOUND`
 
 ---
 
-## 7. Scanning
+## 7. Business Days
+
+BusinessDay is auto-created when the first shift of a calendar date opens. Admins can close a BusinessDay once all its shifts are closed.
+
+### GET /api/business-days
+List all BusinessDays for the store, ordered most-recent first.
+
+**Response 200**
+```json
+{
+  "business_days": [
+    {
+      "id": 1,
+      "store_id": 1,
+      "business_date": "2026-04-30",
+      "opened_at": "2026-04-30T08:00:00Z",
+      "closed_at": null,
+      "status": "open",
+      "total_sales": null,
+      "total_variance": null
+    }
+  ]
+}
+```
+
+### GET /api/business-days/today
+Returns today's BusinessDay, auto-creating it if it doesn't exist yet. The mobile app calls this on load to ensure a BusinessDay is always available before any shift is opened.
+
+**Response 200** — single BusinessDay object (same shape as list item above).
+
+### GET /api/business-days/{id}
+Returns a single BusinessDay with its shifts.
+
+**Response 200**
+```json
+{
+  "business_day": { ...BusinessDay object... },
+  "shifts": [
+    {
+      "shift_id": 1,
+      "shift_number": 1,
+      "status": "closed",
+      "shift_status": "correct",
+      "voided": false,
+      "employee_id": 2,
+      "opened_at": "2026-04-30T08:00:00Z",
+      "closed_at": "2026-04-30T12:00:00Z"
+    }
+  ]
+}
+```
+
+**Errors:** 404 `BUSINESS_DAY_NOT_FOUND`
+
+### POST /api/business-days/{id}/close
+Admin-only. Closes a BusinessDay, computing aggregate totals across all non-voided shifts.
+
+**Request:** empty body or `{}`.
+
+**Server logic:**
+1. Verify no EmployeeShift is still open for this BusinessDay (BR-BD-04)
+2. Sum `tickets_total` from all non-voided closed shifts → `total_sales`
+3. Sum `difference` from all non-voided closed shifts → `total_variance`
+4. Set `status = "closed"`, record `closed_at`
+
+**Response 200** — updated BusinessDay object with `total_sales` and `total_variance` set.
+
+**Errors:**
+- 422 `OPEN_SHIFTS_REMAIN` — one or more EmployeeShifts are still open
+- 422 `DAY_ALREADY_CLOSED`
+- 404 `BUSINESS_DAY_NOT_FOUND`
+
+---
+
+## 8. Scanning
 
 ### POST /api/scan
-Records a ticket scan during an open sub-shift.
+Records a ticket scan during an open EmployeeShift.
 
 **Request**
 ```json
 {
-  "shift_id": 11,
+  "shift_id": 1,
   "barcode": "1234567890149",
   "scan_type": "open",
   "force_sold": null
 }
 ```
 
-- `shift_id` must be an open sub-shift
+- `shift_id` must be an open EmployeeShift id
 - `scan_type`: `open` or `close`
 - `force_sold` (boolean, optional):
   - `true` — mark book as sold; still requires: `scan_type=close`, position at last ticket, and `close_position > open_position`
@@ -870,9 +943,9 @@ When `pending_scans_remaining = 0` and `is_initialized = true`, sale scans are u
 - 422 `BOOK_ALREADY_SOLD` — already marked sold
 - 400 `INVALID_POSITION` — position out of range
 - 400 `POSITION_BEFORE_OPEN` — close position < open position
-- 409 `OPEN_RESCAN_BLOCKED` — cannot rewrite an existing open scan after close has started in this sub-shift (Rule 8). Brand-new open scans for newly-assigned books are still allowed.
-- 422 `SHIFT_CLOSED` — target sub-shift is not open
-- 422 `SHIFT_VOIDED` — target sub-shift has been voided
+- 409 `OPEN_RESCAN_BLOCKED` — cannot rewrite an existing open scan after close has started in this shift (Rule 8). Brand-new open scans for newly-assigned books are still allowed.
+- 422 `SHIFT_CLOSED` — target shift is not open
+- 422 `SHIFT_VOIDED` — target shift has been voided
 - 422 `SALES_BLOCKED_PENDING_INIT` — attempted sale scan before pending_scans empty
 - 422 `FORCE_SOLD_REQUIRES_CLOSE` — `force_sold=true` sent on a non-close scan
 - 422 `FORCE_SOLD_REQUIRES_LAST_POSITION` — `force_sold=true` sent at a position that is not the last ticket of the book
@@ -880,9 +953,9 @@ When `pending_scans_remaining = 0` and `is_initialized = true`, sale scans are u
 
 ---
 
-## 8. Whole-Book Sale
+## 9. Whole-Book Sale
 
-### POST /api/shifts/{subshift_id}/whole-book-sale
+### POST /api/shifts/{shift_id}/whole-book-sale
 
 Any authenticated user. Requires store PIN.
 
@@ -902,7 +975,7 @@ Any authenticated user. Requires store PIN.
 - `note` — optional free text
 
 **Server logic:**
-1. Validate sub-shift open, not voided, belongs to caller's store
+1. Validate shift open, not voided, belongs to caller's store
 2. Validate PIN (rate limit on failure)
 3. Validate `ticket_price` in LENGTH_BY_PRICE
 4. Compute `ticket_count = LENGTH_BY_PRICE[ticket_price]` and `value = ticket_price * ticket_count`
@@ -913,14 +986,14 @@ Any authenticated user. Requires store PIN.
 {
   "extra_sale": {
     "extra_sale_id": 42,
-    "shift_id": 11,
+    "shift_id": 1,
     "sale_type": "whole_book",
     "scanned_barcode": "5555555555012",
     "ticket_price": "5.00",
     "ticket_count": 60,
     "value": "300.00",
     "note": null,
-    "created_at": "2026-04-24T11:22:00Z",
+    "created_at": "2026-04-30T11:22:00Z",
     "created_by": { "user_id": 2, "username": "alice" }
   }
 }
@@ -936,106 +1009,96 @@ Any authenticated user. Requires store PIN.
 
 ---
 
-## 9. Reports
+## 10. Reports
 
 ### GET /api/reports/shift/{id}
-`id` is a **main shift** id.
+`{id}` is an **EmployeeShift id**.
 
-**Access control:** Employees may only fetch reports for shifts returned by `GET /api/shifts` (their open shift + most recent closed shift). Any other `shift_id` returns 404 `SHIFT_NOT_FOUND`. Admins have unrestricted access.
+**Access control:** Employees may only fetch reports for shifts where they are the `employee_id`. Any other `shift_id` returns 404 `SHIFT_NOT_FOUND`. Admins have unrestricted access.
 
 **Response 200**
 ```json
 {
-  "main_shift": {
-    "shift_id": 10,
-    "shift_start_time": "2026-04-24T08:00:00Z",
-    "shift_end_time": "2026-04-24T16:00:00Z",
-    "voided": false,
+  "shift": {
+    "shift_id": 1,
+    "shift_number": 1,
+    "status": "closed",
+    "opened_at": "2026-04-30T08:00:00Z",
+    "closed_at": "2026-04-30T16:00:00Z",
     "opened_by": { "user_id": 2, "username": "alice" },
-    "totals": {
-      "tickets_total": "440.00",
-      "gross_sales": "760.00",
-      "expected_cash": "1200.00",
-      "cash_in_hand": "1200.00",
-      "difference": "0.00",
-      "shift_status": "correct"
-    },
+    "closed_by": { "user_id": 2, "username": "alice" },
+    "voided": false,
+    "void_reason": null,
+    "voided_at": null,
+    "voided_by": null,
+    "cash_in_hand": "512.50",
+    "gross_sales": "380.00",
+    "cash_out": "20.00",
+    "tickets_total": "132.50",
+    "expected_cash": "492.50",
+    "difference": "20.00",
+    "shift_status": "over",
     "ticket_breakdown": [
       { "ticket_price": "5.00",  "source": "scanned",    "tickets_sold": 14, "subtotal": "70.00" },
       { "ticket_price": "5.00",  "source": "whole_book", "tickets_sold": 60, "subtotal": "300.00" },
       { "ticket_price": "10.00", "source": "scanned",    "tickets_sold": 7,  "subtotal": "70.00" }
+    ],
+    "books": [
+      {
+        "book_id": 12,
+        "static_code": "1234567890",
+        "book_name": null,
+        "slot_name": "Slot A",
+        "ticket_price": "5.00",
+        "open_position": 0,
+        "close_position": 14,
+        "tickets_sold": 14,
+        "value": "70.00",
+        "fully_sold": false,
+        "scan_source_open": "scanned",
+        "scan_source_close": "scanned"
+      }
+    ],
+    "whole_book_sales": [
+      {
+        "extra_sale_id": 42,
+        "scanned_barcode": "5555555555012",
+        "ticket_price": "5.00",
+        "ticket_count": 60,
+        "value": "300.00",
+        "note": null,
+        "created_at": "2026-04-30T11:22:00Z",
+        "created_by": { "user_id": 2, "username": "alice" }
+      }
+    ],
+    "returned_books": [
+      {
+        "book_id": 15,
+        "static_code": "7777777777",
+        "slot_name": "Slot C",
+        "ticket_price": "3.00",
+        "open_position": 0,
+        "returned_at_position": 27,
+        "tickets_sold": 27,
+        "value": "81.00",
+        "returned_at": "2026-04-30T13:45:00Z",
+        "returned_by": { "user_id": 2, "username": "alice" }
+      }
     ]
   },
-  "subshifts": [
-    {
-      "shift_id": 11,
-      "shift_number": 1,
-      "voided": false,
-      "opened_by": { "user_id": 2, "username": "alice" },
-      "closed_by": { "user_id": 2, "username": "alice" },
-      "shift_start_time": "...",
-      "shift_end_time": "...",
-      "cash_in_hand": "512.50",
-      "gross_sales": "380.00",
-      "cash_out": "20.00",
-      "tickets_total": "440.00",
-      "expected_cash": "1200.00",
-      "difference": "0.00",
-      "shift_status": "correct",
-      "ticket_breakdown": [ ... scanned vs whole_book lines ... ],
-      "books": [
-        {
-          "book_id": 12,
-          "static_code": "1234567890",
-          "book_name": null,
-          "slot_name": "Slot A",
-          "ticket_price": "5.00",
-          "open_position": 0,
-          "close_position": 14,
-          "tickets_sold": 14,
-          "value": "70.00",
-          "fully_sold": false,
-          "scan_source_open": "scanned",
-          "scan_source_close": "scanned"
-        }
-      ],
-      "whole_book_sales": [
-        {
-          "extra_sale_id": 42,
-          "scanned_barcode": "5555555555012",
-          "ticket_price": "5.00",
-          "ticket_count": 60,
-          "value": "300.00",
-          "note": null,
-          "created_at": "2026-04-24T11:22:00Z",
-          "created_by": { "user_id": 2, "username": "alice" }
-        }
-      ],
-      "returned_books": [
-        {
-          "book_id": 15,
-          "static_code": "7777777777",
-          "slot_name": "Slot C",
-          "ticket_price": "3.00",
-          "open_position": 0,
-          "returned_at_position": 27,
-          "tickets_sold": 27,
-          "value": "81.00",
-          "returned_at": "2026-04-24T13:45:00Z",
-          "returned_by": { "user_id": 2, "username": "alice" }
-        }
-      ]
-    }
-  ],
-  "voided_subshifts": []
+  "business_day": {
+    "id": 1,
+    "business_date": "2026-04-30",
+    "status": "closed"
+  }
 }
 ```
 
-Voided sub-shifts appear in `voided_subshifts` separately (not in totals).
+**Errors:** 404 `SHIFT_NOT_FOUND`
 
 ---
 
-## 10. Barcode Parsing Contract
+## 11. Barcode Parsing Contract
 
 Barcode format: `<static_code><3-digit-position>`
 
@@ -1051,9 +1114,9 @@ Example: `1234567890149` with `ticket_price=1.00`
 
 ---
 
-## 11. PIN Rate Limiting
+## 12. PIN Rate Limiting
 
-Applies to: `POST /api/books/{id}/return-to-vendor`, `POST /api/shifts/{subshift_id}/whole-book-sale`
+Applies to: `POST /api/books/{id}/return-to-vendor`, `POST /api/shifts/{shift_id}/whole-book-sale`
 
 - Per `(user_id, store_id)` pair
 - Max 5 failed PIN attempts in 10-minute rolling window
@@ -1065,14 +1128,14 @@ Implementation: in-memory counter for v2.0; Redis-backed for production later.
 
 ---
 
-## 12. Versioning
+## 13. Versioning
 
 - v2.0 uses `/api/` prefix
 - v2.1 may introduce `/api/v2/` for breaking changes; current endpoints remain as default
 
 ---
 
-## 13. Endpoint Quick Reference
+## 14. Endpoint Quick Reference
 
 | Method | Endpoint | Auth | Role |
 |---|---|---|---|
@@ -1099,16 +1162,19 @@ Implementation: in-memory counter for v2.0; Redis-backed for production later.
 | GET | /api/books | JWT | any |
 | GET | /api/books/{id} | JWT | any |
 | GET | /api/books/summary | JWT | any |
+| GET | /api/books/activity | JWT | admin |
 | POST | /api/books/{book_id}/unassign | JWT | admin |
 | POST | /api/books/{book_id}/return-to-vendor | JWT | any (PIN) |
 | POST | /api/shifts | JWT | any |
 | GET | /api/shifts | JWT | any |
 | GET | /api/shifts/{id} | JWT | any |
 | GET | /api/shifts/{id}/summary | JWT | any |
-| POST | /api/shifts/{id}/subshifts | JWT | any |
 | PUT | /api/shifts/{id}/close | JWT | any |
 | POST | /api/shifts/{id}/void | JWT | admin |
-| POST | /api/shifts/{id}/subshifts/{sub_id}/void | JWT | admin |
+| GET | /api/business-days | JWT | any |
+| GET | /api/business-days/today | JWT | any |
+| GET | /api/business-days/{id} | JWT | any |
+| POST | /api/business-days/{id}/close | JWT | admin |
 | POST | /api/scan | JWT | any |
 | POST | /api/shifts/{id}/whole-book-sale | JWT | any (PIN) |
 | GET | /api/reports/shift/{id} | JWT | any |

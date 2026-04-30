@@ -3,7 +3,8 @@
 from decimal import Decimal
 from collections import defaultdict
 
-from app.models.shift_details import ShiftDetails
+from app.models.employee_shift import EmployeeShift
+from app.models.business_day import BusinessDay
 from app.models.shift_books import ShiftBooks
 from app.models.shift_extra_sales import ShiftExtraSales
 from app.models.book import Book
@@ -217,151 +218,74 @@ def _ticket_breakdown_for_subshift(
     return lines
 
 
-def _ticket_breakdown_combined(subshift_lines_list: list[list[dict]]) -> list[dict]:
-    """Aggregate sub-shift breakdown lines into a single combined breakdown."""
-    combined: dict[tuple, dict] = {}
-    for lines in subshift_lines_list:
-        for line in lines:
-            key = (line["ticket_price"], line["source"])
-            if key not in combined:
-                combined[key] = {
-                    "ticket_price": line["ticket_price"],
-                    "source": line["source"],
-                    "tickets_sold": 0,
-                    "subtotal_decimal": Decimal("0.00"),
-                }
-            combined[key]["tickets_sold"] += line["tickets_sold"]
-            combined[key]["subtotal_decimal"] += Decimal(line["subtotal"])
-
-    out = []
-    for v in sorted(
-        combined.values(),
-        key=lambda x: (x["source"], Decimal(x["ticket_price"])),
-    ):
-        out.append({
-            "ticket_price": v["ticket_price"],
-            "source": v["source"],
-            "tickets_sold": v["tickets_sold"],
-            "subtotal": _money(v["subtotal_decimal"]),
-        })
-    return out
-
-
-def build_main_shift_report(store_id: int, main_shift_id: int) -> dict:
-    """Assemble the full report payload for a main shift."""
-    main = (
-        ShiftDetails.query
-        .filter_by(shift_id=main_shift_id, store_id=store_id, main_shift_id=None)
+def get_shift_report(store_id: int, employee_shift_id: int) -> dict:
+    """Assemble the full report payload for an EmployeeShift."""
+    shift = (
+        EmployeeShift.query
+        .filter_by(id=employee_shift_id, store_id=store_id)
         .first()
     )
-    if main is None:
-        raise NotFoundError("Main shift not found.", code="SHIFT_NOT_FOUND")
+    if shift is None:
+        raise NotFoundError("Employee shift not found.", code="SHIFT_NOT_FOUND")
 
-    subs = (
-        ShiftDetails.query
-        .filter_by(store_id=store_id, main_shift_id=main_shift_id)
-        .order_by(ShiftDetails.shift_number)
-        .all()
-    )
+    business_day = BusinessDay.query.filter_by(id=shift.business_day_id).first()
 
-    # Collect user_ids upfront for one query
-    user_ids = {main.opened_by_user_id, main.closed_by_user_id, main.voided_by_user_id}
-    for s in subs:
-        user_ids.update({s.opened_by_user_id, s.closed_by_user_id, s.voided_by_user_id})
-    # Plus return-to-vendor users from books referenced in scans
-    static_codes_in_subs = set()
-    for s in subs:
-        for sb in ShiftBooks.query.filter_by(shift_id=s.shift_id, store_id=store_id).all():
-            static_codes_in_subs.add(sb.static_code)
-    if static_codes_in_subs:
+    # One pass over ShiftBooks to collect both user_ids and slot_ids
+    all_scan_rows = ShiftBooks.query.filter_by(shift_id=employee_shift_id, store_id=store_id).all()
+    static_codes_in_shift = {sb.static_code for sb in all_scan_rows}
+    slot_ids = {sb.slot_id for sb in all_scan_rows if sb.slot_id is not None}
+
+    user_ids = {shift.employee_id, shift.closed_by_user_id, shift.voided_by_user_id}
+
+    # Return-to-vendor users from books referenced in scans
+    if static_codes_in_shift:
         for b in Book.query.filter(
-            Book.store_id == store_id, Book.static_code.in_(static_codes_in_subs)
+            Book.store_id == store_id, Book.static_code.in_(static_codes_in_shift)
         ).all():
             if b.returned_by_user_id:
                 user_ids.add(b.returned_by_user_id)
-    # Cleanup the leftover variable name no longer used
-    # Plus whole-book-sale creators
-    for s in subs:
-        for e in ShiftExtraSales.query.filter_by(shift_id=s.shift_id, store_id=store_id).all():
-            user_ids.add(e.created_by_user_id)
+
+    # Whole-book-sale creators
+    for e in ShiftExtraSales.query.filter_by(shift_id=employee_shift_id, store_id=store_id).all():
+        user_ids.add(e.created_by_user_id)
 
     user_map = _build_user_map(user_ids)
-
-    # Collect slot_ids
-    slot_ids = set()
-    for s in subs:
-        for sb in ShiftBooks.query.filter_by(shift_id=s.shift_id, store_id=store_id).all():
-            if sb.slot_id is not None:
-                slot_ids.add(sb.slot_id)
     slot_map = _build_slot_name_map(slot_ids)
 
-    # Build per-sub-shift entries
-    subshift_entries = []
-    voided_entries = []
-    breakdown_lines_for_combined = []
+    regular_books, returned_books = _per_book_lines_for_subshift(
+        employee_shift_id, store_id, user_map, slot_map
+    )
+    whole_book_sales = _whole_book_sales_for_subshift(employee_shift_id, store_id, user_map)
+    ticket_breakdown = _ticket_breakdown_for_subshift(employee_shift_id, store_id)
 
-    for s in subs:
-        regular_books, returned_books = _per_book_lines_for_subshift(
-            s.shift_id, store_id, user_map, slot_map
-        )
-        whole_book_sales = _whole_book_sales_for_subshift(s.shift_id, store_id, user_map)
-        breakdown = _ticket_breakdown_for_subshift(s.shift_id, store_id)
-
-        entry = {
-            "shift_id": s.shift_id,
-            "shift_number": s.shift_number,
-            "voided": s.voided,
-            "void_reason": s.void_reason,
-            "voided_at": s.voided_at.isoformat() + "Z" if s.voided_at else None,
-            "voided_by": _user_summary(user_map, s.voided_by_user_id),
-            "opened_by": _user_summary(user_map, s.opened_by_user_id),
-            "closed_by": _user_summary(user_map, s.closed_by_user_id),
-            "shift_start_time": s.shift_start_time.isoformat() + "Z",
-            "shift_end_time": s.shift_end_time.isoformat() + "Z" if s.shift_end_time else None,
-            "cash_in_hand": _money(s.cash_in_hand),
-            "gross_sales": _money(s.gross_sales),
-            "cash_out": _money(s.cash_out),
-            "tickets_total": _money(s.tickets_total),
-            "expected_cash": _money(s.expected_cash),
-            "difference": _money(s.difference),
-            "shift_status": s.shift_status,
-            "ticket_breakdown": breakdown,
+    return {
+        "shift": {
+            "shift_id": shift.id,
+            "shift_number": shift.shift_number,
+            "status": shift.status,
+            "opened_at": shift.opened_at.isoformat() + "Z",
+            "closed_at": shift.closed_at.isoformat() + "Z" if shift.closed_at else None,
+            "opened_by": _user_summary(user_map, shift.employee_id),
+            "closed_by": _user_summary(user_map, shift.closed_by_user_id),
+            "voided": shift.voided,
+            "void_reason": shift.void_reason,
+            "voided_at": shift.voided_at.isoformat() + "Z" if shift.voided_at else None,
+            "voided_by": _user_summary(user_map, shift.voided_by_user_id),
+            "cash_in_hand": _money(shift.cash_in_hand),
+            "gross_sales": _money(shift.gross_sales),
+            "cash_out": _money(shift.cash_out),
+            "tickets_total": _money(shift.tickets_total),
+            "expected_cash": _money(shift.expected_cash),
+            "difference": _money(shift.difference),
+            "shift_status": shift.shift_status,
+            "ticket_breakdown": ticket_breakdown,
             "books": regular_books,
             "whole_book_sales": whole_book_sales,
             "returned_books": returned_books,
-        }
-
-        if s.voided:
-            voided_entries.append(entry)
-        else:
-            subshift_entries.append(entry)
-            breakdown_lines_for_combined.append(breakdown)
-
-    # Combined main-shift breakdown across non-voided sub-shifts
-    combined_breakdown = _ticket_breakdown_combined(breakdown_lines_for_combined)
-
-    return {
-        "main_shift": {
-            "shift_id": main.shift_id,
-            "shift_start_time": main.shift_start_time.isoformat() + "Z",
-            "shift_end_time": main.shift_end_time.isoformat() + "Z" if main.shift_end_time else None,
-            "voided": main.voided,
-            "void_reason": main.void_reason,
-            "voided_at": main.voided_at.isoformat() + "Z" if main.voided_at else None,
-            "voided_by": _user_summary(user_map, main.voided_by_user_id),
-            "opened_by": _user_summary(user_map, main.opened_by_user_id),
-            "closed_by": _user_summary(user_map, main.closed_by_user_id),
-            "totals": {
-                "tickets_total": _money(main.tickets_total),
-                "gross_sales": _money(main.gross_sales),
-                "expected_cash": _money(main.expected_cash),
-                "cash_in_hand": _money(main.cash_in_hand),
-                "cash_out": _money(main.cash_out),
-                "difference": _money(main.difference),
-                "shift_status": main.shift_status,
-            },
-            "ticket_breakdown": combined_breakdown,
         },
-        "subshifts": subshift_entries,
-        "voided_subshifts": voided_entries,
+        "business_day": {
+            "id": business_day.id,
+            "business_date": business_day.business_date.isoformat(),
+            "status": business_day.status,
+        } if business_day else None,
     }

@@ -160,17 +160,22 @@ The complete REST API is implemented and tested end-to-end with both Thunder Cli
 - [x] Bulk slot management (POST /api/slots/bulk up to 500, POST /api/slots/bulk-delete)
 - [x] Store scan_mode preference (PUT /api/store/settings/scan-mode)
 - [x] Multi-tenancy audit complete — 19 security fixes applied; T-01–T-10 cross-tenant tests pass
+- [x] BusinessDay + EmployeeShift refactor — April 2026
+    - Replaced self-referential ShiftDetails model with two clean models: BusinessDay (daily container, auto-managed) and EmployeeShift (one employee session per day)
+    - 2 new models, 2 new services (business_day_service, employee_shift_service), 2 new route files, 3 Alembic migrations
+    - Unplanned fixes applied: book_service.py return_to_vendor (two-level ShiftDetails query), report.py employee access guard (shift_service reference)
+    - All 8 end-to-end sequences verified live (open shift → summary → close → carry-forward → BD close guard → BD close)
 
 ### Implementation Stats
 
 | Metric | Value |
 |---|---|
-| SQLAlchemy models | 8 |
-| API endpoints | 35 |
-| Flask blueprints | 8 |
-| Marshmallow schemas | 7 |
-| Services | 9 |
-| Database migrations | 7 |
+| SQLAlchemy models | 9 |
+| API endpoints | 39 |
+| Flask blueprints | 9 |
+| Marshmallow schemas | 8 |
+| Services | 10 |
+| Database migrations | 10 |
 | Lines of Python (approx) | 5,020 |
 
 ### Backend — Outstanding

@@ -802,7 +802,7 @@ lottometer-mobile/
 
 ## 11. Database Design
 
-Eight models. Full ERD with columns, constraints, and relationships is in `docs/ERD.md`.
+Nine models. Full ERD with columns, constraints, and relationships is in `docs/ERD.md`.
 
 | Model | Purpose |
 |---|---|
@@ -811,8 +811,9 @@ Eight models. Full ERD with columns, constraints, and relationships is in `docs/
 | Slot | Physical location for a book, holds ticket_price |
 | Book | Lottery ticket book — created via slot assignment |
 | BookAssignmentHistory | Every assignment / reassignment / unassignment event |
-| ShiftDetails | Main shifts and sub-shifts (self-referential) |
-| ShiftBooks | Scan records (open + close per book per sub-shift) |
+| BusinessDay | Daily container per store; auto-created on first shift open, admin-closable |
+| EmployeeShift | One employee session within a BusinessDay; replaces self-referential ShiftDetails |
+| ShiftBooks | Scan records (open + close per book per employee shift) |
 | ShiftExtraSales | Whole-book sales (not tied to Book records) |
 
 ---
@@ -853,10 +854,12 @@ Full API contract is in `docs/API_Contract.md`.
 | GET | /api/shifts | JWT | any |
 | GET | /api/shifts/{id} | JWT | any |
 | GET | /api/shifts/{id}/summary | JWT | any |
-| POST | /api/shifts/{id}/subshifts | JWT | any |
 | PUT | /api/shifts/{id}/close | JWT | any |
 | POST | /api/shifts/{id}/void | JWT | admin |
-| POST | /api/shifts/{id}/subshifts/{sub_id}/void | JWT | admin |
+| GET | /api/business-days | JWT | any |
+| GET | /api/business-days/today | JWT | any |
+| GET | /api/business-days/{id} | JWT | any |
+| POST | /api/business-days/{id}/close | JWT | admin |
 | POST | /api/scan | JWT | any |
 | POST | /api/shifts/{id}/whole-book-sale | JWT | any (PIN) |
 | GET | /api/reports/shift/{id} | JWT | any |

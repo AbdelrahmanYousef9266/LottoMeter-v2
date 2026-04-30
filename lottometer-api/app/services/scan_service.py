@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from app.extensions import db
 from app.models.book import Book
 from app.models.book_assignment_history import BookAssignmentHistory
-from app.models.shift_details import ShiftDetails
+from app.models.employee_shift import EmployeeShift
 from app.models.shift_books import ShiftBooks
 from app.constants import LENGTH_BY_PRICE
 from app.errors import (
@@ -20,28 +20,28 @@ from app.errors import (
 from app.services.book_service import parse_barcode
 
 
-def _get_subshift(store_id: int, shift_id: int) -> ShiftDetails:
-    sub = (
-        ShiftDetails.query
-        .filter_by(shift_id=shift_id, store_id=store_id)
+def _get_employee_shift(store_id: int, shift_id: int) -> EmployeeShift:
+    shift = (
+        EmployeeShift.query
+        .filter_by(id=shift_id, store_id=store_id)
         .first()
     )
-    if sub is None or sub.main_shift_id is None:
+    if shift is None:
         raise NotFoundError(
             "Sub-shift not found.",
             code="SUBSHIFT_NOT_FOUND",
         )
-    if sub.voided:
+    if shift.voided:
         raise BusinessRuleError(
             "Sub-shift has been voided.",
             code="SHIFT_VOIDED",
         )
-    if not sub.is_shift_open:
+    if shift.status != "open":
         raise BusinessRuleError(
             "Sub-shift is closed.",
             code="SHIFT_CLOSED",
         )
-    return sub
+    return shift
 
 
 def _has_any_close_scan_in_subshift(shift_id: int, store_id: int) -> bool:
@@ -80,9 +80,9 @@ def record_scan(
       False — explicitly do NOT mark sold even if auto-detection conditions are met
       None  — auto-detect (default, backward-compatible)
 
-    Returns: (scan_row, book, subshift)
+    Returns: (scan_row, book, shift)
     """
-    sub = _get_subshift(store_id, shift_id)
+    shift = _get_employee_shift(store_id, shift_id)
     static_code, position = parse_barcode(barcode)
 
     # Rule 1: static_code matches an active book in this store
@@ -225,7 +225,7 @@ def record_scan(
             history.unassign_reason = "sold"
 
     db.session.commit()
-    return scan_row, book, sub
+    return scan_row, book, shift
 
 
 def get_running_totals(shift_id: int, store_id: int) -> dict:

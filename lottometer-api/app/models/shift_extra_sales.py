@@ -12,7 +12,7 @@ class ShiftExtraSales(db.Model):
     extra_sale_id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     shift_id = db.Column(
         db.Integer,
-        db.ForeignKey("shift_details.shift_id"),
+        db.ForeignKey("employee_shifts.id"),
         nullable=False,
         index=True,
     )

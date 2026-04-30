@@ -17,7 +17,7 @@ class ShiftBooks(db.Model):
 
     shift_id = db.Column(
         db.Integer,
-        db.ForeignKey("shift_details.shift_id"),
+        db.ForeignKey("employee_shifts.id"),
         primary_key=True,
     )
     static_code = db.Column(db.String(100), primary_key=True)

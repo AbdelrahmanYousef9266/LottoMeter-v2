@@ -4,7 +4,7 @@ from decimal import Decimal
 
 from app.extensions import db
 from app.models.shift_extra_sales import ShiftExtraSales
-from app.models.shift_details import ShiftDetails
+from app.models.employee_shift import EmployeeShift
 from app.constants import LENGTH_BY_PRICE
 from app.errors import NotFoundError, BusinessRuleError
 
@@ -26,19 +26,19 @@ def create_whole_book_sale(
     """
     from app.services import auth_service  # late import to avoid circular
 
-    sub = (
-        ShiftDetails.query
-        .filter_by(shift_id=subshift_id, store_id=store_id)
+    shift = (
+        EmployeeShift.query
+        .filter_by(id=subshift_id, store_id=store_id)
         .first()
     )
-    if sub is None or sub.main_shift_id is None:
+    if shift is None:
         raise NotFoundError(
             "Sub-shift not found.",
             code="SUBSHIFT_NOT_FOUND",
         )
-    if sub.voided:
+    if shift.voided:
         raise BusinessRuleError("Sub-shift has been voided.", code="SHIFT_VOIDED")
-    if not sub.is_shift_open:
+    if shift.status != "open":
         raise BusinessRuleError("Sub-shift is closed.", code="SHIFT_CLOSED")
 
     # Verify PIN (raises on failure or lockout)

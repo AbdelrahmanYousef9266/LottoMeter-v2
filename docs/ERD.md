@@ -1,14 +1,14 @@
 # Entity Relationship Diagram — LottoMeter v2.0
 
-**Version:** 2.2
-**Date:** April 2026
-**Status:** Final — aligned with SRS v5.3
+**Version:** 3.0
+**Date:** 2026-04-30
+**Status:** Final — aligned with refactor completed April 2026
 
 ---
 
 ## Overview
 
-LottoMeter v2.0 uses 8 models. Every non-Store table carries `store_id` for multi-tenancy. `ShiftDetails` is self-referential (main shift ↔ sub-shifts).
+LottoMeter v2.0 uses 9 models. Every non-Store table carries `store_id` for multi-tenancy. The former self-referential `ShiftDetails` model has been replaced by two clean models: `BusinessDay` (one per store per calendar date, auto-managed) and `EmployeeShift` (one employee session inside a BusinessDay).
 
 ---
 
@@ -19,7 +19,7 @@ erDiagram
     Store ||--o{ User : has
     Store ||--o{ Slot : has
     Store ||--o{ Book : has
-    Store ||--o{ ShiftDetails : has
+    Store ||--o{ BusinessDay : has
     Store ||--o{ ShiftBooks : has
     Store ||--o{ ShiftExtraSales : has
     Store ||--o{ BookAssignmentHistory : has
@@ -30,11 +30,11 @@ erDiagram
 
     Book ||--o{ BookAssignmentHistory : "history"
 
-    ShiftDetails ||--o{ ShiftDetails : "main has sub-shifts"
-    ShiftDetails ||--o{ ShiftBooks : "contains scans"
-    ShiftDetails ||--o{ ShiftExtraSales : "contains whole-book sales"
+    BusinessDay ||--o{ EmployeeShift : contains
+    EmployeeShift ||--o{ ShiftBooks : has
+    EmployeeShift ||--o{ ShiftExtraSales : has
 
-    User ||--o{ ShiftDetails : "opens/closes/voids"
+    User ||--o{ EmployeeShift : "opens/closes/voids"
     User ||--o{ ShiftBooks : "scans"
     User ||--o{ ShiftExtraSales : "creates"
     User ||--o{ BookAssignmentHistory : "assigns/unassigns"
@@ -97,27 +97,38 @@ erDiagram
         int store_id FK
     }
 
-    ShiftDetails {
-        int shift_id PK
-        datetime shift_start_time
-        datetime shift_end_time "nullable"
+    BusinessDay {
+        int id PK
+        int store_id FK
+        date business_date
+        datetime opened_at
+        datetime closed_at "nullable"
+        string status "open|closed|auto_closed"
+        decimal total_sales "nullable"
+        decimal total_variance "nullable"
+    }
+
+    EmployeeShift {
+        int id PK
+        int business_day_id FK
+        int store_id FK
+        int employee_id FK
+        int shift_number
+        datetime opened_at
+        datetime closed_at "nullable"
+        string status "open|closed"
         decimal cash_in_hand "nullable"
         decimal gross_sales "nullable"
         decimal cash_out "nullable"
         decimal tickets_total "nullable"
         decimal expected_cash "nullable"
         decimal difference "nullable"
-        string shift_status "correct/over/short"
-        boolean is_shift_open
-        int main_shift_id FK "nullable self-ref"
-        int shift_number
-        int opened_by_user_id FK
+        string shift_status "correct|over|short"
         int closed_by_user_id FK "nullable"
         boolean voided
         datetime voided_at "nullable"
         int voided_by_user_id FK "nullable"
         string void_reason "nullable"
-        int store_id FK
     }
 
     ShiftBooks {
@@ -250,53 +261,83 @@ Records every assignment, reassignment, and unassignment event.
 
 **Index:** `(book_id, unassigned_at)` — speeds up "current assignment" lookups
 
-### 6. ShiftDetails
+### 6. BusinessDay
 
-Represents both main shifts and sub-shifts. Sub-shift is any row where `main_shift_id IS NOT NULL`.
+One per store per calendar date. Auto-created when the first EmployeeShift of the day is opened; never manually opened by employees (BR-BD-02).
 
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
-| shift_id | Integer | PK, autoincrement | |
-| shift_start_time | DateTime | Not Null | |
-| shift_end_time | DateTime | Nullable | Set when shift closes |
-| cash_in_hand | Numeric(10,2) | Nullable | Only on sub-shifts, at close |
-| gross_sales | Numeric(10,2) | Nullable | Only on sub-shifts, at close |
-| cash_out | Numeric(10,2) | Nullable | Only on sub-shifts, at close |
+| id | Integer | PK, autoincrement | |
+| store_id | Integer | FK → Store, Not Null, Indexed | |
+| business_date | Date | Not Null | Calendar date (local to store) |
+| opened_at | DateTime | Not Null, default now() | UTC timestamp of auto-creation |
+| closed_at | DateTime | Nullable | Set when admin closes the day |
+| status | String(20) | Not Null, default 'open' | `open` \| `closed` \| `auto_closed` |
+| total_sales | Numeric(10,2) | Nullable | Sum of all shift tickets_total; set at close |
+| total_variance | Numeric(10,2) | Nullable | Sum of all shift differences; set at close |
+
+**Unique constraint:** `(store_id, business_date)` — one BusinessDay per store per date (BR-BD-01)
+
+**Check:** `status IN ('open', 'closed', 'auto_closed')`
+
+**Business rules:**
+- BR-BD-01: Only one BusinessDay per store per calendar date
+- BR-BD-02: Auto-created on first `POST /api/shifts` of the day; never manually created
+- BR-BD-03: Only admins can close a BusinessDay
+- BR-BD-04: Cannot close while any EmployeeShift is still open
+
+### 7. EmployeeShift
+
+One employee session within a BusinessDay. `shift_number` increments within the BusinessDay and resets for each new day.
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| id | Integer | PK, autoincrement | |
+| business_day_id | Integer | FK → BusinessDay, Not Null, Indexed | |
+| store_id | Integer | FK → Store, Not Null, Indexed | |
+| employee_id | Integer | FK → User, Not Null | Who opened this shift |
+| shift_number | Integer | Not Null | Sequence within the BusinessDay (starts at 1) |
+| opened_at | DateTime | Not Null, default now() | |
+| closed_at | DateTime | Nullable | Set at close |
+| status | String(20) | Not Null, default 'open' | `open` \| `closed` |
+| cash_in_hand | Numeric(10,2) | Nullable | Entered at close |
+| gross_sales | Numeric(10,2) | Nullable | Entered at close |
+| cash_out | Numeric(10,2) | Nullable | Entered at close |
 | tickets_total | Numeric(10,2) | Nullable | Auto-calculated at close |
-| expected_cash | Numeric(10,2) | Nullable | gross_sales + tickets_total - cash_out |
-| difference | Numeric(10,2) | Nullable | cash_in_hand - expected_cash |
-| shift_status | String(20) | Nullable | correct / over / short |
-| is_shift_open | Boolean | Not Null, default True | |
-| main_shift_id | Integer | FK → ShiftDetails(shift_id), Nullable | Null = main shift |
-| shift_number | Integer | Not Null, default 1 | Sub-shift sequence within main |
-| opened_by_user_id | Integer | FK → User, Not Null | |
+| expected_cash | Numeric(10,2) | Nullable | `gross_sales + tickets_total - cash_out` |
+| difference | Numeric(10,2) | Nullable | `cash_in_hand - expected_cash` |
+| shift_status | String(20) | Nullable | `correct` \| `over` \| `short` |
 | closed_by_user_id | Integer | FK → User, Nullable | |
 | voided | Boolean | Not Null, default False | |
 | voided_at | DateTime | Nullable | |
 | voided_by_user_id | Integer | FK → User, Nullable | |
 | void_reason | String(500) | Nullable | |
-| store_id | Integer | FK → Store, Not Null, Indexed | |
 
-**Partial unique index** (enforces FR-SHIFT-02):
+**Partial unique index** (enforces BR-ES-01 — one open shift per store):
 ```sql
-CREATE UNIQUE INDEX uq_one_open_main_shift_per_store
-  ON shift_details (store_id)
-  WHERE main_shift_id IS NULL AND is_shift_open = TRUE;
+CREATE UNIQUE INDEX uq_one_open_employee_shift_per_store
+  ON employee_shifts (store_id)
+  WHERE status = 'open' AND voided = FALSE;
 ```
 
-**Composite unique:** `(main_shift_id, shift_number)` — sub-shift numbers unique within a main shift
+**Composite unique:** `(business_day_id, shift_number)` — shift numbers unique within a BusinessDay (BR-ES-02)
 
 **Check constraints:**
-- `main_shift_id IS NULL OR main_shift_id != shift_id` — no self-reference loop
+- `status IN ('open', 'closed')`
+- `shift_status IS NULL OR shift_status IN ('correct', 'over', 'short')`
 - `NOT voided OR void_reason IS NOT NULL` — void requires reason
 
-### 7. ShiftBooks
+**Business rules:**
+- BR-ES-03: Carry-forward only runs when previous shift `shift_status == 'correct'`
+- BR-ES-04: All active books must have close scans before an EmployeeShift can close
+
+### 8. ShiftBooks
 
 Scan records. Composite PK keys on `static_code` (book identity) so open and close scans for the same book pair correctly even though their full barcodes differ by position.
 
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
-| shift_id | Integer | PK, FK → ShiftDetails | Always a sub-shift |
+| shift_id | Integer | PK, FK → EmployeeShift | The employee shift this scan belongs to |
 | static_code | String(100) | PK | Book identifier (barcode minus last 3 digits) |
 | scan_type | String(10) | PK | `open` \| `close` |
 | barcode | String(100) | Not Null | Full barcode string at scan time (audit) |
@@ -318,14 +359,14 @@ Scan records. Composite PK keys on `static_code` (book identity) so open and clo
 
 **Why static_code in the PK:** The barcode includes the position digits, so an open scan at position 0 (`<static_code>000`) and a close scan at position 59 (`<static_code>059`) for the same book would have different PKs under a barcode-keyed scheme — breaking the open/close pairing logic. Keying on `static_code` fixes this; the actual scanned barcode is preserved as a regular column for audit.
 
-### 8. ShiftExtraSales
+### 9. ShiftExtraSales
 
 Records whole-book sales. Not tied to Book — intentionally decoupled because whole-book sales never enter inventory.
 
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
 | extra_sale_id | Integer | PK, autoincrement | |
-| shift_id | Integer | FK → ShiftDetails, Not Null, Indexed | Always a sub-shift |
+| shift_id | Integer | FK → EmployeeShift, Not Null, Indexed | |
 | sale_type | String(25) | Not Null | `whole_book` (extensible) |
 | scanned_barcode | String(100) | Not Null | Audit record |
 | ticket_price | Numeric(10,2) | Not Null | |
@@ -348,19 +389,19 @@ Records whole-book sales. Not tied to Book — intentionally decoupled because w
 | Store | Slot | 1 : ∞ | RESTRICT |
 | Store | Book | 1 : ∞ | RESTRICT |
 | Store | BookAssignmentHistory | 1 : ∞ | RESTRICT |
-| Store | ShiftDetails | 1 : ∞ | RESTRICT |
+| Store | BusinessDay | 1 : ∞ | RESTRICT |
 | Store | ShiftBooks | 1 : ∞ | RESTRICT |
 | Store | ShiftExtraSales | 1 : ∞ | RESTRICT |
 | Slot | Book | 1 : ∞ (0..1 active) | SET NULL |
 | Slot | BookAssignmentHistory | 1 : ∞ | RESTRICT |
 | Slot | ShiftBooks | 1 : ∞ | RESTRICT |
 | Book | BookAssignmentHistory | 1 : ∞ | CASCADE |
-| ShiftDetails (main) | ShiftDetails (sub) | 1 : ∞ | CASCADE |
-| ShiftDetails (sub) | ShiftBooks | 1 : ∞ | CASCADE |
-| ShiftDetails (sub) | ShiftExtraSales | 1 : ∞ | CASCADE |
-| User | ShiftDetails (opened_by) | 1 : ∞ | RESTRICT |
-| User | ShiftDetails (closed_by) | 1 : ∞ | RESTRICT |
-| User | ShiftDetails (voided_by) | 1 : ∞ | RESTRICT |
+| BusinessDay | EmployeeShift | 1 : ∞ | RESTRICT |
+| EmployeeShift | ShiftBooks | 1 : ∞ | CASCADE |
+| EmployeeShift | ShiftExtraSales | 1 : ∞ | CASCADE |
+| User | EmployeeShift (opened_by) | 1 : ∞ | RESTRICT |
+| User | EmployeeShift (closed_by) | 1 : ∞ | RESTRICT |
+| User | EmployeeShift (voided_by) | 1 : ∞ | RESTRICT |
 | User | ShiftBooks (scanned_by) | 1 : ∞ | RESTRICT |
 | User | ShiftExtraSales (created_by) | 1 : ∞ | RESTRICT |
 | User | BookAssignmentHistory (assigned_by / unassigned_by) | 1 : ∞ | RESTRICT |
@@ -406,21 +447,21 @@ WHERE book_id = :book_id AND unassigned_at IS NULL
 ORDER BY assigned_at DESC LIMIT 1;
 ```
 
-### "Which books need a pending open scan in sub-shift S?"
+### "Which books need a pending open scan in shift S?"
 ```sql
 SELECT * FROM books b
 WHERE b.store_id = :store_id
   AND b.is_active = TRUE
   AND NOT EXISTS (
     SELECT 1 FROM shift_books sb
-    WHERE sb.shift_id = :subshift_id
+    WHERE sb.shift_id = :shift_id
       AND sb.scan_type = 'open'
-      AND sb.barcode = b.barcode
+      AND sb.static_code = b.static_code
   );
 ```
 
-### "What's the total tickets_total for sub-shift S?"
-Stored on ShiftDetails.tickets_total after close. Pre-close, compute:
+### "What's the tickets_total for shift S?"
+Stored on EmployeeShift.tickets_total after close. Pre-close, compute:
 ```sql
 -- From scans:
 SELECT SUM(
@@ -429,23 +470,30 @@ SELECT SUM(
     ELSE (close.start_at_scan - open.start_at_scan)
   END * b.ticket_price
 ) FROM shift_books open
-JOIN shift_books close ON open.barcode = close.barcode AND open.shift_id = close.shift_id
-JOIN books b ON b.barcode = close.barcode AND b.store_id = close.store_id
-WHERE open.shift_id = :subshift_id
+JOIN shift_books close ON open.static_code = close.static_code AND open.shift_id = close.shift_id
+JOIN books b ON b.static_code = close.static_code AND b.store_id = close.store_id
+WHERE open.shift_id = :shift_id
   AND open.scan_type = 'open'
   AND close.scan_type = 'close';
 
 -- Plus whole-book sales:
-SELECT SUM(value) FROM shift_extra_sales WHERE shift_id = :subshift_id;
+SELECT SUM(value) FROM shift_extra_sales WHERE shift_id = :shift_id;
 ```
 
-### "Is any main shift open for this store?"
+### "Is any shift open for this store?"
 ```sql
-SELECT 1 FROM shift_details
+SELECT 1 FROM employee_shifts
 WHERE store_id = :store_id
-  AND main_shift_id IS NULL
-  AND is_shift_open = TRUE
+  AND status = 'open'
   AND voided = FALSE
+LIMIT 1;
+```
+
+### "What is today's BusinessDay for this store?"
+```sql
+SELECT * FROM business_days
+WHERE store_id = :store_id
+  AND business_date = CURRENT_DATE
 LIMIT 1;
 ```
 
@@ -458,10 +506,10 @@ LIMIT 1;
 3. **Book.static_code, start_position, ticket_price, slot_id all nullable until assignment** — books don't exist in the DB before assignment anyway in practice, but schema allows partial rows
 4. **Book.returned_at, returned_by_user_id added** — return-to-vendor lifecycle
 5. **Slot.deleted_at added + partial unique index on (store_id, slot_name) WHERE deleted_at IS NULL** — soft delete preserving historical refs
-6. **ShiftDetails.voided + audit columns added** — void as flag, no data deletion
-7. **ShiftDetails.opened_by_user_id, closed_by_user_id** — employee attribution
+6. **EmployeeShift.voided + audit columns added** — void as flag, no data deletion
+7. **EmployeeShift.employee_id, closed_by_user_id** — employee attribution
 8. **ShiftBooks.scanned_at, scanned_by_user_id, scan_source** — scan audit + distinguishing carry-forward from physical scans
-9. **Partial unique index for one open main shift** — DB-level enforcement of FR-SHIFT-02
+9. **Partial unique index for one open employee shift** — DB-level enforcement of BR-ES-01
 10. **Store.store_pin_hash added** — single PIN reused for whole-book-sale and return-to-vendor
 11. **BookAssignmentHistory new table** — assignment audit trail
 12. **ShiftExtraSales new table** — whole-book sales without Book row
@@ -469,3 +517,4 @@ LIMIT 1;
 14. **User soft-delete with partial unique index on (store_id, username) WHERE deleted_at IS NULL** — consistent with Slot soft-delete; allows username reuse after deactivation while preserving login history rows.
 15. **Store.scan_mode column** — admin-configurable preference returned on login so the mobile client applies it immediately; avoids a separate API call per session.
 16. **Admin user management CRUD** — moved up from v2.1; required for multi-store commercialization readiness and day-1 store operations.
+17. **BusinessDay + EmployeeShift replace ShiftDetails (April 2026)** — the self-referential ShiftDetails model (main shift ↔ sub-shifts) was replaced with two dedicated models. BusinessDay is the daily container (auto-managed, admin-closable). EmployeeShift is the unit of employee work. This removes the two-level query pattern, eliminates the `main_shift_id IS NULL` sentinel, and makes the data model match the business domain directly. Three migrations, two new services, two new route files. All 8 end-to-end sequences verified after refactor.
