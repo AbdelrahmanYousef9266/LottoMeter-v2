@@ -1,5 +1,11 @@
 import api from './client';
 
+export const getCurrentOpenShift = async () => {
+  const response = await api.get('/shifts');
+  const shifts = response.data.shifts;
+  return shifts.find(s => s.status === 'open') || null;
+};
+
 export async function openShift() {
   const { data } = await api.post('/shifts');
   return data;
@@ -15,23 +21,18 @@ export async function getShift(shiftId) {
   return data;
 }
 
-export async function getSubshiftSummary(subshiftId) {
-  const { data } = await api.get(`/shifts/${subshiftId}/summary`);
+export async function getShiftSummary(shiftId) {
+  const { data } = await api.get(`/shifts/${shiftId}/summary`);
   return data;
 }
 
-export async function handoverSubshift(shiftId, payload) {
-  const { data } = await api.post(`/shifts/${shiftId}/subshifts`, payload);
-  return data;
-}
+// Kept for CloseShiftModal backward compatibility (same endpoint, new name)
+export const getSubshiftSummary = getShiftSummary;
 
-export async function closeMainShift(shiftId, payload) {
+export async function closeShift(shiftId, payload) {
   const { data } = await api.put(`/shifts/${shiftId}/close`, payload);
   return data;
 }
 
-export async function getCurrentOpenShift() {
-  const { shifts } = await listShifts({ status: 'open', limit: 1 });
-  if (shifts.length === 0) return null;
-  return await getShift(shifts[0].shift_id);
-}
+// Legacy aliases — kept so CloseShiftModal's internal imports don't break
+export const closeMainShift = closeShift;

@@ -77,9 +77,9 @@ export default function ReportDetailScreen({ route }) {
       const isRTL = i18n.language === 'ar';
       const html = buildReportHtml(report, t, isRTL);
 
-      const dateStr = report.main_shift.shift_start_time
-        ? new Date(report.main_shift.shift_start_time).toISOString().split('T')[0]
-        : `shift-${report.main_shift.shift_id}`;
+      const dateStr = report.shift.opened_at
+        ? new Date(report.shift.opened_at).toISOString().split('T')[0]
+        : `shift-${report.shift.shift_id}`;
       const filename = `LottoMeter_${dateStr}.pdf`;
 
       // Generate PDF to a temp path
@@ -136,7 +136,7 @@ export default function ReportDetailScreen({ route }) {
     );
   }
 
-  if (!report) {
+  if (!report || !report.shift) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
@@ -146,10 +146,8 @@ export default function ReportDetailScreen({ route }) {
     );
   }
 
-  const main = report.main_shift;
-  const totals = main.totals || {};
-  const subshifts = report.subshifts || [];
-  const voidedSubshifts = report.voided_subshifts || [];
+  const shift = report.shift;
+  const businessDay = report.business_day;
 
   return (
     <SafeAreaView style={styles.container}>
@@ -189,34 +187,40 @@ export default function ReportDetailScreen({ route }) {
       >
         <View style={styles.card}>
           <View style={styles.headerRow}>
-            <Text style={styles.title}>
-              {t('report.mainShiftTitle', { id: main.shift_id })}
-            </Text>
-            <StatusBadge status={totals.shift_status} voided={main.voided} t={t} />
+            <View>
+              {businessDay && (
+                <Text style={styles.dateText}>{businessDay.business_date}</Text>
+              )}
+              <Text style={styles.title}>
+                {t('report.subshiftTitle', { number: shift.shift_number })}
+              </Text>
+            </View>
+            <StatusBadge status={shift.shift_status} voided={shift.voided} t={t} />
           </View>
-          <KV k={t('report.started')} v={formatTime(main.shift_start_time)} />
-          <KV k={t('report.ended')} v={formatTime(main.shift_end_time)} />
-          <KV k={t('report.openedBy')} v={main.opened_by?.username} />
+          <KV k={t('report.started')} v={formatTime(shift.opened_at)} />
+          <KV k={t('report.ended')} v={formatTime(shift.closed_at)} />
+          <KV k={t('report.openedBy')} v={shift.opened_by?.username} />
+          <KV k={t('report.closedBy')} v={shift.closed_by?.username} />
         </View>
 
         <SectionTitle text={t('report.totals')} />
         <View style={styles.card}>
-          <KV k={t('report.ticketsTotal')} v={fmt$(totals.tickets_total)} />
-          <KV k={t('report.grossSales')} v={fmt$(totals.gross_sales)} />
-          <KV k={t('report.cashInHand')} v={fmt$(totals.cash_in_hand)} />
-          <KV k={t('report.expectedCash')} v={fmt$(totals.expected_cash)} />
+          <KV k={t('report.ticketsTotal')} v={fmt$(shift.tickets_total)} />
+          <KV k={t('report.grossSales')} v={fmt$(shift.gross_sales)} />
+          <KV k={t('report.cashInHand')} v={fmt$(shift.cash_in_hand)} />
+          <KV k={t('report.expectedCash')} v={fmt$(shift.expected_cash)} />
           <KV
             k={t('report.difference')}
-            v={fmt$(totals.difference)}
-            vColor={diffColor(totals.shift_status)}
+            v={fmt$(shift.difference)}
+            vColor={diffColor(shift.shift_status)}
           />
         </View>
 
-        {main.ticket_breakdown?.length > 0 && (
+        {shift.ticket_breakdown?.length > 0 && (
           <>
             <SectionTitle text={t('report.ticketBreakdown')} />
             <View style={styles.card}>
-              {main.ticket_breakdown.map((row, i) => (
+              {shift.ticket_breakdown.map((row, i) => (
                 <View key={i} style={styles.kvRow}>
                   <Text style={styles.kvKey}>
                     ${row.ticket_price} · {row.source}
@@ -230,31 +234,61 @@ export default function ReportDetailScreen({ route }) {
           </>
         )}
 
-        {subshifts.length > 0 && (
+        {shift.books?.length > 0 && (
           <>
-            <SectionTitle text={t('report.subshifts')} />
-            {subshifts.map((sub) => (
-              <SubshiftCard key={sub.shift_id} sub={sub} t={t} />
-            ))}
+            <SectionTitle text={t('report.books')} />
+            <View style={styles.card}>
+              {shift.books.map((b, i) => (
+                <View key={i} style={styles.bookRow}>
+                  <View style={styles.bookHeader}>
+                    <Text style={styles.bookCode}>{b.static_code}</Text>
+                    <Text style={styles.bookValue}>{fmt$(b.value)}</Text>
+                  </View>
+                  <Text style={styles.bookMeta}>
+                    {b.slot_name} · ${b.ticket_price} · {b.open_position} → {b.close_position} · {t('report.subshiftFooter', { count: b.tickets_sold })}
+                    {b.fully_sold && ' · ' + t('report.soldOut')}
+                  </Text>
+                </View>
+              ))}
+            </View>
           </>
         )}
 
-        {voidedSubshifts.length > 0 && (
+        {shift.whole_book_sales?.length > 0 && (
           <>
-            <SectionTitle text={t('report.voidedSubshifts')} />
-            {voidedSubshifts.map((sub) => (
-              <View key={sub.shift_id} style={[styles.card, styles.voidedCard]}>
-                <View style={styles.headerRow}>
-                  <Text style={styles.subTitle}>
-                    {t('report.subshiftTitle', { number: sub.shift_number })}
-                  </Text>
-                  <View style={styles.voidedBadge}>
-                    <Text style={styles.voidedText}>{t('report.voidedBadge')}</Text>
+            <SectionTitle text={t('report.wholeBookSales')} />
+            <View style={styles.card}>
+              {shift.whole_book_sales.map((s) => (
+                <View key={s.extra_sale_id} style={styles.bookRow}>
+                  <View style={styles.bookHeader}>
+                    <Text style={styles.bookCode}>{s.scanned_barcode}</Text>
+                    <Text style={styles.bookValue}>{fmt$(s.value)}</Text>
                   </View>
+                  <Text style={styles.bookMeta}>
+                    ${s.ticket_price} · {s.ticket_count} · {s.created_by?.username}
+                  </Text>
                 </View>
-                <KV k={t('report.reason')} v={sub.void_reason || '—'} />
-              </View>
-            ))}
+              ))}
+            </View>
+          </>
+        )}
+
+        {shift.returned_books?.length > 0 && (
+          <>
+            <SectionTitle text={t('report.returnedBooks')} />
+            <View style={styles.card}>
+              {shift.returned_books.map((r) => (
+                <View key={r.book_id} style={styles.bookRow}>
+                  <View style={styles.bookHeader}>
+                    <Text style={styles.bookCode}>{r.static_code}</Text>
+                    <Text style={styles.bookValue}>{fmt$(r.value)}</Text>
+                  </View>
+                  <Text style={styles.bookMeta}>
+                    {r.slot_name} · ${r.ticket_price} · {r.open_position} → {r.returned_at_position} · {t('report.soldBeforeReturn', { count: r.tickets_sold })}
+                  </Text>
+                </View>
+              ))}
+            </View>
           </>
         )}
       </ScrollView>
@@ -263,111 +297,8 @@ export default function ReportDetailScreen({ route }) {
 }
 
 // ---------------------------------------------------------------------------
-// Sub-components (unchanged from original)
+// Sub-components
 // ---------------------------------------------------------------------------
-
-function SubshiftCard({ sub, t }) {
-  return (
-    <View style={styles.card}>
-      <View style={styles.headerRow}>
-        <Text style={styles.subTitle}>
-          {t('report.subshiftTitle', { number: sub.shift_number })}
-        </Text>
-        <StatusBadge status={sub.shift_status} voided={sub.voided} t={t} />
-      </View>
-
-      <KV k={t('report.openedBy')} v={sub.opened_by?.username} />
-      <KV k={t('report.closedBy')} v={sub.closed_by?.username} />
-      <KV k={t('report.started')} v={formatTime(sub.shift_start_time)} />
-      <KV k={t('report.ended')} v={formatTime(sub.shift_end_time)} />
-
-      <View style={styles.divider} />
-
-      <KV k={t('report.cashInHand')} v={fmt$(sub.cash_in_hand)} />
-      <KV k={t('report.grossSales')} v={fmt$(sub.gross_sales)} />
-      <KV k={t('report.cashOut')} v={fmt$(sub.cash_out)} />
-      <KV k={t('report.ticketsTotal')} v={fmt$(sub.tickets_total)} />
-      <KV k={t('report.expectedCash')} v={fmt$(sub.expected_cash)} />
-      <KV
-        k={t('report.difference')}
-        v={fmt$(sub.difference)}
-        vColor={diffColor(sub.shift_status)}
-      />
-
-      {sub.books?.length > 0 && (
-        <>
-          <View style={styles.divider} />
-          <Text style={styles.sectionLabel}>{t('report.books')}</Text>
-          {sub.books.map((b, i) => (
-            <View key={i} style={styles.bookRow}>
-              <View style={styles.bookHeader}>
-                <Text style={styles.bookCode}>{b.static_code}</Text>
-                <Text style={styles.bookValue}>{fmt$(b.value)}</Text>
-              </View>
-              <Text style={styles.bookMeta}>
-                {b.slot_name} · ${b.ticket_price} · {b.open_position} → {b.close_position} · {t('report.subshiftFooter', { count: b.tickets_sold })}
-                {b.fully_sold && ' · ' + t('report.soldOut')}
-              </Text>
-            </View>
-          ))}
-        </>
-      )}
-
-      {sub.whole_book_sales?.length > 0 && (
-        <>
-          <View style={styles.divider} />
-          <Text style={styles.sectionLabel}>{t('report.wholeBookSales')}</Text>
-          {sub.whole_book_sales.map((s) => (
-            <View key={s.extra_sale_id} style={styles.bookRow}>
-              <View style={styles.bookHeader}>
-                <Text style={styles.bookCode}>{s.scanned_barcode}</Text>
-                <Text style={styles.bookValue}>{fmt$(s.value)}</Text>
-              </View>
-              <Text style={styles.bookMeta}>
-                ${s.ticket_price} · {s.ticket_count} · {s.created_by?.username}
-              </Text>
-            </View>
-          ))}
-        </>
-      )}
-
-      {sub.returned_books?.length > 0 && (
-        <>
-          <View style={styles.divider} />
-          <Text style={styles.sectionLabel}>{t('report.returnedBooks')}</Text>
-          {sub.returned_books.map((r) => (
-            <View key={r.book_id} style={styles.bookRow}>
-              <View style={styles.bookHeader}>
-                <Text style={styles.bookCode}>{r.static_code}</Text>
-                <Text style={styles.bookValue}>{fmt$(r.value)}</Text>
-              </View>
-              <Text style={styles.bookMeta}>
-                {r.slot_name} · ${r.ticket_price} · {r.open_position} → {r.returned_at_position} · {t('report.soldBeforeReturn', { count: r.tickets_sold })}
-              </Text>
-            </View>
-          ))}
-        </>
-      )}
-
-      {sub.ticket_breakdown?.length > 0 && (
-        <>
-          <View style={styles.divider} />
-          <Text style={styles.sectionLabel}>{t('report.ticketBreakdown')}</Text>
-          {sub.ticket_breakdown.map((row, i) => (
-            <View key={i} style={styles.kvRow}>
-              <Text style={styles.kvKey}>
-                ${row.ticket_price} · {row.source}
-              </Text>
-              <Text style={styles.kvValue}>
-                {row.tickets_sold} → {fmt$(row.subtotal)}
-              </Text>
-            </View>
-          ))}
-        </>
-      )}
-    </View>
-  );
-}
 
 function StatusBadge({ status, voided, t }) {
   let color = '#888';
@@ -436,10 +367,8 @@ function formatTime(iso) {
 // ---------------------------------------------------------------------------
 
 function buildReportHtml(report, t, isRTL) {
-  const main = report.main_shift;
-  const totals = main.totals || {};
-  const subshifts = report.subshifts || [];
-  const voidedSubshifts = report.voided_subshifts || [];
+  const shift = report.shift;
+  const businessDay = report.business_day;
 
   function esc(v) {
     if (v === null || v === undefined) return '—';
@@ -484,85 +413,52 @@ function buildReportHtml(report, t, isRTL) {
     return `<p class="section-label">${esc(text)}</p>`;
   }
 
-  function subshiftHtml(sub) {
-    let h = `<div class="card">`;
-    h += `<div class="header-row"><h3>${esc(t('report.subshiftTitle', { number: sub.shift_number }))}</h3>${badge(sub.shift_status, sub.voided)}</div>`;
-    h += kvRow(t('report.openedBy'), sub.opened_by?.username);
-    h += kvRow(t('report.closedBy'), sub.closed_by?.username);
-    h += kvRow(t('report.started'), fmtTime(sub.shift_start_time));
-    h += kvRow(t('report.ended'), fmtTime(sub.shift_end_time));
-    h += `<hr class="divider" />`;
-    h += kvRow(t('report.cashInHand'), money(sub.cash_in_hand));
-    h += kvRow(t('report.grossSales'), money(sub.gross_sales));
-    h += kvRow(t('report.cashOut'), money(sub.cash_out));
-    h += kvRow(t('report.ticketsTotal'), money(sub.tickets_total));
-    h += kvRow(t('report.expectedCash'), money(sub.expected_cash));
-    h += kvRow(t('report.difference'), money(sub.difference), diffCls(sub.shift_status));
-
-    if (sub.books?.length > 0) {
-      h += `<hr class="divider" />${sectionLabel(t('report.books'))}`;
-      for (const b of sub.books) {
-        const meta = `${esc(b.slot_name)} · $${esc(b.ticket_price)} · ${esc(b.open_position)} → ${esc(b.close_position)} · ${esc(t('report.subshiftFooter', { count: b.tickets_sold }))}${b.fully_sold ? ' · ' + esc(t('report.soldOut')) : ''}`;
-        h += `<div class="book-row"><div class="book-header"><span>${esc(b.static_code)}</span><span>${money(b.value)}</span></div><div class="book-meta">${meta}</div></div>`;
-      }
-    }
-
-    if (sub.whole_book_sales?.length > 0) {
-      h += `<hr class="divider" />${sectionLabel(t('report.wholeBookSales'))}`;
-      for (const s of sub.whole_book_sales) {
-        h += `<div class="book-row"><div class="book-header"><span>${esc(s.scanned_barcode)}</span><span>${money(s.value)}</span></div><div class="book-meta">$${esc(s.ticket_price)} · ${esc(s.ticket_count)} · ${esc(s.created_by?.username)}</div></div>`;
-      }
-    }
-
-    if (sub.returned_books?.length > 0) {
-      h += `<hr class="divider" />${sectionLabel(t('report.returnedBooks'))}`;
-      for (const r of sub.returned_books) {
-        const meta = `${esc(r.slot_name)} · $${esc(r.ticket_price)} · ${esc(r.open_position)} → ${esc(r.returned_at_position)} · ${esc(t('report.soldBeforeReturn', { count: r.tickets_sold }))}`;
-        h += `<div class="book-row"><div class="book-header"><span>${esc(r.static_code)}</span><span>${money(r.value)}</span></div><div class="book-meta">${meta}</div></div>`;
-      }
-    }
-
-    if (sub.ticket_breakdown?.length > 0) {
-      h += `<hr class="divider" />${sectionLabel(t('report.ticketBreakdown'))}`;
-      for (const bd of sub.ticket_breakdown) {
-        h += `<div class="row"><span class="label">$${esc(bd.ticket_price)} · ${esc(bd.source)}</span><span class="value">${esc(bd.tickets_sold)} → ${money(bd.subtotal)}</span></div>`;
-      }
-    }
-
-    h += `</div>`;
-    return h;
-  }
-
   // ── Body ──────────────────────────────────────────────────────────────────
   let body = '';
 
-  // Main shift header
-  body += `<div class="card"><div class="header-row"><h1>${esc(t('report.mainShiftTitle', { id: main.shift_id }))}</h1>${badge(totals.shift_status, main.voided)}</div>${kvRow(t('report.started'), fmtTime(main.shift_start_time))}${kvRow(t('report.ended'), fmtTime(main.shift_end_time))}${kvRow(t('report.openedBy'), main.opened_by?.username)}</div>`;
+  // Shift header
+  const dateLabel = businessDay ? `<p class="date-label">${esc(businessDay.business_date)}</p>` : '';
+  body += `<div class="card"><div class="header-row"><div>${dateLabel}<h1>${esc(t('report.subshiftTitle', { number: shift.shift_number }))}</h1></div>${badge(shift.shift_status, shift.voided)}</div>${kvRow(t('report.started'), fmtTime(shift.opened_at))}${kvRow(t('report.ended'), fmtTime(shift.closed_at))}${kvRow(t('report.openedBy'), shift.opened_by?.username)}${kvRow(t('report.closedBy'), shift.closed_by?.username)}</div>`;
 
   // Totals
-  body += `<h2>${esc(t('report.totals'))}</h2><div class="card">${kvRow(t('report.ticketsTotal'), money(totals.tickets_total))}${kvRow(t('report.grossSales'), money(totals.gross_sales))}${kvRow(t('report.cashInHand'), money(totals.cash_in_hand))}${kvRow(t('report.expectedCash'), money(totals.expected_cash))}${kvRow(t('report.difference'), money(totals.difference), diffCls(totals.shift_status))}</div>`;
+  body += `<h2>${esc(t('report.totals'))}</h2><div class="card">${kvRow(t('report.ticketsTotal'), money(shift.tickets_total))}${kvRow(t('report.grossSales'), money(shift.gross_sales))}${kvRow(t('report.cashInHand'), money(shift.cash_in_hand))}${kvRow(t('report.expectedCash'), money(shift.expected_cash))}${kvRow(t('report.difference'), money(shift.difference), diffCls(shift.shift_status))}</div>`;
 
-  // Main ticket breakdown
-  if (main.ticket_breakdown?.length > 0) {
+  // Ticket breakdown
+  if (shift.ticket_breakdown?.length > 0) {
     body += `<h2>${esc(t('report.ticketBreakdown'))}</h2><div class="card">`;
-    for (const bd of main.ticket_breakdown) {
+    for (const bd of shift.ticket_breakdown) {
       body += `<div class="row"><span class="label">$${esc(bd.ticket_price)} · ${esc(bd.source)}</span><span class="value">${esc(bd.tickets_sold)} → ${money(bd.subtotal)}</span></div>`;
     }
     body += `</div>`;
   }
 
-  // Sub-shifts
-  if (subshifts.length > 0) {
-    body += `<h2>${esc(t('report.subshifts'))}</h2>`;
-    for (const sub of subshifts) body += subshiftHtml(sub);
+  // Books
+  if (shift.books?.length > 0) {
+    body += `<h2>${esc(t('report.books'))}</h2><div class="card">`;
+    for (const b of shift.books) {
+      const meta = `${esc(b.slot_name)} · $${esc(b.ticket_price)} · ${esc(b.open_position)} → ${esc(b.close_position)} · ${esc(t('report.subshiftFooter', { count: b.tickets_sold }))}${b.fully_sold ? ' · ' + esc(t('report.soldOut')) : ''}`;
+      body += `<div class="book-row"><div class="book-header"><span>${esc(b.static_code)}</span><span>${money(b.value)}</span></div><div class="book-meta">${meta}</div></div>`;
+    }
+    body += `</div>`;
   }
 
-  // Voided sub-shifts
-  if (voidedSubshifts.length > 0) {
-    body += `<h2>${esc(t('report.voidedSubshifts'))}</h2>`;
-    for (const sub of voidedSubshifts) {
-      body += `<div class="card voided-card"><div class="header-row"><h3>${esc(t('report.subshiftTitle', { number: sub.shift_number }))}</h3>${badge(null, true)}</div>${kvRow(t('report.reason'), sub.void_reason || '—')}</div>`;
+  // Whole book sales
+  if (shift.whole_book_sales?.length > 0) {
+    body += `<h2>${esc(t('report.wholeBookSales'))}</h2><div class="card">`;
+    for (const s of shift.whole_book_sales) {
+      body += `<div class="book-row"><div class="book-header"><span>${esc(s.scanned_barcode)}</span><span>${money(s.value)}</span></div><div class="book-meta">$${esc(s.ticket_price)} · ${esc(s.ticket_count)} · ${esc(s.created_by?.username)}</div></div>`;
     }
+    body += `</div>`;
+  }
+
+  // Returned books
+  if (shift.returned_books?.length > 0) {
+    body += `<h2>${esc(t('report.returnedBooks'))}</h2><div class="card">`;
+    for (const r of shift.returned_books) {
+      const meta = `${esc(r.slot_name)} · $${esc(r.ticket_price)} · ${esc(r.open_position)} → ${esc(r.returned_at_position)} · ${esc(t('report.soldBeforeReturn', { count: r.tickets_sold }))}`;
+      body += `<div class="book-row"><div class="book-header"><span>${esc(r.static_code)}</span><span>${money(r.value)}</span></div><div class="book-meta">${meta}</div></div>`;
+    }
+    body += `</div>`;
   }
 
   body += `<div class="footer">${esc(t('report.export.generatedAt'))}: ${new Date().toLocaleString()}</div>`;
@@ -577,7 +473,7 @@ function buildReportHtml(report, t, isRTL) {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>${esc(t('report.mainShiftTitle', { id: main.shift_id }))}</title>
+<title>${esc(t('report.subshiftTitle', { number: shift.shift_number }))}</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body { font-family: ${fontFamily}; font-size: 13px; color: #222; background: #f4f5f7; padding: 24px; direction: ${isRTL ? 'rtl' : 'ltr'}; }
@@ -605,6 +501,7 @@ hr.divider { border: none; border-top: 1px solid #eee; margin: 10px 0; }
 .book-row:last-child { border-bottom: none; }
 .book-header { display: flex; justify-content: space-between; font-weight: 600; font-size: 13px; }
 .book-meta { font-size: 11px; color: #666; margin-top: 2px; }
+.date-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
 .footer { text-align: center; color: #aaa; font-size: 11px; margin-top: 24px; }
 </style>
 </head>
@@ -671,6 +568,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 10,
   },
+  dateText: { fontSize: 12, color: '#888', fontWeight: '500', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.4 },
   title: { fontSize: 20, fontWeight: '700', color: '#222' },
   subTitle: { fontSize: 16, fontWeight: '700', color: '#222' },
 

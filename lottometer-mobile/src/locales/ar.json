@@ -110,8 +110,14 @@
     "errorLoadingShift": "خطأ في تحميل الوردية",
     "subshiftEnded": "انتهت الوردية الفرعية",
     "subshiftEndedHint": "بدأت وردية فرعية جديدة.",
-    "mainShiftClosed": "أُغلقت الوردية الرئيسية",
-    "mainShiftClosedHint": "اعرض التقرير في تبويب السجل."
+    "mainShiftClosed": "أُغلقت الوردية",
+    "mainShiftClosedHint": "اعرض التقرير في تبويب السجل.",
+    "shiftActive": "وردية رقم {{number}} — نشطة",
+    "closeBizDay": "إغلاق يوم العمل",
+    "closeBizDayTitle": "إغلاق يوم العمل؟",
+    "closeBizDayConfirm": "سيؤدي ذلك إلى قفل سجلات اليوم. تأكّد من إغلاق جميع الورديات أولاً.",
+    "bizDayClosed": "أُغلق يوم العمل",
+    "bizDayClosedHint": "تمّ تسجيل جميع ورديات اليوم بنجاح."
   },
 
   "scan": {
@@ -287,37 +293,32 @@
 
   "history": {
     "title": "السجل",
-    "noShifts": "لا توجد ورديات بعد.",
+    "noShifts": "لا توجد ورديات لهذا اليوم.",
     "noShiftsHint": "ستظهر الورديات المغلقة هنا.",
     "ticketsTotal": "إجمالي التذاكر",
     "difference": "الفرق",
     "subshifts": "ورديات فرعية",
     "errorLoadingShifts": "خطأ في تحميل الورديات",
+    "errorLoadingDays": "خطأ في تحميل السجل",
     "statusOpen": "مفتوحة",
+    "statusClosed": "مغلقة",
+    "statusActive": "نشطة",
     "statusCorrect": "صحيح",
     "statusOver": "زيادة",
     "statusShort": "نقص",
     "statusVoided": "ملغاة",
+    "today": "اليوم",
+    "yesterday": "أمس",
+    "shiftNumber": "وردية رقم {{number}}",
+    "emptyDaysTitle": "لا يوجد سجل بعد",
+    "emptyDaysSubtitle": "ستظهر ورديات الأيام المغلقة هنا مصنّفة حسب اليوم.",
     "emptyTitle": "لا توجد ورديات بعد",
     "emptySubtitle": "بمجرد فتح وإغلاق الورديات، ستظهر هنا.",
     "emptyFilteredTitle": "لا توجد ورديات تطابق المرشحات",
     "emptyFilteredSubtitle": "حاول تعديل النطاق الزمني أو الحالة أو مرشح الموظف.",
     "emptyFilteredAction": "مسح المرشحات",
     "emptyEmployeeTitle": "لا توجد ورديات للعرض",
-    "emptyEmployeeSubtitle": "يحتاج مديرك أو موظف آخر إلى فتح وردية أولاً.",
-    "filters": {
-      "pill": "فلاتر",
-      "from": "من",
-      "to": "إلى",
-      "datePlaceholder": "YYYY-MM-DD",
-      "status": "الحالة",
-      "statusAll": "الكل",
-      "statusClosed": "مغلقة",
-      "employee": "الموظف",
-      "allEmployees": "جميع الموظفين",
-      "apply": "تطبيق",
-      "clear": "مسح"
-    }
+    "emptyEmployeeSubtitle": "يحتاج مديرك أو موظف آخر إلى فتح وردية أولاً."
   },
 
   "report": {

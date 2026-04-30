@@ -15,7 +15,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
-import { getCurrentOpenShift } from '../api/shifts';
+import { getCurrentOpenShift, getShiftSummary } from '../api/shifts';
 import { recordScan } from '../api/scan';
 import { listSlots } from '../api/slots';
 import { useAuth } from '../context/AuthContext';
@@ -61,21 +61,23 @@ export default function ScanScreen() {
 
   const loadShift = useCallback(async () => {
     try {
-      const detail = await getCurrentOpenShift();
-      if (!detail) {
+      const shift = await getCurrentOpenShift();
+      if (!shift) {
         setShift(null);
         setOpenSubId(null);
+        setPendingCount(0);
+        setIsInitialized(true);
         return;
       }
-      setShift(detail);
-      const openSub = detail.subshifts.find((s) => s.is_shift_open);
-      setOpenSubId(openSub?.shift_id || null);
+      setShift(shift);
+      setOpenSubId(shift.id);
 
-      const pending = detail.current_subshift_pending;
-      if (pending) {
-        setPendingCount(pending.pending_scans?.length || 0);
-        setIsInitialized(!!pending.is_initialized);
-      } else {
+      try {
+        const summary = await getShiftSummary(shift.id);
+        const pending = summary.books_pending_close ?? 0;
+        setPendingCount(pending);
+        setIsInitialized(pending === 0);
+      } catch {
         setPendingCount(0);
         setIsInitialized(true);
       }

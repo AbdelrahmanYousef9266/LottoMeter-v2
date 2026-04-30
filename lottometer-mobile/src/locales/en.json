@@ -110,8 +110,14 @@
     "errorLoadingShift": "Error loading shift",
     "subshiftEnded": "Sub-shift ended",
     "subshiftEndedHint": "A new sub-shift has started.",
-    "mainShiftClosed": "Main shift closed",
-    "mainShiftClosedHint": "View the report on the History tab."
+    "mainShiftClosed": "Shift closed",
+    "mainShiftClosedHint": "View the report on the History tab.",
+    "shiftActive": "Shift #{{number}} — Active",
+    "closeBizDay": "Close Business Day",
+    "closeBizDayTitle": "Close Business Day?",
+    "closeBizDayConfirm": "This will lock today's records. Make sure all shifts are closed before continuing.",
+    "bizDayClosed": "Business day closed",
+    "bizDayClosedHint": "All shift records for today have been finalised."
   },
 
   "scan": {
@@ -287,37 +293,32 @@
 
   "history": {
     "title": "History",
-    "noShifts": "No shifts yet.",
+    "noShifts": "No shifts for this day.",
     "noShiftsHint": "Closed shifts will appear here.",
     "ticketsTotal": "Tickets Total",
     "difference": "Difference",
     "subshifts": "Sub-shifts",
     "errorLoadingShifts": "Error loading shifts",
+    "errorLoadingDays": "Error loading history",
     "statusOpen": "Open",
+    "statusClosed": "Closed",
+    "statusActive": "Active",
     "statusCorrect": "Correct",
     "statusOver": "Over",
     "statusShort": "Short",
     "statusVoided": "Voided",
+    "today": "Today",
+    "yesterday": "Yesterday",
+    "shiftNumber": "Shift #{{number}}",
+    "emptyDaysTitle": "No history yet",
+    "emptyDaysSubtitle": "Your closed shifts will appear here grouped by day.",
     "emptyTitle": "No shifts yet",
     "emptySubtitle": "Once you open and close shifts, they'll appear here.",
     "emptyFilteredTitle": "No shifts match your filters",
     "emptyFilteredSubtitle": "Try adjusting the date range, status, or employee filter.",
     "emptyFilteredAction": "Clear filters",
     "emptyEmployeeTitle": "No shifts to display",
-    "emptyEmployeeSubtitle": "Your admin or another employee needs to open a shift first.",
-    "filters": {
-      "pill": "Filters",
-      "from": "From",
-      "to": "To",
-      "datePlaceholder": "YYYY-MM-DD",
-      "status": "Status",
-      "statusAll": "All",
-      "statusClosed": "Closed",
-      "employee": "Employee",
-      "allEmployees": "All Employees",
-      "apply": "Apply",
-      "clear": "Clear"
-    }
+    "emptyEmployeeSubtitle": "Your admin or another employee needs to open a shift first."
   },
 
   "report": {

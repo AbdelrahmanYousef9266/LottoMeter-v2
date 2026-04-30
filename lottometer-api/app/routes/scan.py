@@ -32,9 +32,9 @@ def scan():
         force_sold=data["force_sold"],
     )
 
-    totals = scan_service.get_running_totals(sub.shift_id, current_store_id())
+    totals = scan_service.get_running_totals(sub.id, current_store_id())
     pending_remaining = scan_service.pending_scans_remaining(
-        current_store_id(), sub.shift_id
+        current_store_id(), sub.id
     )
 
     return jsonify({
