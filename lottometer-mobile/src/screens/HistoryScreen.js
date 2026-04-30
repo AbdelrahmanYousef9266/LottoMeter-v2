@@ -18,50 +18,7 @@ import { listBusinessDays } from '../api/businessDays';
 import { listShifts } from '../api/shifts';
 import { useAuth } from '../context/AuthContext';
 import EmptyState from '../components/EmptyState';
-
-// ─── helpers ─────────────────────────────────────────────────────────────────
-
-function getTodayStr() {
-  const d = new Date();
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, '0'),
-    String(d.getDate()).padStart(2, '0'),
-  ].join('-');
-}
-
-function getYesterdayStr() {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, '0'),
-    String(d.getDate()).padStart(2, '0'),
-  ].join('-');
-}
-
-function formatDayLabel(dateStr, t) {
-  if (!dateStr) return '—';
-  const [year, month, day] = dateStr.split('-').map(Number);
-  const formatted = new Date(year, month - 1, day).toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
-  if (dateStr === getTodayStr()) return `${t('history.today')} — ${formatted}`;
-  if (dateStr === getYesterdayStr()) return `${t('history.yesterday')} — ${formatted}`;
-  return formatted;
-}
-
-function formatTime(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
+import { formatDayLabel, formatLocalTime } from '../utils/dateTime';
 
 function fmt$(v) {
   if (v === null || v === undefined) return '$0.00';
@@ -212,7 +169,7 @@ function DayCard({ day, isExpanded, cached, user, t, onPress, onShiftPress }) {
         <View style={styles.dayHeader}>
           <View style={styles.dayInfo}>
             <Text style={styles.dayDate}>
-              {formatDayLabel(day.business_date, t)}
+              {formatDayLabel(day.business_date)}
             </Text>
             <Text style={styles.daySales}>{fmt$(day.total_sales)}</Text>
           </View>
@@ -310,7 +267,7 @@ function ShiftRow({ shift, user, t, onPress }) {
 
   const endLabel = isOpen
     ? t('history.statusActive')
-    : formatTime(shift.closed_at);
+    : formatLocalTime(shift.closed_at);
 
   return (
     <TouchableOpacity
@@ -323,7 +280,7 @@ function ShiftRow({ shift, user, t, onPress }) {
           {t('history.shiftNumber', { number: shift.shift_number })}
         </Text>
         <Text style={styles.shiftTime}>
-          {`${formatTime(shift.opened_at)} → ${endLabel}`}
+          {`${formatLocalTime(shift.opened_at)} → ${endLabel}`}
         </Text>
         <Text style={styles.shiftOpenedBy}>{openedBy}</Text>
       </View>

@@ -21,28 +21,7 @@ import CloseShiftModal from '../components/CloseShiftModal';
 import WholeBookSaleModal from '../components/WholeBookSaleModal';
 import ReturnBookModal from '../components/ReturnBookModal';
 import BooksDashboard from '../components/BooksDashboard';
-
-// ─── helpers ────────────────────────────────────────────────────────────────
-
-function formatBusinessDate(dateStr) {
-  if (!dateStr) return '';
-  const [year, month, day] = dateStr.split('-').map(Number);
-  return new Date(year, month - 1, day).toLocaleDateString('en-US', {
-    weekday: 'long',
-    month: 'long',
-    day: 'numeric',
-    year: 'numeric',
-  });
-}
-
-function formatTime(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleTimeString('en-US', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true,
-  });
-}
+import { formatBusinessDate, formatLocalTime } from '../utils/dateTime';
 
 // ─── screen ─────────────────────────────────────────────────────────────────
 
@@ -346,7 +325,7 @@ function ActiveShiftCard({ businessDay, shift, employeeName, summary, onClose, o
       {/* shift detail rows */}
       <View style={styles.divider} />
       <KV k={t('home.openedBy')} v={employeeName ?? '—'} />
-      <KV k={t('home.started')} v={formatTime(shift.opened_at)} />
+      <KV k={t('home.started')} v={formatLocalTime(shift.opened_at)} />
       <KV
         k={t('home.pendingScans')}
         v={pendingScans}

@@ -18,6 +18,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
 import { getShiftReport } from '../api/reports';
+import { formatLocalDateTime, formatBusinessDate } from '../utils/dateTime';
 
 export default function ReportDetailScreen({ route }) {
   const { t, i18n } = useTranslation();
@@ -189,7 +190,7 @@ export default function ReportDetailScreen({ route }) {
           <View style={styles.headerRow}>
             <View>
               {businessDay && (
-                <Text style={styles.dateText}>{businessDay.business_date}</Text>
+                <Text style={styles.dateText}>{formatBusinessDate(businessDay.business_date)}</Text>
               )}
               <Text style={styles.title}>
                 {t('report.subshiftTitle', { number: shift.shift_number })}
@@ -197,8 +198,8 @@ export default function ReportDetailScreen({ route }) {
             </View>
             <StatusBadge status={shift.shift_status} voided={shift.voided} t={t} />
           </View>
-          <KV k={t('report.started')} v={formatTime(shift.opened_at)} />
-          <KV k={t('report.ended')} v={formatTime(shift.closed_at)} />
+          <KV k={t('report.started')} v={formatLocalDateTime(shift.opened_at)} />
+          <KV k={t('report.ended')} v={formatLocalDateTime(shift.closed_at)} />
           <KV k={t('report.openedBy')} v={shift.opened_by?.username} />
           <KV k={t('report.closedBy')} v={shift.closed_by?.username} />
         </View>
@@ -357,11 +358,6 @@ function diffColor(status) {
   return '#222';
 }
 
-function formatTime(iso) {
-  if (!iso) return '—';
-  return new Date(iso).toLocaleString();
-}
-
 // ---------------------------------------------------------------------------
 // PDF HTML builder
 // ---------------------------------------------------------------------------
@@ -386,8 +382,7 @@ function buildReportHtml(report, t, isRTL) {
   }
 
   function fmtTime(iso) {
-    if (!iso) return '—';
-    return new Date(iso).toLocaleString();
+    return formatLocalDateTime(iso);
   }
 
   function badge(status, voided) {
@@ -417,7 +412,7 @@ function buildReportHtml(report, t, isRTL) {
   let body = '';
 
   // Shift header
-  const dateLabel = businessDay ? `<p class="date-label">${esc(businessDay.business_date)}</p>` : '';
+  const dateLabel = businessDay ? `<p class="date-label">${esc(formatBusinessDate(businessDay.business_date))}</p>` : '';
   body += `<div class="card"><div class="header-row"><div>${dateLabel}<h1>${esc(t('report.subshiftTitle', { number: shift.shift_number }))}</h1></div>${badge(shift.shift_status, shift.voided)}</div>${kvRow(t('report.started'), fmtTime(shift.opened_at))}${kvRow(t('report.ended'), fmtTime(shift.closed_at))}${kvRow(t('report.openedBy'), shift.opened_by?.username)}${kvRow(t('report.closedBy'), shift.closed_by?.username)}</div>`;
 
   // Totals
