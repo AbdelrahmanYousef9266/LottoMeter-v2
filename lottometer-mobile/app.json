@@ -1,25 +1,26 @@
 {
   "expo": {
-    "name": "lottometer-mobile",
+    "name": "LottoMeter",
     "slug": "lottometer-mobile",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/app-icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "image": "./assets/splash-screen.png",
+      "resizeMode": "cover",
+      "backgroundColor": "#061A33"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "icon": "./assets/app-icon.png"
     },
     "android": {
       "package": "com.lottometer.app",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/app-icon.png",
+        "backgroundColor": "#061A33"
       },
       "edgeToEdgeEnabled": true
     },
@@ -27,6 +28,7 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
+      "expo-splash-screen",
       "expo-secure-store",
       "expo-localization",
       "@react-native-community/datetimepicker",
