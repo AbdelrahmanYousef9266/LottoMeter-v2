@@ -2,6 +2,38 @@ import { Link } from 'react-router-dom'
 import Navbar from '../../components/public/Navbar'
 import Footer from '../../components/public/Footer'
 
+const heroBadgeStyles = `
+  @keyframes badge-shimmer {
+    0%   { background-position: -200% center; }
+    100% { background-position:  200% center; }
+  }
+  @keyframes dot-pulse {
+    0%, 100% { transform: scale(1);   opacity: 1; box-shadow: 0 0 0 0 rgba(0,119,204,0.6); }
+    50%       { transform: scale(1.3); opacity: 0.8; box-shadow: 0 0 0 5px rgba(0,119,204,0); }
+  }
+  .hero-badge {
+    background: linear-gradient(90deg, #EAF6FF 0%, #d6eeff 40%, #c5f0d6 60%, #EAF6FF 100%);
+    background-size: 200% auto;
+    animation: badge-shimmer 3s linear infinite;
+    border: 1px solid rgba(0,119,204,0.25);
+    border-radius: 999px;
+    padding: 7px 16px;
+    font-size: 13px;
+    font-weight: 700;
+    color: #0077CC;
+    margin-bottom: 28px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    letter-spacing: 0.01em;
+  }
+  .hero-badge-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: #0077CC; display: inline-block; flex-shrink: 0;
+    animation: dot-pulse 1.8s ease-in-out infinite;
+  }
+`
+
 const PROBLEMS = [
   { icon: '📋', title: 'Paper-Based Tracking', desc: 'Shift records are handwritten, lost, or inconsistent — making audits a nightmare.' },
   { icon: '💸', title: 'Cash Variance Goes Unnoticed', desc: 'Overs and shorts are only discovered at end of day, with no clear accountability trail.' },
@@ -33,24 +65,43 @@ export default function HomePage() {
       <Navbar />
 
       {/* Hero */}
+      <style>{heroBadgeStyles}</style>
       <section style={{ background: 'linear-gradient(135deg, #F0F7FF 0%, #F8FFF4 100%)', padding: '96px 24px 80px', textAlign: 'center' }}>
         <div style={{ maxWidth: 760, margin: '0 auto' }}>
-          <div style={{
-            display: 'inline-flex', alignItems: 'center', gap: 8,
-            background: '#EAF6FF', border: '1px solid #B3D9F5', borderRadius: 999,
-            padding: '6px 14px', fontSize: 13, fontWeight: 600, color: '#0077CC', marginBottom: 28,
-          }}>
-            <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#0077CC', display: 'inline-block' }} />
-            Built for lottery store owners
+          <div className="hero-badge">
+            <span className="hero-badge-dot" />
+            Built for store owners
           </div>
           <h1 style={{ fontSize: 'clamp(36px, 5vw, 58px)', fontWeight: 900, lineHeight: 1.12, margin: '0 0 24px', letterSpacing: '-0.02em' }}>
-            The fastest way to{' '}
+            The Fastest Way To{' '}
             <span style={{ background: 'linear-gradient(to right, #0077CC, #2DAE1A)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-              track lottery shifts
+              Track Lottery Shifts
             </span>
           </h1>
-          <p style={{ fontSize: 18, color: '#46627F', lineHeight: 1.7, margin: '0 0 40px', maxWidth: 600, marginLeft: 'auto', marginRight: 'auto' }}>
-            LottoMeter replaces paper-based shift records with a digital system your whole team can use from their phone. Scan books, track cash, and close days in seconds.
+          <p style={{ color: '#46627F', fontSize: '18px', lineHeight: '1.8', marginBottom: '32px' }}>
+            LottoMeter replaces paper-based shift records with a computerized
+            system that the whole team can use from their own phone.
+            <br /><br />
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+              <span style={{
+                width: '10px', height: '10px', borderRadius: '50%',
+                backgroundColor: '#2DAE1A',
+                boxShadow: '0 0 6px #2DAE1A',
+                display: 'inline-block',
+                flexShrink: 0,
+              }}></span>
+              <span>Employees can scan books, track cash and close their shift in seconds.</span>
+            </span>
+            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{
+                width: '10px', height: '10px', borderRadius: '50%',
+                backgroundColor: '#2DAE1A',
+                boxShadow: '0 0 6px #2DAE1A',
+                display: 'inline-block',
+                flexShrink: 0,
+              }}></span>
+              <span>Owners can keep track of cash-flow, view daily reports and monitor shifts.</span>
+            </span>
           </p>
           <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Link to="/apply" style={{
