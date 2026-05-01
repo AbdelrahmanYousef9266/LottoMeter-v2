@@ -59,10 +59,10 @@ const PLANS = [
 ]
 
 const FAQ = [
-  { q: 'Is there a free trial?', a: 'Yes — the Pro plan includes a 14-day free trial, no credit card required. Request a demo and we'll get you set up.' },
-  { q: 'Can I change plans later?', a: 'Absolutely. You can upgrade or downgrade your plan at any time from your account settings.' },
-  { q: 'What happens to my data if I cancel?', a: 'Your data is kept for 90 days after cancellation, giving you time to export everything you need.' },
-  { q: 'Do employees need their own subscription?', a: 'No. The subscription covers your store — all your employees use the mobile app under the same plan.' },
+  { q: "Is there a free trial?", a: "Yes — the Pro plan includes a 14-day free trial, no credit card required. Request a demo and we will get you set up." },
+  { q: "Can I change plans later?", a: "Absolutely. You can upgrade or downgrade your plan at any time from your account settings." },
+  { q: "What happens to my data if I cancel?", a: "Your data is kept for 90 days after cancellation, giving you time to export everything you need." },
+  { q: "Do employees need their own subscription?", a: "No. The subscription covers your store — all your employees use the mobile app under the same plan." },
 ]
 
 export default function PricingPage() {
