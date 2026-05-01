@@ -35,7 +35,23 @@ def create_app(config_name: str = None) -> Flask:
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
-    cors.init_app(app)
+
+    _dashboard_url = os.getenv("DASHBOARD_URL", "").strip()
+    _origins = [
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "exp://localhost:8081",
+        "http://localhost:19000",
+        "http://localhost:19006",
+    ]
+    if _dashboard_url:
+        _origins.append(_dashboard_url)
+
+    cors.init_app(
+        app,
+        resources={r"/api/*": {"origins": _origins}},
+        supports_credentials=True,
+    )
 
     # JWT blocklist callback — checks every request's token against blocklist
     @jwt.token_in_blocklist_loader
