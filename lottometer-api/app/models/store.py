@@ -36,5 +36,9 @@ class Store(db.Model):
         default=lambda: datetime.now(timezone.utc),
     )
 
+    subscription = db.relationship(
+        "Subscription", backref="store", uselist=False
+    )
+
     def __repr__(self) -> str:
         return f"<Store id={self.store_id} code={self.store_code}>"

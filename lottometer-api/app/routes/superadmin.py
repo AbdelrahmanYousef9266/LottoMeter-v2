@@ -150,6 +150,10 @@ def create_store():
         store_id=store.store_id,
     )
     db.session.add(admin)
+
+    from app.services.subscription_service import create_trial_subscription
+    create_trial_subscription(store.store_id)
+
     db.session.commit()
 
     return jsonify({"store": _serialize_store(store), "admin": _serialize_user(admin)}), 201

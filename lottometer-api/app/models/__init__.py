@@ -10,6 +10,7 @@ from app.models.employee_shift import EmployeeShift
 from app.models.shift_books import ShiftBooks
 from app.models.shift_extra_sales import ShiftExtraSales
 from app.models.contact_submission import ContactSubmission
+from app.models.subscription import Subscription
 
 
 __all__ = [
@@ -23,4 +24,5 @@ __all__ = [
     "ShiftBooks",
     "ShiftExtraSales",
     "ContactSubmission",
+    "Subscription",
 ]

@@ -3,6 +3,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuth } from '../context/AuthContext';
 import LoginScreen from '../screens/LoginScreen';
+import SubscriptionExpiredScreen from '../screens/SubscriptionExpiredScreen';
 import MainTabs from './MainTabs';
 import CameraScannerScreen from '../screens/CameraScannerScreen';
 import SlotDetailScreen from '../screens/SlotDetailScreen';
@@ -38,7 +39,10 @@ export default function RootNavigator() {
             />
           </>
         ) : (
-          <Stack.Screen name="Login" component={LoginScreen} />
+          <>
+            <Stack.Screen name="Login" component={LoginScreen} />
+            <Stack.Screen name="SubscriptionExpired" component={SubscriptionExpiredScreen} />
+          </>
         )}
       </Stack.Navigator>
     </NavigationContainer>

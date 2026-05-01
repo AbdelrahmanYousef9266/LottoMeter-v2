@@ -52,6 +52,10 @@ def setup_first_store(data: dict) -> dict:
         store_id=store.store_id,
     )
     db.session.add(user)
+
+    from app.services.subscription_service import create_trial_subscription
+    create_trial_subscription(store.store_id)
+
     db.session.commit()
 
     # Issue JWT
@@ -92,6 +96,14 @@ def login(data: dict) -> dict:
 
     if user is None or not _check_password(data["password"], user.password_hash):
         raise InvalidCredentials("Invalid credentials.")
+
+    if user.role != "superadmin":
+        from app.services.subscription_service import check_subscription_active
+        if not check_subscription_active(store.store_id):
+            raise BusinessRuleError(
+                "Your subscription has expired. Visit lottometer.com to renew.",
+                code="SUBSCRIPTION_EXPIRED",
+            )
 
     token = create_access_token(
         identity=str(user.user_id),

@@ -16,6 +16,8 @@ import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../context/AuthContext';
 import { openShift, listShifts, closeShift, getShiftSummary, getCurrentOpenShift } from '../api/shifts';
+import { getSubscription } from '../api/subscription';
+import TrialBannerComponent from './TrialBannerComponent';
 import { getTodaysBusinessDay, closeBusinessDay } from '../api/businessDays';
 import CloseShiftModal from '../components/CloseShiftModal';
 import WholeBookSaleModal from '../components/WholeBookSaleModal';
@@ -41,6 +43,8 @@ export default function HomeScreen() {
   const [activeShift, setActiveShift]   = useState(null);
   const [summary, setSummary]           = useState(null);
 
+  const [subscription, setSubscription]     = useState(null);
+
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [wbSaleOpen, setWbSaleOpen]         = useState(false);
   const [returnOpen, setReturnOpen]         = useState(false);
@@ -48,6 +52,11 @@ export default function HomeScreen() {
   // ── data loading ───────────────────────────────────────────────────────────
 
   const loadData = useCallback(async () => {
+    try {
+      const subRes = await getSubscription().catch(() => null);
+      if (subRes) setSubscription(subRes.data);
+    } catch { /* subscription status is non-critical */ }
+
     try {
       const bd = await getTodaysBusinessDay();
       setBusinessDay(bd);
@@ -216,6 +225,8 @@ export default function HomeScreen() {
         <Text style={styles.greeting}>
           {t('home.greeting', { name: user?.username || '' })}
         </Text>
+
+        <TrialBannerComponent subscription={subscription} />
 
         {isAdmin && <BooksDashboard />}
 

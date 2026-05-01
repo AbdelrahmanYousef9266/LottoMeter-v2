@@ -60,7 +60,28 @@ export default function Navbar() {
         </div>
 
         {/* CTA buttons */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }} className="pub-nav-cta">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }} className="pub-nav-cta">
+          {/* Portal links */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+            <Link
+              to="/login"
+              style={{ textDecoration: 'none', fontSize: 13, color: '#46627F', whiteSpace: 'nowrap', transition: 'color 0.15s' }}
+              onMouseEnter={(e) => e.currentTarget.style.color = '#0A1128'}
+              onMouseLeave={(e) => e.currentTarget.style.color = '#46627F'}
+            >
+              🏪 Store Portal
+            </Link>
+            <span style={{ color: '#D1DBE8', fontSize: 13 }}>|</span>
+            <Link
+              to="/staff-portal"
+              style={{ textDecoration: 'none', fontSize: 13, color: '#46627F', whiteSpace: 'nowrap', transition: 'color 0.15s' }}
+              onMouseEnter={(e) => e.currentTarget.style.color = '#0A1128'}
+              onMouseLeave={(e) => e.currentTarget.style.color = '#46627F'}
+            >
+              🔐 Staff Portal
+            </Link>
+          </div>
+
           <Link
             to="/get-started"
             style={{
@@ -75,24 +96,6 @@ export default function Navbar() {
             }}
           >
             Get Started
-          </Link>
-          <Link
-            to="/staff-portal"
-            style={{
-              textDecoration: 'none',
-              fontSize: 12,
-              fontWeight: 500,
-              color: '#46627F',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 4,
-              opacity: 0.75,
-              transition: 'opacity 0.15s',
-            }}
-            onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
-            onMouseLeave={(e) => e.currentTarget.style.opacity = '0.75'}
-          >
-            🔐 Staff Portal
           </Link>
         </div>
 

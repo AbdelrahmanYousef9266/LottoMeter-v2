@@ -11,6 +11,7 @@ import {
   Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
 import { login } from '../api/auth';
@@ -82,6 +83,7 @@ function RotatingTagline() {
 
 export default function LoginScreen() {
   const { t } = useTranslation();
+  const navigation = useNavigation();
   const { setUser, setStore } = useAuth();
 
   const [storeCode, setStoreCode] = useState('LM001');
@@ -110,7 +112,11 @@ export default function LoginScreen() {
       setUser(data.user);
       setStore(data.store || null);
     } catch (err) {
-      Alert.alert(t('auth.loginFailed'), err.message || t('auth.couldNotLogIn'));
+      if (err.code === 'SUBSCRIPTION_EXPIRED') {
+        navigation.navigate('SubscriptionExpired');
+      } else {
+        Alert.alert(t('auth.loginFailed'), err.message || t('auth.couldNotLogIn'));
+      }
     } finally {
       setBusy(false);
     }
