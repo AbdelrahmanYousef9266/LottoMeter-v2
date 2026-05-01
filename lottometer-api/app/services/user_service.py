@@ -13,14 +13,12 @@ from app.errors import (
 from app.services.auth_service import _hash_password
 
 
-def list_users(store_id: int) -> list:
-    """List all non-deleted users for a store, ordered by created_at."""
-    return (
-        User.query
-        .filter_by(store_id=store_id, deleted_at=None)
-        .order_by(User.created_at.asc())
-        .all()
-    )
+def list_users(store_id: int, include_deleted: bool = False) -> list:
+    """List users for a store, ordered by created_at."""
+    q = User.query.filter_by(store_id=store_id)
+    if not include_deleted:
+        q = q.filter_by(deleted_at=None)
+    return q.order_by(User.created_at.asc()).all()
 
 
 def get_user(store_id: int, user_id: int) -> User:

@@ -15,7 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../context/AuthContext';
-import { openShift, listShifts, closeShift, getShiftSummary } from '../api/shifts';
+import { openShift, listShifts, closeShift, getShiftSummary, getCurrentOpenShift } from '../api/shifts';
 import { getTodaysBusinessDay, closeBusinessDay } from '../api/businessDays';
 import CloseShiftModal from '../components/CloseShiftModal';
 import WholeBookSaleModal from '../components/WholeBookSaleModal';
@@ -52,10 +52,13 @@ export default function HomeScreen() {
       const bd = await getTodaysBusinessDay();
       setBusinessDay(bd);
 
-      const { shifts } = await listShifts({ business_day_id: bd.id });
-      setTodayShifts(shifts);
+      const [shiftsResult, open] = await Promise.all([
+        listShifts({ business_day_id: bd.id }),
+        getCurrentOpenShift(),
+      ]);
 
-      const open = shifts.find((s) => s.status === 'open' && !s.voided) || null;
+      const shifts = shiftsResult?.shifts ?? shiftsResult ?? [];
+      setTodayShifts(shifts);
       setActiveShift(open);
 
       if (open) {
@@ -181,11 +184,15 @@ export default function HomeScreen() {
     );
   }
 
+  const hasActiveShift = activeShift !== null &&
+                         activeShift !== undefined &&
+                         activeShift.status === 'open';
+
   const closedShiftsToday = todayShifts.filter((s) => s.status === 'closed' && !s.voided);
   const canCloseBizDay = (
     isAdmin &&
     businessDay?.status === 'open' &&
-    !activeShift &&
+    !hasActiveShift &&
     closedShiftsToday.length > 0
   );
 
@@ -212,7 +219,16 @@ export default function HomeScreen() {
 
         {isAdmin && <BooksDashboard />}
 
-        {activeShift ? (
+        {!hasActiveShift && (
+          <NoShiftCard
+            businessDay={businessDay}
+            onOpen={handleOpenShift}
+            busy={busy}
+            t={t}
+          />
+        )}
+
+        {hasActiveShift && (
           <ActiveShiftCard
             businessDay={businessDay}
             shift={activeShift}
@@ -221,13 +237,6 @@ export default function HomeScreen() {
             onClose={() => setCloseModalOpen(true)}
             onSellWholeBook={() => setWbSaleOpen(true)}
             onReturnBook={() => setReturnOpen(true)}
-            t={t}
-          />
-        ) : (
-          <NoShiftCard
-            businessDay={businessDay}
-            onOpen={handleOpenShift}
-            busy={busy}
             t={t}
           />
         )}

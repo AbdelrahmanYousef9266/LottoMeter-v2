@@ -1,8 +1,8 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useEffect } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { listReports, getShiftReport } from '../api/reports'
 import { listBusinessDays } from '../api/businessDays'
-import useApi from '../hooks/useApi'
+import { listUsers } from '../api/users'
 import Badge from '../components/UI/Badge'
 import Modal from '../components/UI/Modal'
 import Button from '../components/UI/Button'
@@ -28,10 +28,40 @@ export default function Reports() {
   const [activeFilters, setActiveFilters] = useState(
     initialShiftId ? { shift_id: initialShiftId } : {}
   )
+  const [shifts, setShifts] = useState([])
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
   const [reportShift, setReportShift] = useState(null)
   const [reportData, setReportData] = useState(null)
   const [reportLoading, setReportLoading] = useState(false)
   const [reportError, setReportError] = useState('')
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    Promise.all([
+      listUsers({ include_deleted: true }),
+      listReports({ ...activeFilters }),
+    ]).then(([usersRes, shiftsRes]) => {
+      if (cancelled) return
+      setUsers(Array.isArray(usersRes.data) ? usersRes.data : usersRes.data?.users || [])
+      const d = shiftsRes.data
+      setShifts(Array.isArray(d) ? d : d?.shifts || d?.data || [])
+    }).catch(() => {}).finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [activeFilters])
+
+  const getEmployeeName = (employeeId) => {
+    const user = users.find((u) => u.user_id === employeeId)
+    return user ? user.username : '—'
+  }
+
+  const getSales = (shift) => {
+    if (shift.tickets_total !== null && shift.tickets_total !== undefined) {
+      return formatCurrency(shift.tickets_total)
+    }
+    return '—'
+  }
 
   // Auto-open report if shift_id in query params
   useEffect(() => {
@@ -40,13 +70,6 @@ export default function Reports() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialShiftId])
-
-  const apiFn = useCallback(
-    () => listReports({ ...activeFilters }),
-    [activeFilters]
-  )
-  const { data, loading } = useApi(apiFn)
-  const shifts = Array.isArray(data) ? data : data?.shifts || data?.data || []
 
   // Group shifts by business day date
   const grouped = shifts.reduce((acc, shift) => {
@@ -79,9 +102,12 @@ export default function Reports() {
     setReportLoading(true)
     try {
       const id = shift.id || shift._id
+      console.log('REPORT URL: /api/reports/shift/' + id)
       const res = await getShiftReport(id)
+      console.log('REPORT DATA:', res.data)
       setReportData(res.data)
     } catch (err) {
+      console.log('REPORT ERROR:', err?.response?.status, err?.response?.data)
       setReportError(err?.response?.data?.message || 'Failed to load report.')
     } finally {
       setReportLoading(false)
@@ -210,20 +236,20 @@ export default function Reports() {
                     <div style={{ flex: 1, minWidth: 120 }}>
                       <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Employee</div>
                       <div style={{ fontWeight: 600 }}>
-                        {shift.employee?.username || shift.employee_name || '—'}
+                        {getEmployeeName(shift.employee_id)}
                       </div>
                     </div>
                     <div style={{ minWidth: 140 }}>
                       <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Time</div>
                       <div style={{ fontSize: 13 }}>
-                        {formatDateTime(shift.started_at)}
-                        {shift.ended_at && ` — ${formatDateTime(shift.ended_at)}`}
+                        {formatDateTime(shift.opened_at)}
+                        {shift.closed_at && ` — ${formatDateTime(shift.closed_at)}`}
                       </div>
                     </div>
                     <div style={{ minWidth: 80 }}>
                       <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Duration</div>
                       <div style={{ fontSize: 13 }}>
-                        {formatDuration(shift.started_at, shift.ended_at)}
+                        {formatDuration(shift.opened_at, shift.closed_at)}
                       </div>
                     </div>
                     <div>
@@ -231,7 +257,7 @@ export default function Reports() {
                     </div>
                     <div style={{ minWidth: 90, textAlign: 'right' }}>
                       <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Sales</div>
-                      <div style={{ fontWeight: 700 }}>{formatCurrency(shift.total_sales)}</div>
+                      <div style={{ fontWeight: 700 }}>{getSales(shift)}</div>
                     </div>
                     <div style={{ minWidth: 90, textAlign: 'right' }}>
                       <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Variance</div>
@@ -305,12 +331,12 @@ export default function Reports() {
                 }}
               >
                 {[
-                  { label: 'Total Sales', value: formatCurrency(reportData.total_sales) },
-                  { label: 'Expected', value: formatCurrency(reportData.expected_cash) },
-                  { label: 'Actual Cash', value: formatCurrency(reportData.actual_cash) },
-                  { label: 'Variance', value: formatVariance(reportData.variance ?? 0).text },
-                  { label: 'Whole Books', value: reportData.whole_book_count ?? '—' },
-                  { label: 'Returned', value: reportData.returned_count ?? '—' },
+                  { label: 'Total Sales', value: formatCurrency(reportData.shift?.gross_sales) },
+                  { label: 'Expected', value: formatCurrency(reportData.shift?.expected_cash) },
+                  { label: 'Cash in Hand', value: formatCurrency(reportData.shift?.cash_in_hand) },
+                  { label: 'Difference', value: formatVariance(reportData.shift?.difference ?? 0).text },
+                  { label: 'Whole Books', value: reportData.shift?.whole_book_sales?.length ?? '—' },
+                  { label: 'Returned', value: reportData.shift?.returned_books?.length ?? '—' },
                 ].map((item) => (
                   <div key={item.label}>
                     <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>{item.label}</div>
@@ -321,13 +347,52 @@ export default function Reports() {
             </div>
 
             {/* Books List */}
-            {reportData.books?.length > 0 && (
+            {reportData.shift?.books?.length > 0 && (
               <div>
                 <h4 style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  Books ({reportData.books.length})
+                  Books ({reportData.shift.books.length})
                 </h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {reportData.books.map((book, i) => (
+                  {reportData.shift.books.map((book, i) => {
+                    const status = book.returned_at ? 'Returned' : book.is_sold ? 'Sold' : book.is_active ? 'Active' : 'Inactive'
+                    const variant = book.returned_at ? 'amber' : book.is_sold ? 'gray' : book.is_active ? 'green' : 'red'
+                    return (
+                      <div
+                        key={i}
+                        style={{
+                          display: 'flex',
+                          justifyContent: 'space-between',
+                          alignItems: 'center',
+                          padding: '8px 12px',
+                          background: '#F8FAFF',
+                          borderRadius: 6,
+                          fontSize: 13,
+                        }}
+                      >
+                        <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                          {book.static_code || book.barcode || `Book ${i + 1}`}
+                        </span>
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>
+                            {book.tickets_sold ?? '—'} tickets
+                          </span>
+                          <Badge variant={variant}>{status}</Badge>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* Whole Book Sales */}
+            {reportData.shift?.whole_book_sales?.length > 0 && (
+              <div>
+                <h4 style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Whole Book Sales ({reportData.shift.whole_book_sales.length})
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {reportData.shift.whole_book_sales.map((book, i) => (
                     <div
                       key={i}
                       style={{
@@ -343,14 +408,37 @@ export default function Reports() {
                       <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
                         {book.static_code || book.barcode || `Book ${i + 1}`}
                       </span>
-                      <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <span style={{ color: 'var(--text-secondary)' }}>
-                          {book.tickets_sold ?? '—'} tickets
-                        </span>
-                        <Badge variant={book.status === 'sold' ? 'gray' : book.status === 'returned' ? 'amber' : 'green'}>
-                          {book.status || '—'}
-                        </Badge>
-                      </div>
+                      <Badge variant="gray">Whole Sale</Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Returned Books */}
+            {reportData.shift?.returned_books?.length > 0 && (
+              <div>
+                <h4 style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Returned Books ({reportData.shift.returned_books.length})
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  {reportData.shift.returned_books.map((book, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        display: 'flex',
+                        justifyContent: 'space-between',
+                        alignItems: 'center',
+                        padding: '8px 12px',
+                        background: '#F8FAFF',
+                        borderRadius: 6,
+                        fontSize: 13,
+                      }}
+                    >
+                      <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                        {book.static_code || book.barcode || `Book ${i + 1}`}
+                      </span>
+                      <Badge variant="amber">Returned</Badge>
                     </div>
                   ))}
                 </div>
@@ -358,27 +446,33 @@ export default function Reports() {
             )}
 
             {/* Ticket Breakdown */}
-            {reportData.ticket_breakdown && (
+            {reportData.shift?.ticket_breakdown?.length > 0 && (
               <div>
                 <h4 style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                   Ticket Breakdown
                 </h4>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: '1fr 1fr',
-                    gap: 8,
-                    background: '#F8FAFF',
-                    borderRadius: 8,
-                    padding: 14,
-                  }}
-                >
-                  {Object.entries(reportData.ticket_breakdown).map(([key, val]) => (
-                    <div key={key}>
-                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>{key}</div>
-                      <div style={{ fontWeight: 700 }}>{val}</div>
-                    </div>
-                  ))}
+                <div style={{ background: '#F8FAFF', borderRadius: 8, overflow: 'hidden' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        {['Source', 'Ticket Price', 'Tickets Sold', 'Subtotal'].map((h) => (
+                          <th key={h} style={{ padding: '8px 12px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportData.shift.ticket_breakdown.map((item, i) => (
+                        <tr key={i} style={{ borderBottom: i < reportData.shift.ticket_breakdown.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                          <td style={{ padding: '8px 12px', textTransform: 'capitalize', fontWeight: 600 }}>{item.source}</td>
+                          <td style={{ padding: '8px 12px' }}>{formatCurrency(item.ticket_price)}</td>
+                          <td style={{ padding: '8px 12px' }}>{item.tickets_sold}</td>
+                          <td style={{ padding: '8px 12px', fontWeight: 700 }}>{formatCurrency(item.subtotal)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
             )}

@@ -1,6 +1,7 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { listBusinessDays, closeBusinessDay, getBusinessDay } from '../api/businessDays'
 import { listShifts } from '../api/shifts'
+import { listUsers } from '../api/users'
 import useApi from '../hooks/useApi'
 import Badge from '../components/UI/Badge'
 import Table from '../components/UI/Table'
@@ -31,10 +32,24 @@ export default function BusinessDays() {
   const [activeFilters, setActiveFilters] = useState({})
   const [expandedRows, setExpandedRows] = useState({})
   const [shiftsCache, setShiftsCache] = useState({})
-  const [loadingShifts, setLoadingShifts] = useState({})
+  const [users, setUsers] = useState([])
   const [closeTarget, setCloseTarget] = useState(null)
   const [closing, setClosing] = useState(false)
   const [closeError, setCloseError] = useState('')
+
+  const getEmployeeName = (employeeId) => {
+    const user = users.find((u) => u.user_id === employeeId)
+    return user ? user.username : '—'
+  }
+
+  const getDaySales = (day, dayShifts) => {
+    if (day.status === 'closed' && day.total_sales !== null && day.total_sales !== undefined) {
+      return parseFloat(day.total_sales)
+    }
+    return dayShifts
+      .filter((s) => !s.voided)
+      .reduce((sum, s) => sum + parseFloat(s.tickets_total || 0), 0)
+  }
 
   const apiFn = useCallback(
     () => listBusinessDays(activeFilters),
@@ -43,6 +58,27 @@ export default function BusinessDays() {
   const { data, loading, error, refetch } = useApi(apiFn)
 
   const rows = Array.isArray(data) ? data : data?.business_days || data?.data || []
+
+  // Preload users + all shifts whenever the business days list changes
+  useEffect(() => {
+    if (!rows.length) return
+    let cancelled = false
+    const shiftPromises = rows.map((row) =>
+      listShifts({ business_day_id: row.id })
+        .then((res) => ({ id: row.id, shifts: res.data?.shifts || [] }))
+        .catch(() => ({ id: row.id, shifts: [] }))
+    )
+    Promise.all([listUsers({ include_deleted: true }), ...shiftPromises])
+      .then(([usersRes, ...shiftResults]) => {
+        if (cancelled) return
+        setUsers(Array.isArray(usersRes.data) ? usersRes.data : usersRes.data?.users || [])
+        const cache = {}
+        shiftResults.forEach(({ id, shifts }) => { cache[id] = shifts })
+        setShiftsCache(cache)
+      })
+      .catch(() => {})
+    return () => { cancelled = true }
+  }, [data]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleFilter = () => {
     const params = {}
@@ -56,24 +92,9 @@ export default function BusinessDays() {
     setActiveFilters({})
   }
 
-  const toggleRow = async (row) => {
+  const toggleRow = (row) => {
     const id = row.id || row._id
-    if (expandedRows[id]) {
-      setExpandedRows((prev) => ({ ...prev, [id]: false }))
-      return
-    }
-    setExpandedRows((prev) => ({ ...prev, [id]: true }))
-    if (shiftsCache[id]) return
-    setLoadingShifts((prev) => ({ ...prev, [id]: true }))
-    try {
-      const res = await listShifts({ business_day_id: id })
-      const shifts = Array.isArray(res.data) ? res.data : res.data?.shifts || res.data?.data || []
-      setShiftsCache((prev) => ({ ...prev, [id]: shifts }))
-    } catch {
-      setShiftsCache((prev) => ({ ...prev, [id]: [] }))
-    } finally {
-      setLoadingShifts((prev) => ({ ...prev, [id]: false }))
-    }
+    setExpandedRows((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
   const handleClose = async () => {
@@ -193,7 +214,7 @@ export default function BusinessDays() {
                         <Badge variant={getStatusVariant(row.status)}>{row.status || '—'}</Badge>
                       </td>
                       <td>{row.shifts_count ?? '—'}</td>
-                      <td style={{ fontWeight: 600 }}>{formatCurrency(row.total_sales)}</td>
+                      <td style={{ fontWeight: 600 }}>{formatCurrency(getDaySales(row, shiftsCache[id] || []))}</td>
                       <td>
                         <span
                           style={{
@@ -226,9 +247,7 @@ export default function BusinessDays() {
                           <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 10, color: 'var(--text-secondary)' }}>
                             Shifts for this day
                           </div>
-                          {loadingShifts[id] ? (
-                            <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>Loading shifts...</div>
-                          ) : (shiftsCache[id] || []).length === 0 ? (
+                          {(shiftsCache[id] || []).length === 0 ? (
                             <div style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No shifts found.</div>
                           ) : (
                             <table className="table" style={{ background: 'white', borderRadius: 8 }}>
@@ -244,11 +263,11 @@ export default function BusinessDays() {
                                 {(shiftsCache[id] || []).map((s) => (
                                   <tr key={s.id || s._id}>
                                     <td>#{s.shift_number || s.id}</td>
-                                    <td>{s.employee?.username || s.employee_name || '—'}</td>
+                                    <td>{getEmployeeName(s.employee_id)}</td>
                                     <td>
                                       <Badge variant={getShiftStatusVariant(s.status)}>{s.status || '—'}</Badge>
                                     </td>
-                                    <td>{formatCurrency(s.total_sales)}</td>
+                                    <td>{formatCurrency(s.tickets_total)}</td>
                                   </tr>
                                 ))}
                               </tbody>

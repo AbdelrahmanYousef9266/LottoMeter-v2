@@ -50,10 +50,11 @@ export default function Slots() {
     setDeleting(true)
     setDeleteError('')
     try {
-      await deleteSlot(deleteTarget.id || deleteTarget._id)
+      await deleteSlot(deleteTarget.slot_id)
       setDeleteTarget(null)
       refetch()
     } catch (err) {
+      console.log('DELETE ERROR:', err?.response?.status, err?.response?.data)
       setDeleteError(err?.response?.data?.message || 'Failed to delete slot.')
     } finally {
       setDeleting(false)

@@ -1,7 +1,8 @@
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { listShifts } from '../api/shifts'
 import { listBusinessDays } from '../api/businessDays'
+import { listUsers } from '../api/users'
 import useApi from '../hooks/useApi'
 import Badge from '../components/UI/Badge'
 import Table from '../components/UI/Table'
@@ -23,6 +24,40 @@ export default function Shifts() {
   const navigate = useNavigate()
   const [filters, setFilters] = useState({ business_day_id: '', status: '' })
   const [activeFilters, setActiveFilters] = useState({})
+  const [shifts, setShifts] = useState([])
+  const [users, setUsers] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    Promise.all([
+      listUsers({ include_deleted: true }),
+      listShifts(activeFilters),
+    ]).then(([usersRes, shiftsRes]) => {
+      if (cancelled) return
+      setUsers(Array.isArray(usersRes.data) ? usersRes.data : usersRes.data?.users || [])
+      const d = shiftsRes.data
+      setShifts(Array.isArray(d) ? d : d?.shifts || d?.data || [])
+    }).catch((err) => {
+      if (cancelled) return
+      setError(err?.response?.data?.message || err.message || 'Failed to load shifts.')
+    }).finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [activeFilters])
+
+  const getEmployeeName = (employeeId) => {
+    const user = users.find((u) => u.user_id === employeeId)
+    return user ? user.username : '—'
+  }
+
+  const getSales = (shift) => {
+    if (shift.tickets_total !== null && shift.tickets_total !== undefined) {
+      return formatCurrency(shift.tickets_total)
+    }
+    return '—'
+  }
 
   const bizDayApiFn = useCallback(() => listBusinessDays({ limit: 100 }), [])
   const { data: bizDayData } = useApi(bizDayApiFn)
@@ -30,12 +65,10 @@ export default function Shifts() {
     ? bizDayData
     : bizDayData?.business_days || bizDayData?.data || []
 
-  const apiFn = useCallback(
-    () => listShifts(activeFilters),
-    [activeFilters]
-  )
-  const { data, loading, error } = useApi(apiFn)
-  const shifts = Array.isArray(data) ? data : data?.shifts || data?.data || []
+  const getBusinessDate = (businessDayId) => {
+    const day = businessDays.find((d) => d.id === businessDayId)
+    return day ? (day.business_date || day.date || '—') : '—'
+  }
 
   const handleFilter = () => {
     const params = {}
@@ -58,27 +91,27 @@ export default function Shifts() {
     {
       key: 'employee',
       label: 'Employee',
-      render: (v, row) => row.employee?.username || row.employee_name || '—',
+      render: (_, row) => getEmployeeName(row.employee_id),
     },
     {
-      key: 'business_day',
+      key: 'business_day_id',
       label: 'Business Day',
-      render: (v, row) => row.business_day?.date || row.business_date || '—',
+      render: (v) => getBusinessDate(v),
     },
     {
-      key: 'started_at',
+      key: 'opened_at',
       label: 'Started',
       render: (v) => formatDateTime(v),
     },
     {
-      key: 'ended_at',
+      key: 'closed_at',
       label: 'Ended',
       render: (v) => v ? formatDateTime(v) : <Badge variant="green">Active</Badge>,
     },
     {
       key: 'duration',
       label: 'Duration',
-      render: (_, row) => formatDuration(row.started_at, row.ended_at),
+      render: (_, row) => formatDuration(row.opened_at, row.closed_at),
     },
     {
       key: 'status',
@@ -86,12 +119,12 @@ export default function Shifts() {
       render: (v) => <Badge variant={getStatusVariant(v)}>{v || '—'}</Badge>,
     },
     {
-      key: 'total_sales',
+      key: 'tickets_total',
       label: 'Sales',
-      render: (v) => <span style={{ fontWeight: 600 }}>{formatCurrency(v)}</span>,
+      render: (_, row) => <span style={{ fontWeight: 600 }}>{getSales(row)}</span>,
     },
     {
-      key: 'total_variance',
+      key: 'difference',
       label: 'Variance',
       render: (v) => {
         const info = formatVariance(v ?? 0)

@@ -6,11 +6,19 @@ import Table from '../components/UI/Table'
 import { formatDate } from '../utils/dateTime'
 import { formatCurrency } from '../utils/currency'
 
+function getBookStatus(book) {
+  if (book.returned_at) return 'Returned'
+  if (book.is_sold) return 'Sold'
+  if (book.is_active) return 'Active'
+  return 'Inactive'
+}
+
 function getStatusVariant(status) {
   switch (status) {
-    case 'active': return 'green'
-    case 'sold': return 'gray'
-    case 'returned': return 'amber'
+    case 'Active': return 'green'
+    case 'Sold': return 'gray'
+    case 'Returned': return 'amber'
+    case 'Inactive': return 'red'
     default: return 'gray'
   }
 }
@@ -69,7 +77,10 @@ export default function Books() {
     {
       key: 'status',
       label: 'Status',
-      render: (v) => <Badge variant={getStatusVariant(v)}>{v || '—'}</Badge>,
+      render: (_, row) => {
+        const status = getBookStatus(row)
+        return <Badge variant={getStatusVariant(status)}>{status}</Badge>
+      },
     },
     {
       key: 'created_at',

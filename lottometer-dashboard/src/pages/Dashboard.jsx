@@ -95,7 +95,21 @@ export default function Dashboard() {
     return 'Good evening'
   }
 
-  const variance = todaysBizDay?.total_variance ?? 0
+  const todayShifts = todaysBizDay
+    ? recentShifts.filter((s) => s.business_day_id === todaysBizDay.id)
+    : []
+
+  const totalOver = todayShifts
+    .filter((s) => s.shift_status === 'over')
+    .reduce((sum, s) => sum + Math.abs(parseFloat(s.difference || 0)), 0)
+
+  const totalShort = todayShifts
+    .filter((s) => s.shift_status === 'short')
+    .reduce((sum, s) => sum + Math.abs(parseFloat(s.difference || 0)), 0)
+
+  const totalSales = todayShifts.reduce((sum, s) => sum + parseFloat(s.gross_sales || 0), 0)
+
+  const variance = totalOver - totalShort
   const varianceInfo = formatVariance(variance)
 
   return (
@@ -129,7 +143,7 @@ export default function Dashboard() {
         <StatCard
           icon="📚"
           label="Active Books"
-          value={loading ? '...' : (booksSummary?.active_count ?? '—')}
+          value={loading ? '...' : (booksSummary?.active ?? '—')}
         />
         <StatCard
           icon="🔄"
@@ -139,28 +153,28 @@ export default function Dashboard() {
         <StatCard
           icon="💰"
           label="Total Sales"
-          value={loading ? '...' : formatCurrency(todaysBizDay?.total_sales ?? 0)}
+          value={loading ? '...' : formatCurrency(totalSales)}
         />
         <StatCard
           icon={varianceInfo.isPositive ? '📈' : varianceInfo.isNegative ? '📉' : '➖'}
-          label="Variance"
+          label="Today's Variance"
           value={
-            loading ? (
-              '...'
-            ) : (
-              <span
-                style={{
-                  color: varianceInfo.isPositive
-                    ? 'var(--green)'
-                    : varianceInfo.isNegative
-                    ? 'var(--red)'
-                    : 'var(--text-primary)',
-                  fontSize: 24,
-                  fontWeight: 700,
-                }}
-              >
-                {varianceInfo.text}
-              </span>
+            loading ? '...' : (
+              <div>
+                <span
+                  style={{
+                    color: variance >= 0 ? '#2DAE1A' : '#EF4444',
+                    fontSize: 22,
+                    fontWeight: 700,
+                    display: 'block',
+                  }}
+                >
+                  {varianceInfo.text}
+                </span>
+                <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4, display: 'block' }}>
+                  Over: {formatCurrency(totalOver)} | Short: {formatCurrency(totalShort)}
+                </span>
+              </div>
             )
           }
         />

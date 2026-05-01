@@ -21,9 +21,10 @@ user_bp = Blueprint("users", __name__, url_prefix="/api/users")
 @jwt_required()
 @admin_required
 def list_users_route():
-    """GET /api/users — list all non-deleted users in the caller's store."""
+    """GET /api/users — list users; pass ?include_deleted=true to include soft-deleted."""
     store_id = current_store_id()
-    users = user_service.list_users(store_id)
+    include_deleted = request.args.get('include_deleted', 'false').lower() == 'true'
+    users = user_service.list_users(store_id, include_deleted=include_deleted)
     return jsonify({"users": [serialize_user(u) for u in users]}), 200
 
 

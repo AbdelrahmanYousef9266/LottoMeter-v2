@@ -1,10 +1,30 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+
+const TAGLINES = [
+  'Track lottery shifts in seconds',
+  'Scan books faster with zero errors',
+  'Simplify daily store operations',
+]
 
 export default function Login() {
   const { login } = useAuth()
   const navigate = useNavigate()
+
+  const [taglineIndex, setTaglineIndex] = useState(0)
+  const [taglineVisible, setTaglineVisible] = useState(true)
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setTaglineVisible(false)
+      setTimeout(() => {
+        setTaglineIndex((i) => (i + 1) % TAGLINES.length)
+        setTaglineVisible(true)
+      }, 300)
+    }, 2800)
+    return () => clearInterval(interval)
+  }, [])
 
   const [form, setForm] = useState({ store_code: '', username: '', password: '' })
   const [error, setError] = useState('')
@@ -57,24 +77,84 @@ export default function Login() {
         }}
       >
         {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
-          <div style={{ fontSize: 48, marginBottom: 8 }}>🎰</div>
+        <div style={{ textAlign: 'center', marginBottom: 36 }}>
+          {/* Icon */}
+          <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 16 }}>
+            <img
+              src="/app-icon.png"
+              alt="LottoMeter"
+              style={{
+                width: 88,
+                height: 88,
+                borderRadius: 22,
+                boxShadow: '0 8px 24px rgba(0, 119, 204, 0.18)',
+              }}
+            />
+          </div>
+
+          {/* Title */}
           <h1
             style={{
-              fontSize: 28,
+              fontSize: 30,
               fontWeight: 800,
               background: 'var(--gradient)',
               WebkitBackgroundClip: 'text',
               WebkitTextFillColor: 'transparent',
               backgroundClip: 'text',
               letterSpacing: '-0.5px',
+              margin: 0,
             }}
           >
             LottoMeter
           </h1>
-          <p style={{ fontSize: 14, color: 'var(--text-secondary)', marginTop: 4 }}>
-            Digital Shift Tracking
-          </p>
+
+          {/* Subtitle row with decorative lines */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, margin: '8px 0 14px' }}>
+            <div style={{ height: 1, width: 28, background: 'var(--border)' }} />
+            <span style={{ fontSize: 10, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.12em', fontWeight: 700 }}>
+              Digital Shift Tracking
+            </span>
+            <div style={{ height: 1, width: 28, background: 'var(--border)' }} />
+          </div>
+
+          {/* Animated tagline pill */}
+          <div style={{ height: 32, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: 'linear-gradient(135deg, rgba(0,119,204,0.08), rgba(45,174,26,0.08))',
+                border: '1px solid rgba(0,119,204,0.15)',
+                borderRadius: 999,
+                padding: '5px 14px',
+                transition: 'opacity 300ms ease, transform 300ms ease',
+                opacity: taglineVisible ? 1 : 0,
+                transform: taglineVisible ? 'translateY(0) scale(1)' : 'translateY(4px) scale(0.97)',
+              }}
+            >
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--gradient)', flexShrink: 0 }} />
+              <span style={{ fontSize: 12.5, fontWeight: 600, color: '#0077CC', whiteSpace: 'nowrap' }}>
+                {TAGLINES[taglineIndex]}
+              </span>
+            </div>
+          </div>
+
+          {/* Indicator dots */}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 5, marginTop: 10 }}>
+            {TAGLINES.map((_, i) => (
+              <div
+                key={i}
+                style={{
+                  width: i === taglineIndex ? 16 : 5,
+                  height: 5,
+                  borderRadius: 999,
+                  background: i === taglineIndex ? 'var(--blue)' : 'var(--border)',
+                  transition: 'width 300ms ease, background 300ms ease',
+                }}
+              />
+            ))}
+          </div>
         </div>
 
         {/* Form */}
