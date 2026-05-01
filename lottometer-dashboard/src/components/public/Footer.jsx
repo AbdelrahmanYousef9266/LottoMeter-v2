@@ -67,7 +67,7 @@ export default function Footer() {
           <p style={{ margin: 0, fontSize: 13, color: '#8EA8C3' }}>
             © {year} LottoMeter. All rights reserved.
           </p>
-          <div style={{ display: 'flex', gap: 20 }}>
+          <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
             {['Privacy Policy', 'Terms of Service'].map((t) => (
               <a key={t} href="#" style={{ fontSize: 13, color: '#8EA8C3', textDecoration: 'none' }}
                 onMouseEnter={(e) => e.target.style.color = '#fff'}
@@ -76,6 +76,14 @@ export default function Footer() {
                 {t}
               </a>
             ))}
+            <Link
+              to="/staff-portal"
+              style={{ fontSize: 12, color: '#4A5568', textDecoration: 'none', opacity: 0.6, transition: 'opacity 0.15s' }}
+              onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+              onMouseLeave={(e) => e.currentTarget.style.opacity = '0.6'}
+            >
+              🔐 Staff Portal
+            </Link>
           </div>
         </div>
       </div>

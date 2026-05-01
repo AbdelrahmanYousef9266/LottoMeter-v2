@@ -62,21 +62,6 @@ export default function Navbar() {
         {/* CTA buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }} className="pub-nav-cta">
           <Link
-            to="/login"
-            style={{
-              textDecoration: 'none',
-              fontSize: 14,
-              fontWeight: 600,
-              color: '#0A1128',
-              padding: '8px 16px',
-              borderRadius: 8,
-              border: '1.5px solid #E2EAF4',
-              transition: 'border-color 0.15s',
-            }}
-          >
-            Login
-          </Link>
-          <Link
             to="/apply"
             style={{
               textDecoration: 'none',
@@ -90,6 +75,24 @@ export default function Navbar() {
             }}
           >
             Request Demo
+          </Link>
+          <Link
+            to="/staff-portal"
+            style={{
+              textDecoration: 'none',
+              fontSize: 12,
+              fontWeight: 500,
+              color: '#46627F',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 4,
+              opacity: 0.75,
+              transition: 'opacity 0.15s',
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.opacity = '1'}
+            onMouseLeave={(e) => e.currentTarget.style.opacity = '0.75'}
+          >
+            🔐 Staff Portal
           </Link>
         </div>
 

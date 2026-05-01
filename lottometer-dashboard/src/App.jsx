@@ -19,6 +19,7 @@ import ApplyPage from './pages/public/ApplyPage'
 import PricingPage from './pages/public/PricingPage'
 
 import SuperAdminLayout from './pages/superadmin/SuperAdminLayout'
+import SuperAdminLogin from './pages/superadmin/SuperAdminLogin'
 import SuperDashboard from './pages/superadmin/SuperDashboard'
 import SuperStores from './pages/superadmin/SuperStores'
 import SuperSubmissions from './pages/superadmin/SuperSubmissions'
@@ -59,6 +60,9 @@ function AppRoutes() {
 
       {/* Login */}
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+
+      {/* Staff portal login */}
+      <Route path="/staff-portal" element={<SuperAdminLogin />} />
 
       {/* Superadmin panel */}
       <Route
