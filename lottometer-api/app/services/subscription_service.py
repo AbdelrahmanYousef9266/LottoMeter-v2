@@ -19,6 +19,13 @@ def create_trial_subscription(store_id: int) -> Subscription:
     return sub
 
 
+def _aware(dt: datetime) -> datetime:
+    """Return dt as a UTC-aware datetime, adding tzinfo if the DB gave us a naive value."""
+    if dt is not None and dt.tzinfo is None:
+        return dt.replace(tzinfo=timezone.utc)
+    return dt
+
+
 def check_subscription_active(store_id: int) -> bool:
     """Returns True if the store can access the app. Called on every login."""
     sub = Subscription.query.filter_by(store_id=store_id).first()
@@ -26,14 +33,16 @@ def check_subscription_active(store_id: int) -> bool:
     if not sub:
         return False
 
+    now = datetime.now(timezone.utc)
+
     if sub.status == "active":
         if sub.current_period_end:
-            return datetime.now(timezone.utc) < sub.current_period_end
+            return now < _aware(sub.current_period_end)
         return True
 
     if sub.status == "trial":
         if sub.trial_ends_at:
-            if datetime.now(timezone.utc) > sub.trial_ends_at:
+            if now > _aware(sub.trial_ends_at):
                 sub.status = "expired"
                 db.session.commit()
                 return False
@@ -59,9 +68,9 @@ def get_subscription_status(store_id: int) -> dict:
 
     days_remaining = None
     if sub.status == "trial" and sub.trial_ends_at:
-        days_remaining = max(0, (sub.trial_ends_at - now).days)
+        days_remaining = max(0, (_aware(sub.trial_ends_at) - now).days)
     elif sub.status == "active" and sub.current_period_end:
-        days_remaining = max(0, (sub.current_period_end - now).days)
+        days_remaining = max(0, (_aware(sub.current_period_end) - now).days)
 
     return {
         "status": sub.status,
