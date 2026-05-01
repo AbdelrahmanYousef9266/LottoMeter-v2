@@ -1,0 +1,6 @@
+# Admin scripts — never commit these
+reset_db.py
+create_superadmin.py
+seed_*.py
+drop_*.py
+*_reset.py
