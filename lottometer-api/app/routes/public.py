@@ -43,3 +43,30 @@ def contact():
 @public_bp.post("/apply")
 def apply():
     return _save_submission("apply")
+
+
+@public_bp.post("/waitlist")
+def waitlist():
+    try:
+        data = request.get_json(silent=True) or {}
+
+        full_name = (data.get("name") or "").strip()
+        email = (data.get("email") or "").strip()
+
+        if not full_name or not email:
+            return jsonify({"error": "name and email are required."}), 400
+
+        sub = ContactSubmission(
+            submission_type="waitlist",
+            full_name=full_name,
+            email=email,
+            business_name=(data.get("store_name") or "").strip() or None,
+            phone=(data.get("phone") or "").strip() or None,
+        )
+        db.session.add(sub)
+        db.session.commit()
+        return jsonify({"message": "You are on the list! We will notify you when we launch."}), 201
+
+    except Exception:
+        db.session.rollback()
+        return jsonify({"error": "Server error. Please try again."}), 500

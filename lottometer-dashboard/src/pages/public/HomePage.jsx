@@ -104,13 +104,13 @@ export default function HomePage() {
             </span>
           </p>
           <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Link to="/apply" style={{
+            <Link to="/get-started" style={{
               textDecoration: 'none', fontSize: 15, fontWeight: 700, color: '#fff',
               padding: '14px 28px', borderRadius: 10,
               background: 'linear-gradient(to right, #0077CC, #2DAE1A)',
               boxShadow: '0 4px 16px rgba(0,119,204,0.3)',
             }}>
-              Request a Free Demo
+              Get Started
             </Link>
             <a href="#how-it-works" style={{
               textDecoration: 'none', fontSize: 15, fontWeight: 600, color: '#0077CC',
@@ -277,13 +277,13 @@ export default function HomePage() {
             Join lottery store owners already using LottoMeter to save time and reduce errors every single day.
           </p>
           <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Link to="/apply" style={{
+            <Link to="/get-started" style={{
               textDecoration: 'none', fontSize: 15, fontWeight: 700, color: '#0A1128',
               padding: '14px 28px', borderRadius: 10,
               background: 'linear-gradient(to right, #4DB8FF, #5CDE3A)',
               boxShadow: '0 4px 20px rgba(77,184,255,0.25)',
             }}>
-              Request a Free Demo
+              Get Started
             </Link>
             <Link to="/contact" style={{
               textDecoration: 'none', fontSize: 15, fontWeight: 600, color: '#C8D8E8',

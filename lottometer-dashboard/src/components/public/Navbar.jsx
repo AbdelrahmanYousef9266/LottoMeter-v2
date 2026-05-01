@@ -62,7 +62,7 @@ export default function Navbar() {
         {/* CTA buttons */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }} className="pub-nav-cta">
           <Link
-            to="/apply"
+            to="/get-started"
             style={{
               textDecoration: 'none',
               fontSize: 14,
@@ -74,7 +74,7 @@ export default function Navbar() {
               whiteSpace: 'nowrap',
             }}
           >
-            Request Demo
+            Get Started
           </Link>
           <Link
             to="/staff-portal"
@@ -128,7 +128,7 @@ export default function Navbar() {
           ))}
           <div style={{ borderTop: '1px solid #E2EAF4', paddingTop: 14, display: 'flex', gap: 10 }}>
             <Link to="/login" onClick={() => setMenuOpen(false)} style={{ textDecoration: 'none', fontSize: 14, fontWeight: 600, color: '#0A1128', flex: 1, textAlign: 'center', padding: '10px', border: '1.5px solid #E2EAF4', borderRadius: 8 }}>Login</Link>
-            <Link to="/apply" onClick={() => setMenuOpen(false)} style={{ textDecoration: 'none', fontSize: 14, fontWeight: 600, color: '#fff', flex: 1, textAlign: 'center', padding: '10px', background: 'linear-gradient(to right, #0077CC, #2DAE1A)', borderRadius: 8 }}>Request Demo</Link>
+            <Link to="/get-started" onClick={() => setMenuOpen(false)} style={{ textDecoration: 'none', fontSize: 14, fontWeight: 600, color: '#fff', flex: 1, textAlign: 'center', padding: '10px', background: 'linear-gradient(to right, #0077CC, #2DAE1A)', borderRadius: 8 }}>Get Started</Link>
           </div>
         </div>
       )}
