@@ -36,6 +36,10 @@ class User(db.Model):
             sqlite_where=db.text("deleted_at IS NULL"),
             postgresql_where=db.text("deleted_at IS NULL"),
         ),
+        db.CheckConstraint(
+            "role IN ('admin', 'employee', 'superadmin')",
+            name="ck_users_role",
+        ),
     )
 
     def __repr__(self) -> str:
