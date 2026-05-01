@@ -18,6 +18,12 @@ import ContactPage from './pages/public/ContactPage'
 import ApplyPage from './pages/public/ApplyPage'
 import PricingPage from './pages/public/PricingPage'
 
+import SuperAdminLayout from './pages/superadmin/SuperAdminLayout'
+import SuperDashboard from './pages/superadmin/SuperDashboard'
+import SuperStores from './pages/superadmin/SuperStores'
+import SuperSubmissions from './pages/superadmin/SuperSubmissions'
+import SuperCreateStore from './pages/superadmin/SuperCreateStore'
+
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth()
   if (loading) return <LoadingSpinner fullPage />
@@ -25,10 +31,20 @@ function ProtectedRoute({ children }) {
   return children
 }
 
-function PublicRoute({ children }) {
-  const { isAuthenticated, loading } = useAuth()
+function SuperAdminRoute({ children }) {
+  const { isAuthenticated, loading, role } = useAuth()
   if (loading) return <LoadingSpinner fullPage />
-  if (isAuthenticated) return <Navigate to="/dashboard" replace />
+  if (!isAuthenticated) return <Navigate to="/login" replace />
+  if (role !== 'superadmin') return <Navigate to="/dashboard" replace />
+  return children
+}
+
+function PublicRoute({ children }) {
+  const { isAuthenticated, loading, role } = useAuth()
+  if (loading) return <LoadingSpinner fullPage />
+  if (isAuthenticated) {
+    return <Navigate to={role === 'superadmin' ? '/superadmin/dashboard' : '/dashboard'} replace />
+  }
   return children
 }
 
@@ -43,6 +59,17 @@ function AppRoutes() {
 
       {/* Login */}
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />
+
+      {/* Superadmin panel */}
+      <Route
+        path="/superadmin"
+        element={<SuperAdminRoute><SuperAdminLayout /></SuperAdminRoute>}
+      >
+        <Route path="dashboard" element={<SuperDashboard />} />
+        <Route path="stores" element={<SuperStores />} />
+        <Route path="stores/create" element={<SuperCreateStore />} />
+        <Route path="submissions" element={<SuperSubmissions />} />
+      </Route>
 
       {/* Protected dashboard */}
       <Route

@@ -34,17 +34,29 @@ def current_role() -> str:
 # ---------- Role decorator ----------
 
 def admin_required(fn):
-    """Decorator: require both JWT and admin role.
-
-    Returns 401 if no/invalid JWT, 403 if authenticated but not admin.
-    """
+    """Decorator: require both JWT and admin (or superadmin) role."""
     @wraps(fn)
     def wrapper(*args, **kwargs):
         verify_jwt_in_request()
-        if get_jwt().get("role") != "admin":
+        if get_jwt().get("role") not in ("admin", "superadmin"):
             raise AuthorizationError(
                 "Admin role required for this action.",
                 code="ADMIN_REQUIRED",
+            )
+        return fn(*args, **kwargs)
+
+    return wrapper
+
+
+def superadmin_required(fn):
+    """Decorator: require both JWT and superadmin role."""
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        verify_jwt_in_request()
+        if get_jwt().get("role") != "superadmin":
+            raise AuthorizationError(
+                "Superadmin role required for this action.",
+                code="SUPERADMIN_REQUIRED",
             )
         return fn(*args, **kwargs)
 

@@ -6,7 +6,7 @@ from flask_jwt_extended import create_access_token
 from app.extensions import db
 from app.models.store import Store
 from app.models.user import User
-from app.errors import ConflictError, InvalidCredentials
+from app.errors import ConflictError, InvalidCredentials, BusinessRuleError
 
 
 def _hash_password(plain: str) -> str:
@@ -82,6 +82,9 @@ def login(data: dict) -> dict:
     # Same error for unknown store and wrong password (don't leak existence)
     if store is None:
         raise InvalidCredentials("Invalid credentials.")
+
+    if store.suspended:
+        raise BusinessRuleError("This store has been suspended. Please contact support.", code="STORE_SUSPENDED")
 
     user = User.query.filter_by(
         store_id=store.store_id, username=data["username"]

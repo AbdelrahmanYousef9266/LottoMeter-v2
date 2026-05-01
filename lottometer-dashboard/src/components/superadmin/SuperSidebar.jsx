@@ -1,0 +1,71 @@
+import { NavLink, useNavigate } from 'react-router-dom'
+import { useAuth } from '../../context/AuthContext'
+
+const NAV_ITEMS = [
+  { to: '/superadmin/dashboard', label: 'Overview', icon: '📊', exact: true },
+  { to: '/superadmin/stores', label: 'Stores', icon: '🏪' },
+  { to: '/superadmin/submissions', label: 'Submissions', icon: '📬' },
+  { to: '/superadmin/stores/create', label: 'Create Store', icon: '➕' },
+]
+
+const PURPLE = '#7C3AED'
+const PURPLE_LIGHT = 'rgba(124,58,237,0.12)'
+
+export default function SuperSidebar() {
+  const { logout } = useAuth()
+  const navigate = useNavigate()
+
+  const handleLogout = () => {
+    logout()
+    navigate('/login')
+  }
+
+  return (
+    <aside className="sidebar" style={{ borderRight: `2px solid ${PURPLE_LIGHT}` }}>
+      <div className="sidebar-logo">
+        <div style={{
+          display: 'inline-flex', alignItems: 'center', gap: 7,
+          background: PURPLE_LIGHT, borderRadius: 8, padding: '4px 10px', marginBottom: 4,
+        }}>
+          <span style={{ fontSize: 14 }}>⚡</span>
+          <span style={{ fontSize: 11, fontWeight: 800, color: PURPLE, letterSpacing: '0.06em', textTransform: 'uppercase' }}>
+            Super Admin
+          </span>
+        </div>
+        <div className="sidebar-logo-title">LottoMeter</div>
+        <div className="sidebar-logo-sub">Platform Management</div>
+      </div>
+
+      <nav className="sidebar-nav">
+        {NAV_ITEMS.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.exact}
+            className={({ isActive }) =>
+              `sidebar-nav-item${isActive ? ' active' : ''}`
+            }
+            style={({ isActive }) => isActive ? {
+              background: PURPLE_LIGHT,
+              color: PURPLE,
+              borderLeft: `3px solid ${PURPLE}`,
+            } : {}}
+          >
+            <span className="nav-icon">{item.icon}</span>
+            <span>{item.label}</span>
+          </NavLink>
+        ))}
+      </nav>
+
+      <div className="sidebar-footer">
+        <button
+          className="btn btn-secondary btn-sm"
+          style={{ width: '100%' }}
+          onClick={handleLogout}
+        >
+          <span>🚪</span> Logout
+        </button>
+      </div>
+    </aside>
+  )
+}

@@ -11,6 +11,7 @@ from app.routes.report import report_bp
 from app.routes.user import user_bp
 from app.routes.dev import dev_bp
 from app.routes.public import public_bp
+from app.routes.superadmin import superadmin_bp
 
 
 def register_blueprints(app):
@@ -26,5 +27,6 @@ def register_blueprints(app):
     app.register_blueprint(report_bp)
     app.register_blueprint(user_bp)
     app.register_blueprint(public_bp)
+    app.register_blueprint(superadmin_bp)
     if app.debug:
         app.register_blueprint(dev_bp)

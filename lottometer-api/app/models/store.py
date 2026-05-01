@@ -24,6 +24,12 @@ class Store(db.Model):
         default="camera_single",
         server_default="camera_single",
     )
+    suspended = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=False,
+        server_default="false",
+    )
     created_at = db.Column(
         db.DateTime,
         nullable=False,

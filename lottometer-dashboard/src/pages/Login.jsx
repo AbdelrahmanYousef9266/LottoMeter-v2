@@ -9,7 +9,7 @@ const TAGLINES = [
 ]
 
 export default function Login() {
-  const { login } = useAuth()
+  const { login, logout } = useAuth()
   const navigate = useNavigate()
 
   const [taglineIndex, setTaglineIndex] = useState(0)
@@ -44,11 +44,20 @@ export default function Login() {
     setLoading(true)
     setError('')
     try {
-      await login(form)
-      navigate('/dashboard')
+      const data = await login(form)
+      const role = data?.user?.role
+      if (role === 'superadmin') {
+        navigate('/superadmin/dashboard')
+      } else if (role === 'admin') {
+        navigate('/dashboard')
+      } else {
+        logout()
+        setError('Employees cannot access the web dashboard. Please use the mobile app.')
+      }
     } catch (err) {
       setError(
-        err?.response?.data?.message ||
+        err?.response?.data?.error?.message ||
+          err?.response?.data?.message ||
           err?.response?.data?.error ||
           'Invalid credentials. Please try again.'
       )

@@ -58,6 +58,7 @@ export function AuthProvider({ children }) {
     login,
     logout,
     isAuthenticated: !!token,
+    role: user?.role || null,
   }
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
