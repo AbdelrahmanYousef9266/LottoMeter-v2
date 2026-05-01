@@ -15,7 +15,6 @@ const Stack = createNativeStackNavigator();
 
 export default function RootNavigator() {
   const { user, loading } = useAuth();
-  // Native splash is still visible while auth loads — return null to wait
   if (loading) return null;
   return (
     <NavigationContainer>

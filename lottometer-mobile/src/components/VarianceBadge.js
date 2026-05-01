@@ -8,8 +8,8 @@ export default function VarianceBadge({ amount, style, size = 'md' }) {
   const isPos = valid && n > 0;
   const isNeg = valid && n < 0;
 
-  const color = isPos ? Colors.success : isNeg ? Colors.error : Colors.textMuted;
-  const bg    = isPos ? Colors.successDark : isNeg ? Colors.errorDark : Colors.navyDark;
+  const color = isPos ? Colors.success : isNeg ? Colors.error : Colors.textSecondary;
+  const bg    = isPos ? Colors.successBg : isNeg ? Colors.errorBg : Colors.border;
   const prefix = isPos ? '+' : '';
   const display = valid ? `${prefix}$${Math.abs(n).toFixed(2)}` : '—';
 

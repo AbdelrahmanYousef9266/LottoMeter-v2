@@ -36,20 +36,20 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 12,
-    color: Colors.textFaint,
+    color: Colors.textMuted,
     fontWeight: '600',
     textTransform: 'uppercase',
     letterSpacing: 0.6,
   },
   count: {
     fontSize: 13,
-    color: Colors.textWhite,
+    color: Colors.textPrimary,
     fontWeight: '700',
   },
   countDone: { color: Colors.success },
   track: {
     height: 6,
-    backgroundColor: Colors.navyDark,
+    backgroundColor: Colors.border,
     borderRadius: Radius.full,
     overflow: 'hidden',
   },

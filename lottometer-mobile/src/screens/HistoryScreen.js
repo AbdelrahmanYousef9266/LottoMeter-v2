@@ -19,6 +19,7 @@ import { listShifts } from '../api/shifts';
 import { useAuth } from '../context/AuthContext';
 import EmptyState from '../components/EmptyState';
 import { formatDayLabel, formatLocalTime } from '../utils/dateTime';
+import { Colors, Radius, Shadow } from '../theme';
 
 function fmt$(v) {
   if (v === null || v === undefined) return '$0.00';
@@ -38,10 +39,7 @@ export default function HistoryScreen() {
   const [businessDays, setBusinessDays] = useState([]);
   const [expandedDayId, setExpandedDayId] = useState(null);
 
-  // shiftsCache: { [dayId]: { shifts: [], loading: bool } }
-  // Stored in a ref so mutations don't trigger unnecessary renders.
   const shiftsCacheRef = useRef({});
-  // Bumped after every cache mutation to tell FlatList to re-render.
   const [cacheVersion, setCacheVersion] = useState(0);
 
   const loadDays = useCallback(async () => {
@@ -78,7 +76,7 @@ export default function HistoryScreen() {
     }
     setExpandedDayId(day.id);
 
-    if (shiftsCacheRef.current[day.id]) return; // already cached
+    if (shiftsCacheRef.current[day.id]) return;
 
     shiftsCacheRef.current[day.id] = { shifts: [], loading: true };
     setCacheVersion((v) => v + 1);
@@ -132,7 +130,12 @@ export default function HistoryScreen() {
         extraData={[expandedDayId, cacheVersion]}
         contentContainerStyle={styles.listContent}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={Colors.primary}
+            colors={[Colors.primary]}
+          />
         }
         ListHeaderComponent={
           <View style={styles.titleRow}>
@@ -159,41 +162,20 @@ function DayCard({ day, isExpanded, cached, user, t, onPress, onShiftPress }) {
   const shiftsLoading = cached?.loading ?? false;
 
   return (
-    <View
-      style={[
-        styles.dayCard,
-        isOpen ? styles.dayCardOpen : styles.dayCardClosed,
-      ]}
-    >
+    <View style={[styles.dayCard, isOpen ? styles.dayCardOpen : styles.dayCardClosed]}>
       <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
         <View style={styles.dayHeader}>
           <View style={styles.dayInfo}>
-            <Text style={styles.dayDate}>
-              {formatDayLabel(day.business_date)}
-            </Text>
+            <Text style={styles.dayDate}>{formatDayLabel(day.business_date)}</Text>
             <Text style={styles.daySales}>{fmt$(day.total_sales)}</Text>
           </View>
           <View style={styles.dayRight}>
-            <View
-              style={[
-                styles.dayBadge,
-                isOpen ? styles.badgeOpen : styles.badgeClosed,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.dayBadgeText,
-                  isOpen ? styles.badgeOpenText : styles.badgeClosedText,
-                ]}
-              >
+            <View style={[styles.dayBadge, isOpen ? styles.badgeOpen : styles.badgeClosed]}>
+              <Text style={[styles.dayBadgeText, isOpen ? styles.badgeOpenText : styles.badgeClosedText]}>
                 {t(isOpen ? 'history.statusOpen' : 'history.statusClosed')}
               </Text>
             </View>
-            <Text
-              style={[styles.chevron, isExpanded && styles.chevronExpanded]}
-            >
-              {'▼'}
-            </Text>
+            <Text style={[styles.chevron, isExpanded && styles.chevronExpanded]}>{'▼'}</Text>
           </View>
         </View>
       </TouchableOpacity>
@@ -204,7 +186,7 @@ function DayCard({ day, isExpanded, cached, user, t, onPress, onShiftPress }) {
           {shiftsLoading ? (
             <ActivityIndicator
               size="small"
-              color="#1a73e8"
+              color={Colors.primary}
               style={styles.shiftsLoader}
             />
           ) : shifts.length === 0 ? (
@@ -236,28 +218,28 @@ function ShiftRow({ shift, user, t, onPress }) {
 
   if (isVoided) {
     badgeText = t('history.statusVoided');
-    badgeBg = '#fee2e2';
-    badgeColor = '#7c2d12';
+    badgeBg = Colors.errorBg;
+    badgeColor = Colors.error;
   } else if (isOpen) {
     badgeText = t('history.statusActive');
-    badgeBg = '#e8f0fe';
-    badgeColor = '#1a73e8';
+    badgeBg = Colors.primaryLight;
+    badgeColor = Colors.primary;
   } else if (shift.shift_status === 'correct') {
     badgeText = t('history.statusCorrect');
-    badgeBg = '#dcfce7';
-    badgeColor = '#166534';
+    badgeBg = Colors.successBg;
+    badgeColor = Colors.success;
   } else if (shift.shift_status === 'over') {
     badgeText = t('history.statusOver');
-    badgeBg = '#fef3c7';
-    badgeColor = '#b45309';
+    badgeBg = Colors.warningBg;
+    badgeColor = Colors.warning;
   } else if (shift.shift_status === 'short') {
     badgeText = t('history.statusShort');
-    badgeBg = '#fef2f2';
-    badgeColor = '#dc2626';
+    badgeBg = Colors.errorBg;
+    badgeColor = Colors.error;
   } else {
     badgeText = '—';
-    badgeBg = '#f0f0f0';
-    badgeColor = '#888';
+    badgeBg = Colors.border;
+    badgeColor = Colors.textMuted;
   }
 
   const openedBy =
@@ -270,11 +252,7 @@ function ShiftRow({ shift, user, t, onPress }) {
     : formatLocalTime(shift.closed_at);
 
   return (
-    <TouchableOpacity
-      style={styles.shiftRow}
-      onPress={onPress}
-      activeOpacity={0.7}
-    >
+    <TouchableOpacity style={styles.shiftRow} onPress={onPress} activeOpacity={0.7}>
       <View style={styles.shiftLeft}>
         <Text style={styles.shiftNumber}>
           {t('history.shiftNumber', { number: shift.shift_number })}
@@ -301,16 +279,8 @@ function DaySkeleton() {
   useEffect(() => {
     const anim = Animated.loop(
       Animated.sequence([
-        Animated.timing(opacity, {
-          toValue: 0.9,
-          duration: 650,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0.4,
-          duration: 650,
-          useNativeDriver: true,
-        }),
+        Animated.timing(opacity, { toValue: 0.9, duration: 650, useNativeDriver: true }),
+        Animated.timing(opacity, { toValue: 0.4, duration: 650, useNativeDriver: true }),
       ])
     );
     anim.start();
@@ -331,32 +301,29 @@ function DaySkeleton() {
 // ─── styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f4f5f7' },
+  container: { flex: 1, backgroundColor: Colors.background },
 
   titleRow: {
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 8,
   },
-  title: { fontSize: 28, fontWeight: '700', color: '#222' },
+  title: { fontSize: 28, fontWeight: '700', color: Colors.textPrimary },
 
   listContent: { paddingHorizontal: 16, paddingBottom: 32 },
 
-  // ── day card ────────────────────────────────────────────────────────────
   dayCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
     marginBottom: 10,
     borderLeftWidth: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 5,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: Colors.border,
     overflow: 'hidden',
+    ...Shadow.sm,
   },
-  dayCardOpen: { borderLeftColor: '#16a34a' },
-  dayCardClosed: { borderLeftColor: '#ccc' },
+  dayCardOpen:   { borderLeftColor: Colors.success },
+  dayCardClosed: { borderLeftColor: Colors.border },
 
   dayHeader: {
     flexDirection: 'row',
@@ -364,49 +331,41 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 16,
   },
-  dayInfo: { flex: 1, marginRight: 8 },
-  dayDate: { fontSize: 14, fontWeight: '600', color: '#222', marginBottom: 3 },
-  daySales: { fontSize: 13, color: '#666' },
+  dayInfo:  { flex: 1, marginRight: 8 },
+  dayDate:  { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, marginBottom: 3 },
+  daySales: { fontSize: 13, color: Colors.textSecondary },
 
   dayRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
 
   dayBadge: {
     paddingHorizontal: 9,
     paddingVertical: 3,
-    borderRadius: 999,
+    borderRadius: Radius.full,
   },
-  badgeOpen: { backgroundColor: '#dcfce7' },
-  badgeClosed: { backgroundColor: '#f0f0f0' },
-  dayBadgeText: { fontSize: 12, fontWeight: '700' },
-  badgeOpenText: { color: '#166534' },
-  badgeClosedText: { color: '#666' },
+  badgeOpen:       { backgroundColor: Colors.successBg },
+  badgeClosed:     { backgroundColor: Colors.border },
+  dayBadgeText:    { fontSize: 12, fontWeight: '700' },
+  badgeOpenText:   { color: Colors.success },
+  badgeClosedText: { color: Colors.textSecondary },
 
-  chevron: {
-    fontSize: 12,
-    color: '#aaa',
-    marginLeft: 2,
-  },
-  chevronExpanded: {
-    transform: [{ rotate: '180deg' }],
-  },
+  chevron:         { fontSize: 12, color: Colors.textMuted, marginLeft: 2 },
+  chevronExpanded: { transform: [{ rotate: '180deg' }] },
 
-  // ── expanded shifts section ──────────────────────────────────────────────
   shiftsContainer: { paddingBottom: 6 },
   shiftsDivider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#eee',
+    backgroundColor: Colors.border,
     marginHorizontal: 16,
     marginBottom: 4,
   },
-  shiftsLoader: { paddingVertical: 14 },
+  shiftsLoader:  { paddingVertical: 14 },
   noShiftsText: {
     fontSize: 13,
-    color: '#999',
+    color: Colors.textMuted,
     textAlign: 'center',
     paddingVertical: 12,
   },
 
-  // ── shift row ────────────────────────────────────────────────────────────
   shiftRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -414,30 +373,29 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#f2f2f2',
+    borderBottomColor: Colors.border,
   },
-  shiftLeft: { flex: 1, marginRight: 10 },
-  shiftNumber: { fontSize: 14, fontWeight: '700', color: '#222', marginBottom: 2 },
-  shiftTime: { fontSize: 12, color: '#555', marginBottom: 2 },
-  shiftOpenedBy: { fontSize: 11, color: '#999' },
+  shiftLeft:      { flex: 1, marginRight: 10 },
+  shiftNumber:    { fontSize: 14, fontWeight: '700', color: Colors.textPrimary, marginBottom: 2 },
+  shiftTime:      { fontSize: 12, color: Colors.textSecondary, marginBottom: 2 },
+  shiftOpenedBy:  { fontSize: 11, color: Colors.textMuted },
 
   shiftBadge: {
     paddingHorizontal: 9,
     paddingVertical: 4,
-    borderRadius: 999,
+    borderRadius: Radius.full,
     alignItems: 'center',
   },
   shiftBadgeText: { fontSize: 11, fontWeight: '700' },
 
-  // ── skeleton ─────────────────────────────────────────────────────────────
   skeletonCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
     marginBottom: 10,
     marginHorizontal: 16,
     padding: 16,
     borderLeftWidth: 4,
-    borderLeftColor: '#e0e0e0',
+    borderLeftColor: Colors.border,
   },
   skeletonRow: {
     flexDirection: 'row',
@@ -448,19 +406,19 @@ const styles = StyleSheet.create({
   skeletonLineLong: {
     height: 14,
     borderRadius: 7,
-    backgroundColor: '#e8e8e8',
+    backgroundColor: Colors.border,
     flex: 0.65,
   },
   skeletonBadge: {
     height: 22,
     width: 54,
-    borderRadius: 999,
-    backgroundColor: '#e8e8e8',
+    borderRadius: Radius.full,
+    backgroundColor: Colors.border,
   },
   skeletonLineShort: {
     height: 12,
     borderRadius: 6,
-    backgroundColor: '#efefef',
+    backgroundColor: Colors.inputBg,
     width: '35%',
   },
 });

@@ -8,9 +8,9 @@
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-screen.png",
-      "resizeMode": "cover",
-      "backgroundColor": "#061A33"
+      "image": "./assets/splash-1.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F6FAFF"
     },
     "ios": {
       "supportsTablet": true,
@@ -20,7 +20,7 @@
       "package": "com.lottometer.app",
       "adaptiveIcon": {
         "foregroundImage": "./assets/app-icon.png",
-        "backgroundColor": "#061A33"
+        "backgroundColor": "#F6FAFF"
       },
       "edgeToEdgeEnabled": false
     },

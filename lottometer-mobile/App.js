@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import { Animated, View } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import * as SplashScreen from 'expo-splash-screen';
@@ -24,39 +24,35 @@ if (sentryDsn) {
 
 function App() {
   const [appReady, setAppReady] = useState(false);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    async function prepare() {
-      try {
-        await initI18n();
-        // Give React one frame to render the tree before hiding splash
-        await new Promise(resolve => requestAnimationFrame(resolve));
-      } catch (e) {
-        console.warn('App prepare error:', e);
-      } finally {
-        setAppReady(true);
-      }
-    }
-    prepare();
+    initI18n()
+      .catch(e => console.warn('i18n init error:', e))
+      .finally(() => setAppReady(true));
   }, []);
 
   useEffect(() => {
-    if (appReady) {
-      SplashScreen.hideAsync().catch(console.warn);
-    }
-  }, [appReady]);
+    if (!appReady) return;
+    SplashScreen.hideAsync().catch(console.warn);
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 350,
+      useNativeDriver: true,
+    }).start();
+  }, [appReady, fadeAnim]);
 
   if (!appReady) return null;
 
   return (
-    <View style={{ flex: 1 }}>
+    <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
       <SafeAreaProvider>
         <AuthProvider>
           <RootNavigator />
-          <StatusBar style="light" />
+          <StatusBar style="dark" />
         </AuthProvider>
       </SafeAreaProvider>
-    </View>
+    </Animated.View>
   );
 }
 

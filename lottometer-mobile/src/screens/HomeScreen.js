@@ -22,6 +22,7 @@ import WholeBookSaleModal from '../components/WholeBookSaleModal';
 import ReturnBookModal from '../components/ReturnBookModal';
 import BooksDashboard from '../components/BooksDashboard';
 import { formatBusinessDate, formatLocalTime } from '../utils/dateTime';
+import { Colors, Radius, Shadow } from '../theme';
 
 // ─── screen ─────────────────────────────────────────────────────────────────
 
@@ -35,13 +36,11 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [busy, setBusy]             = useState(false);
 
-  // core state
   const [businessDay, setBusinessDay]   = useState(null);
   const [todayShifts, setTodayShifts]   = useState([]);
-  const [activeShift, setActiveShift]   = useState(null); // shift with status === 'open'
+  const [activeShift, setActiveShift]   = useState(null);
   const [summary, setSummary]           = useState(null);
 
-  // modal visibility
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [wbSaleOpen, setWbSaleOpen]         = useState(false);
   const [returnOpen, setReturnOpen]         = useState(false);
@@ -50,19 +49,15 @@ export default function HomeScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      // 1. today's business day (auto-creates if missing)
       const bd = await getTodaysBusinessDay();
       setBusinessDay(bd);
 
-      // 2. all shifts for today
       const { shifts } = await listShifts({ business_day_id: bd.id });
       setTodayShifts(shifts);
 
-      // 3. find the open shift (if any)
       const open = shifts.find((s) => s.status === 'open' && !s.voided) || null;
       setActiveShift(open);
 
-      // 4. load pending-scans summary for the open shift
       if (open) {
         try {
           const s = await getShiftSummary(open.id);
@@ -119,7 +114,7 @@ export default function HomeScreen() {
       } else {
         Alert.alert(err.code || t('common.error'), err.message || t('common.tryAgain'));
       }
-      throw err; // let CloseShiftModal re-enable its submit button
+      throw err;
     }
   }
 
@@ -180,7 +175,7 @@ export default function HomeScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
-          <ActivityIndicator size="large" color="#1a73e8" />
+          <ActivityIndicator size="large" color={Colors.primary} />
         </View>
       </SafeAreaView>
     );
@@ -202,7 +197,14 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView
         contentContainerStyle={styles.scrollContent}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={Colors.primary}
+            colors={[Colors.primary]}
+          />
+        }
       >
         <Text style={styles.greeting}>
           {t('home.greeting', { name: user?.username || '' })}
@@ -237,7 +239,7 @@ export default function HomeScreen() {
             disabled={busy}
           >
             {busy ? (
-              <ActivityIndicator color="#dc2626" />
+              <ActivityIndicator color={Colors.error} />
             ) : (
               <Text style={styles.closeBizDayText}>{t('home.closeBizDay')}</Text>
             )}
@@ -273,7 +275,7 @@ export default function HomeScreen() {
   );
 }
 
-// ─── STATE 1 — no open shift ────────────────────────────────────────────────
+// ─── STATE 1 — no open shift ─────────────────────────────────────────────────
 
 function NoShiftCard({ businessDay, onOpen, busy, t }) {
   return (
@@ -307,14 +309,12 @@ function ActiveShiftCard({ businessDay, shift, employeeName, summary, onClose, o
 
   return (
     <View style={styles.activeCard}>
-      {/* date header */}
       {businessDay && (
         <Text style={styles.dateText}>
           {formatBusinessDate(businessDay.business_date)}
         </Text>
       )}
 
-      {/* shift identity row */}
       <View style={styles.shiftTitleRow}>
         <View style={styles.greenDot} />
         <Text style={styles.shiftTitle}>
@@ -322,7 +322,6 @@ function ActiveShiftCard({ businessDay, shift, employeeName, summary, onClose, o
         </Text>
       </View>
 
-      {/* shift detail rows */}
       <View style={styles.divider} />
       <KV k={t('home.openedBy')} v={employeeName ?? '—'} />
       <KV k={t('home.started')} v={formatLocalTime(shift.opened_at)} />
@@ -332,7 +331,6 @@ function ActiveShiftCard({ businessDay, shift, employeeName, summary, onClose, o
         highlight={typeof pendingScans === 'number' && pendingScans > 0}
       />
 
-      {/* quick actions */}
       <View style={styles.quickActions}>
         <TouchableOpacity style={styles.quickAction} onPress={onSellWholeBook}>
           <Text style={styles.quickActionEmoji}>📚</Text>
@@ -344,7 +342,6 @@ function ActiveShiftCard({ businessDay, shift, employeeName, summary, onClose, o
         </TouchableOpacity>
       </View>
 
-      {/* close shift */}
       <TouchableOpacity style={styles.closeShiftButton} onPress={onClose}>
         <Text style={styles.closeShiftText}>{t('home.endMainShift')}</Text>
       </TouchableOpacity>
@@ -366,57 +363,51 @@ function KV({ k, v, highlight }) {
 // ─── styles ──────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
-  container:     { flex: 1, backgroundColor: '#f4f5f7' },
+  container:     { flex: 1, backgroundColor: Colors.background },
   scrollContent: { padding: 16, paddingBottom: 40 },
   center:        { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  greeting:      { fontSize: 22, fontWeight: '700', color: '#222', marginBottom: 16 },
+  greeting:      { fontSize: 22, fontWeight: '700', color: Colors.textPrimary, marginBottom: 16 },
 
-  // ── shared card base ──────────────────────────────────────────────────────
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
     padding: 20,
     marginBottom: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadow.card,
   },
 
   dateText: {
-    fontSize: 13,
-    color: '#888',
-    fontWeight: '500',
+    fontSize: 12,
+    color: Colors.textMuted,
+    fontWeight: '600',
     marginBottom: 10,
     textTransform: 'uppercase',
-    letterSpacing: 0.4,
+    letterSpacing: 0.5,
   },
-  cardTitle:    { fontSize: 18, fontWeight: '700', color: '#222', marginBottom: 6 },
-  cardSubtitle: { fontSize: 14, color: '#666', marginBottom: 20 },
+  cardTitle:    { fontSize: 18, fontWeight: '700', color: Colors.textPrimary, marginBottom: 6 },
+  cardSubtitle: { fontSize: 14, color: Colors.textSecondary, marginBottom: 20 },
 
   primaryButton: {
-    backgroundColor: '#1a73e8',
+    backgroundColor: Colors.primary,
     padding: 16,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     alignItems: 'center',
   },
   primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   disabled: { opacity: 0.55 },
 
-  // ── active shift card — distinct with green left border ───────────────────
   activeCard: {
-    backgroundColor: '#fff',
-    borderRadius: 14,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
     padding: 20,
     marginBottom: 14,
     borderLeftWidth: 4,
-    borderLeftColor: '#16a34a',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 8,
-    elevation: 3,
+    borderLeftColor: Colors.success,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadow.card,
   },
 
   shiftTitleRow: {
@@ -428,18 +419,18 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#16a34a',
+    backgroundColor: Colors.success,
     marginRight: 8,
   },
   shiftTitle: {
     fontSize: 17,
     fontWeight: '700',
-    color: '#1a2e1a',
+    color: Colors.textPrimary,
   },
 
   divider: {
     height: StyleSheet.hairlineWidth,
-    backgroundColor: '#eee',
+    backgroundColor: Colors.border,
     marginBottom: 10,
   },
 
@@ -449,13 +440,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingVertical: 7,
     borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#f0f0f0',
+    borderBottomColor: Colors.border,
   },
-  kvKey:       { color: '#666', fontSize: 14 },
-  kvValue:     { color: '#222', fontSize: 14, fontWeight: '600' },
-  kvHighlight: { color: '#d97706' }, // amber when pending scans > 0
+  kvKey:       { color: Colors.textSecondary, fontSize: 14 },
+  kvValue:     { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
+  kvHighlight: { color: Colors.warning },
 
-  // ── quick actions inside active card ─────────────────────────────────────
   quickActions: {
     flexDirection: 'row',
     gap: 10,
@@ -464,32 +454,32 @@ const styles = StyleSheet.create({
   },
   quickAction: {
     flex: 1,
-    backgroundColor: '#f4f5f7',
+    backgroundColor: Colors.background,
     paddingVertical: 14,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  quickActionEmoji: { fontSize: 24, marginBottom: 4 },
-  quickActionLabel: { fontSize: 12, fontWeight: '600', color: '#333' },
+  quickActionEmoji: { fontSize: 22, marginBottom: 4 },
+  quickActionLabel: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
 
-  // ── close shift button ────────────────────────────────────────────────────
   closeShiftButton: {
-    backgroundColor: '#dc2626',
+    backgroundColor: Colors.error,
     padding: 16,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     alignItems: 'center',
   },
   closeShiftText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 
-  // ── admin: close business day ─────────────────────────────────────────────
   closeBizDayButton: {
-    backgroundColor: '#fff',
+    backgroundColor: Colors.surface,
     padding: 14,
-    borderRadius: 10,
+    borderRadius: Radius.md,
     alignItems: 'center',
     borderWidth: 1.5,
-    borderColor: '#dc2626',
+    borderColor: Colors.error,
     marginTop: 4,
   },
-  closeBizDayText: { color: '#dc2626', fontSize: 15, fontWeight: '600' },
+  closeBizDayText: { color: Colors.error, fontSize: 15, fontWeight: '600' },
 });

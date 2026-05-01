@@ -3,13 +3,13 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Colors, Radius } from '../theme';
 
 const PRESETS = {
-  open:    { bg: Colors.successDark, color: Colors.success },
-  closed:  { bg: Colors.navyDark,    color: Colors.textMuted },
-  active:  { bg: '#0D2247',          color: Colors.primary },
-  correct: { bg: Colors.successDark, color: Colors.success },
-  over:    { bg: Colors.warningDark, color: Colors.warning },
-  short:   { bg: Colors.errorDark,   color: Colors.error },
-  voided:  { bg: Colors.errorDark,   color: Colors.error },
+  open:    { bg: Colors.successBg,  color: Colors.success },
+  closed:  { bg: Colors.border,     color: Colors.textSecondary },
+  active:  { bg: Colors.primaryLight, color: Colors.primary },
+  correct: { bg: Colors.successBg,  color: Colors.success },
+  over:    { bg: Colors.warningBg,  color: Colors.warning },
+  short:   { bg: Colors.errorBg,    color: Colors.error },
+  voided:  { bg: Colors.errorBg,    color: Colors.error },
 };
 
 export default function StatusBadge({ status, voided, label, style }) {

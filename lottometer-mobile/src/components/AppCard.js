@@ -12,7 +12,7 @@ export default function AppCard({ children, style, noPadding }) {
 
 const styles = StyleSheet.create({
   card: {
-    backgroundColor: Colors.card,
+    backgroundColor: Colors.surface,
     borderRadius: Radius.lg,
     padding: 16,
     borderWidth: 1,

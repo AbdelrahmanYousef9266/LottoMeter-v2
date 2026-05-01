@@ -4,6 +4,7 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
+import { Colors } from '../theme';
 
 import HomeScreen from '../screens/HomeScreen';
 import ScanScreen from '../screens/ScanScreen';
@@ -37,14 +38,17 @@ export default function MainTabs() {
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarActiveTintColor: '#1a73e8',
-        tabBarInactiveTintColor: '#5f6368',
+        tabBarActiveTintColor: Colors.primary,
+        tabBarInactiveTintColor: Colors.textMuted,
         tabBarLabel: ({ focused, color }) => (
           <Text style={{ fontSize: 12, fontWeight: focused ? '600' : '400', color }}>
             {tabLabels[route.name]}
           </Text>
         ),
         tabBarStyle: {
+          backgroundColor: Colors.surface,
+          borderTopColor: Colors.border,
+          borderTopWidth: 1,
           paddingTop: 6,
           paddingBottom: insets.bottom + 6,
           height: 60 + insets.bottom,

@@ -20,6 +20,7 @@ import { useAuth } from '../context/AuthContext';
 import { setStoredLanguage } from '../i18n';
 import { syncRTL } from '../utils/rtl';
 import { getSoundEnabled, setSoundEnabled, getVibrationEnabled, setVibrationEnabled } from '../hooks/useFeedback';
+import { Colors, Radius, Shadow } from '../theme';
 
 const LANGUAGES = [
   { code: 'en', label: 'English', native: 'English' },
@@ -51,7 +52,6 @@ export default function SettingsScreen() {
     await setVibrationEnabled(value);
   }
 
-  // PIN change state
   const [pinFormOpen, setPinFormOpen] = useState(false);
   const [currentPin, setCurrentPin] = useState('');
   const [newPin, setNewPin] = useState('');
@@ -84,11 +84,7 @@ export default function SettingsScreen() {
       await setStoredLanguage(lang);
       const reloadNeeded = syncRTL(lang);
       if (reloadNeeded) {
-        Alert.alert(
-          t('settings.restartTitle'),
-          t('settings.restartMessage'),
-          [{ text: t('common.ok') }]
-        );
+        Alert.alert(t('settings.restartTitle'), t('settings.restartMessage'), [{ text: t('common.ok') }]);
       }
     } catch (err) {
       Alert.alert(t('common.error'), err.message || t('common.tryAgain'));
@@ -112,7 +108,6 @@ export default function SettingsScreen() {
       Alert.alert(t('settings.pinMismatchTitle'), t('settings.pinMismatchHint'));
       return;
     }
-
     setPinSaving(true);
     try {
       await changeStorePin({ current_pin: currentPin, new_pin: newPin });
@@ -137,12 +132,8 @@ export default function SettingsScreen() {
     setScanModeSaving(true);
     try {
       const result = await changeScanMode(newMode);
-      // Update store in context so all screens see new mode immediately
       setStore({ ...(store || {}), scan_mode: result.scan_mode });
-      Alert.alert(
-        t('settings.scanModeUpdatedTitle'),
-        t('settings.scanModeUpdatedHint')
-      );
+      Alert.alert(t('settings.scanModeUpdatedTitle'), t('settings.scanModeUpdatedHint'));
     } catch (err) {
       Alert.alert(err.code || t('common.error'), err.message || t('common.tryAgain'));
     } finally {
@@ -158,15 +149,9 @@ export default function SettingsScreen() {
         {/* 1. Account */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{t('settings.account')}</Text>
-          <Text style={styles.text}>
-            {t('settings.user')}: {user?.username || `#${user?.user_id}`}
-          </Text>
-          <Text style={styles.text}>
-            {t('settings.role')}: {user?.role}
-          </Text>
-          <Text style={styles.text}>
-            {t('settings.store')}: #{user?.store_id}
-          </Text>
+          <Text style={styles.text}>{t('settings.user')}: {user?.username || `#${user?.user_id}`}</Text>
+          <Text style={styles.text}>{t('settings.role')}: {user?.role}</Text>
+          <Text style={styles.text}>{t('settings.store')}: #{user?.store_id}</Text>
         </View>
 
         {/* 2. Manage Users (admin only) */}
@@ -175,10 +160,10 @@ export default function SettingsScreen() {
             <Text style={styles.cardTitle}>{t('users.manageUsers')}</Text>
             <Text style={styles.helperText}>{t('users.manageUsersHint')}</Text>
             <TouchableOpacity
-              style={styles.manageUsersButton}
+              style={styles.actionButton}
               onPress={() => navigation.navigate('Users')}
             >
-              <Text style={styles.manageUsersButtonText}>{t('users.title')}</Text>
+              <Text style={styles.actionButtonText}>{t('users.title')}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -191,12 +176,10 @@ export default function SettingsScreen() {
 
             {!pinFormOpen ? (
               <TouchableOpacity
-                style={styles.changePinButton}
+                style={styles.actionButton}
                 onPress={() => setPinFormOpen(true)}
               >
-                <Text style={styles.changePinButtonText}>
-                  {t('settings.changePin')}
-                </Text>
+                <Text style={styles.actionButtonText}>{t('settings.changePin')}</Text>
               </TouchableOpacity>
             ) : (
               <>
@@ -204,10 +187,9 @@ export default function SettingsScreen() {
                 <TextInput
                   style={styles.input}
                   value={currentPin}
-                  onChangeText={(text) =>
-                    setCurrentPin(text.replace(/\D/g, '').slice(0, 4))
-                  }
+                  onChangeText={(text) => setCurrentPin(text.replace(/\D/g, '').slice(0, 4))}
                   placeholder="••••"
+                  placeholderTextColor={Colors.textMuted}
                   keyboardType="number-pad"
                   secureTextEntry
                   maxLength={4}
@@ -217,10 +199,9 @@ export default function SettingsScreen() {
                 <TextInput
                   style={styles.input}
                   value={newPin}
-                  onChangeText={(text) =>
-                    setNewPin(text.replace(/\D/g, '').slice(0, 4))
-                  }
+                  onChangeText={(text) => setNewPin(text.replace(/\D/g, '').slice(0, 4))}
                   placeholder="••••"
+                  placeholderTextColor={Colors.textMuted}
                   keyboardType="number-pad"
                   secureTextEntry
                   maxLength={4}
@@ -230,10 +211,9 @@ export default function SettingsScreen() {
                 <TextInput
                   style={styles.input}
                   value={confirmPin}
-                  onChangeText={(text) =>
-                    setConfirmPin(text.replace(/\D/g, '').slice(0, 4))
-                  }
+                  onChangeText={(text) => setConfirmPin(text.replace(/\D/g, '').slice(0, 4))}
                   placeholder="••••"
+                  placeholderTextColor={Colors.textMuted}
                   keyboardType="number-pad"
                   secureTextEntry
                   maxLength={4}
@@ -242,28 +222,20 @@ export default function SettingsScreen() {
                 <View style={styles.pinActions}>
                   <TouchableOpacity
                     style={[styles.pinButton, styles.cancelButton]}
-                    onPress={() => {
-                      resetPinForm();
-                      setPinFormOpen(false);
-                    }}
+                    onPress={() => { resetPinForm(); setPinFormOpen(false); }}
                     disabled={pinSaving}
                   >
                     <Text style={styles.cancelText}>{t('common.cancel')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={[
-                      styles.pinButton,
-                      styles.saveButton,
-                      pinSaving && styles.disabled,
-                    ]}
+                    style={[styles.pinButton, styles.saveButton, pinSaving && styles.disabled]}
                     onPress={handleSavePin}
                     disabled={pinSaving}
                   >
-                    {pinSaving ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.saveText}>{t('settings.save')}</Text>
-                    )}
+                    {pinSaving
+                      ? <ActivityIndicator color="#fff" />
+                      : <Text style={styles.saveText}>{t('settings.save')}</Text>
+                    }
                   </TouchableOpacity>
                 </View>
               </>
@@ -271,7 +243,7 @@ export default function SettingsScreen() {
           </View>
         )}
 
-        {/* 4. Scan Feedback (always shown) */}
+        {/* 4. Scan Feedback */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{t('settings.scan_feedback')}</Text>
           <Text style={styles.helperText}>{t('settings.scan_feedback_subtitle')}</Text>
@@ -283,7 +255,7 @@ export default function SettingsScreen() {
             <Switch
               value={soundEnabled}
               onValueChange={handleSoundToggle}
-              trackColor={{ false: '#ddd', true: '#1a73e8' }}
+              trackColor={{ false: Colors.border, true: Colors.primary }}
               thumbColor="#fff"
             />
           </View>
@@ -295,13 +267,13 @@ export default function SettingsScreen() {
             <Switch
               value={vibrationEnabled}
               onValueChange={handleVibrationToggle}
-              trackColor={{ false: '#ddd', true: '#1a73e8' }}
+              trackColor={{ false: Colors.border, true: Colors.primary }}
               thumbColor="#fff"
             />
           </View>
         </View>
 
-        {/* 5. Scan Mode (always shown) */}
+        {/* 5. Scan Mode */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{t('settings.scanMode')}</Text>
           <Text style={styles.helperText}>{t('settings.scanModeHint')}</Text>
@@ -345,12 +317,7 @@ export default function SettingsScreen() {
                 onPress={() => handleLanguageChange(lang.code)}
                 disabled={busy}
               >
-                <Text
-                  style={[
-                    styles.langText,
-                    isActive && styles.langTextActive,
-                  ]}
-                >
+                <Text style={[styles.langText, isActive && styles.langTextActive]}>
                   {lang.native}
                 </Text>
                 {isActive && <Text style={styles.checkmark}>✓</Text>}
@@ -376,7 +343,7 @@ function ScanModeOption({ label, description, active, onPress, disabled }) {
       activeOpacity={0.7}
     >
       <View style={styles.scanModeRow}>
-        <View style={styles.scanModeRadio}>
+        <View style={[styles.scanModeRadio, active && styles.scanModeRadioActive]}>
           {active && <View style={styles.scanModeRadioInner} />}
         </View>
         <View style={styles.scanModeTextWrap}>
@@ -391,18 +358,22 @@ function ScanModeOption({ label, description, active, onPress, disabled }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f4f5f7' },
-  scroll: { padding: 16, paddingBottom: 32 },
-  title: { fontSize: 28, fontWeight: '700', marginBottom: 16 },
+  container: { flex: 1, backgroundColor: Colors.background },
+  scroll:    { padding: 16, paddingBottom: 32 },
+  title:     { fontSize: 28, fontWeight: '700', color: Colors.textPrimary, marginBottom: 16 },
+
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.lg,
     padding: 18,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadow.sm,
   },
-  cardTitle: { fontSize: 16, fontWeight: '700', marginBottom: 12 },
-  text: { fontSize: 14, color: '#333', marginBottom: 6 },
-  helperText: { fontSize: 12, color: '#888', marginBottom: 12 },
+  cardTitle:  { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginBottom: 12 },
+  text:       { fontSize: 14, color: Colors.textSecondary, marginBottom: 6 },
+  helperText: { fontSize: 12, color: Colors.textMuted, marginBottom: 12 },
 
   langOption: {
     flexDirection: 'row',
@@ -410,101 +381,91 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingVertical: 12,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     marginBottom: 4,
   },
-  langOptionActive: { backgroundColor: '#e8f0fe' },
-  langText: { fontSize: 15, color: '#333', fontWeight: '500' },
-  langTextActive: { color: '#1a73e8', fontWeight: '700' },
-  checkmark: { color: '#1a73e8', fontSize: 18, fontWeight: '700' },
+  langOptionActive: { backgroundColor: Colors.primaryLight },
+  langText:         { fontSize: 15, color: Colors.textSecondary, fontWeight: '500' },
+  langTextActive:   { color: Colors.primary, fontWeight: '700' },
+  checkmark:        { color: Colors.primary, fontSize: 18, fontWeight: '700' },
 
   scanModeOption: {
     paddingVertical: 12,
     paddingHorizontal: 12,
-    borderRadius: 8,
+    borderRadius: Radius.sm,
     marginBottom: 6,
-    borderWidth: 1,
-    borderColor: '#eee',
-    backgroundColor: '#fff',
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
   },
   scanModeOptionActive: {
-    borderColor: '#1a73e8',
-    backgroundColor: '#e8f0fe',
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,
   },
-  scanModeRow: { flexDirection: 'row', alignItems: 'flex-start' },
+  scanModeRow:    { flexDirection: 'row', alignItems: 'flex-start' },
   scanModeRadio: {
     width: 22,
     height: 22,
     borderRadius: 11,
     borderWidth: 2,
-    borderColor: '#1a73e8',
+    borderColor: Colors.border,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 2,
     marginRight: 12,
   },
+  scanModeRadioActive:  { borderColor: Colors.primary },
   scanModeRadioInner: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#1a73e8',
+    backgroundColor: Colors.primary,
   },
-  scanModeTextWrap: { flex: 1 },
-  scanModeLabel: { fontSize: 15, color: '#222', fontWeight: '600' },
-  scanModeLabelActive: { color: '#1a73e8' },
-  scanModeDescription: { fontSize: 12, color: '#666', marginTop: 2 },
+  scanModeTextWrap:    { flex: 1 },
+  scanModeLabel:       { fontSize: 15, color: Colors.textPrimary, fontWeight: '600' },
+  scanModeLabelActive: { color: Colors.primary },
+  scanModeDescription: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
 
-  manageUsersButton: {
-    backgroundColor: '#1a73e8',
+  actionButton: {
+    backgroundColor: Colors.primary,
     padding: 14,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     alignItems: 'center',
   },
-  manageUsersButtonText: { color: '#fff', fontWeight: '600' },
-
-  changePinButton: {
-    backgroundColor: '#1a73e8',
-    padding: 14,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  changePinButtonText: { color: '#fff', fontWeight: '600' },
+  actionButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
 
   label: {
     fontSize: 13,
-    color: '#444',
+    color: Colors.textSecondary,
     marginBottom: 6,
     marginTop: 12,
     fontWeight: '600',
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
     padding: 12,
     fontSize: 16,
-    backgroundColor: '#fafafa',
+    backgroundColor: Colors.inputBg,
+    color: Colors.textPrimary,
   },
-  pinActions: { flexDirection: 'row', gap: 12, marginTop: 16 },
-  pinButton: { flex: 1, padding: 14, borderRadius: 8, alignItems: 'center' },
-  cancelButton: { backgroundColor: '#f0f0f0' },
-  cancelText: { color: '#444', fontWeight: '600' },
-  saveButton: { backgroundColor: '#16a34a' },
-  saveText: { color: '#fff', fontWeight: '600' },
-  disabled: { opacity: 0.6 },
+  pinActions:   { flexDirection: 'row', gap: 12, marginTop: 16 },
+  pinButton:    { flex: 1, padding: 14, borderRadius: Radius.md, alignItems: 'center' },
+  cancelButton: { backgroundColor: Colors.inputBg, borderWidth: 1, borderColor: Colors.border },
+  cancelText:   { color: Colors.textSecondary, fontWeight: '600' },
+  saveButton:   { backgroundColor: Colors.accent },
+  saveText:     { color: '#fff', fontWeight: '600' },
+  disabled:     { opacity: 0.6 },
 
-  feedbackRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
+  feedbackRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   feedbackTextWrap: { flex: 1, marginRight: 12 },
-  toggleLabel: { fontSize: 15, color: '#202124' },
+  toggleLabel:     { fontSize: 15, color: Colors.textPrimary },
 
   logoutButton: {
-    backgroundColor: '#dc3545',
+    backgroundColor: Colors.error,
     padding: 16,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     alignItems: 'center',
     marginTop: 8,
   },

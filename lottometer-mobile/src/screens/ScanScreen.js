@@ -22,6 +22,7 @@ import { useAuth } from '../context/AuthContext';
 import { useFeedback } from '../hooks/useFeedback';
 import { friendlyScanError } from '../utils/scanErrorMessages';
 import { lastPositionFor, parseBarcode } from '../utils/bookConstants';
+import { Colors, Radius, Shadow } from '../theme';
 
 function detectLastTicket(trimmedBarcode, scanType, slots) {
   if (scanType !== 'close') return false;
@@ -193,15 +194,8 @@ export default function ScanScreen() {
             t('scan.lastTicketTitle'),
             t('scan.lastTicketBody1'),
             [
-              {
-                text: t('scan.recordOnly'),
-                style: 'cancel',
-                onPress: () => proceedWithScan(code, false),
-              },
-              {
-                text: t('scan.yesSellBook'),
-                onPress: () => showLastTicketDialog2(),
-              },
+              { text: t('scan.recordOnly'), style: 'cancel', onPress: () => proceedWithScan(code, false) },
+              { text: t('scan.yesSellBook'), onPress: () => showLastTicketDialog2() },
             ]
           );
         }
@@ -213,16 +207,8 @@ export default function ScanScreen() {
             t('scan.confirmSaleTitle'),
             t('scan.confirmSaleBody', { slotName, price: `$${price}` }),
             [
-              {
-                text: t('common.cancel'),
-                style: 'cancel',
-                onPress: () => showLastTicketDialog1(),
-              },
-              {
-                text: t('scan.yesMarkSold'),
-                style: 'destructive',
-                onPress: () => proceedWithScan(code, true),
-              },
+              { text: t('common.cancel'), style: 'cancel', onPress: () => showLastTicketDialog1() },
+              { text: t('scan.yesMarkSold'), style: 'destructive', onPress: () => proceedWithScan(code, true) },
             ]
           );
         }
@@ -248,10 +234,7 @@ export default function ScanScreen() {
       t('scan.allClosesDoneBody'),
       [
         { text: t('scan.notYet'), style: 'cancel' },
-        {
-          text: t('scan.yesClose'),
-          onPress: () => navigation.navigate('Home'),
-        },
+        { text: t('scan.yesClose'), onPress: () => navigation.navigate('Home') },
       ]
     );
   }
@@ -264,13 +247,7 @@ export default function ScanScreen() {
     const isContinuous = scanMode === 'camera_continuous';
     navigation.navigate('CameraScanner', {
       mode: isContinuous ? 'continuous' : 'single',
-      onScanned: (data) => {
-        // Same handler in both modes — submitScan fires the API.
-        // In continuous mode it gets called once per scan while the
-        // camera stays open; in single mode it's called once and the
-        // camera closes immediately after.
-        submitScan(data);
-      },
+      onScanned: (data) => { submitScan(data); },
     });
   }
 
@@ -278,7 +255,7 @@ export default function ScanScreen() {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.center}>
-          <ActivityIndicator size="large" />
+          <ActivityIndicator size="large" color={Colors.primary} />
         </View>
       </SafeAreaView>
     );
@@ -315,7 +292,7 @@ export default function ScanScreen() {
             </View>
           ) : (
             <View style={[styles.banner, styles.bannerOk]}>
-              <Text style={styles.bannerText}>{t('scan.bannerInitialized')}</Text>
+              <Text style={[styles.bannerText, styles.bannerOkText]}>{t('scan.bannerInitialized')}</Text>
             </View>
           )}
 
@@ -383,6 +360,7 @@ export default function ScanScreen() {
               value={barcode}
               onChangeText={setBarcode}
               placeholder={t('scan.barcodePlaceholder')}
+              placeholderTextColor={Colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="default"
@@ -413,15 +391,13 @@ export default function ScanScreen() {
               ]}
             >
               <Text style={styles.lastScanTitle}>
-                {lastScan.book?.is_sold
-                  ? t('scan.lastTicketSold')
-                  : t('scan.scanRecorded')}
+                {lastScan.book?.is_sold ? t('scan.lastTicketSold') : t('scan.scanRecorded')}
               </Text>
-              <KV k={t('scan.fieldType')} v={lastScan.scan?.scan_type} />
+              <KV k={t('scan.fieldType')}     v={lastScan.scan?.scan_type} />
               <KV k={t('scan.fieldPosition')} v={lastScan.scan?.start_at_scan} />
-              <KV k={t('scan.fieldBook')} v={lastScan.book?.static_code} />
-              <KV k={t('scan.fieldPrice')} v={lastScan.book?.ticket_price} />
-              <KV k={t('scan.fieldSource')} v={lastScan.scan?.scan_source} />
+              <KV k={t('scan.fieldBook')}     v={lastScan.book?.static_code} />
+              <KV k={t('scan.fieldPrice')}    v={lastScan.book?.ticket_price} />
+              <KV k={t('scan.fieldSource')}   v={lastScan.scan?.scan_source} />
             </View>
           )}
 
@@ -438,6 +414,7 @@ export default function ScanScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
       {toastVisible && (
         <View style={styles.toast}>
           <Text style={styles.toastText}>{t('scan.shiftOpenedToast')}</Text>
@@ -457,71 +434,72 @@ function KV({ k, v }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f4f5f7' },
-  flex: { flex: 1 },
-  scroll: { padding: 16, paddingBottom: 32 },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  title: { fontSize: 28, fontWeight: '700', marginBottom: 12 },
-  subtitle: { fontSize: 14, color: '#666', textAlign: 'center', marginBottom: 4 },
+  container: { flex: 1, backgroundColor: Colors.background },
+  flex:      { flex: 1 },
+  scroll:    { padding: 16, paddingBottom: 32 },
+  center:    { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
+  title:     { fontSize: 28, fontWeight: '700', color: Colors.textPrimary, marginBottom: 12 },
+  subtitle:  { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', marginBottom: 4 },
 
-  banner: { borderRadius: 8, padding: 12, marginBottom: 12 },
-  bannerWarn: { backgroundColor: '#fef3c7' },
-  bannerOk: { backgroundColor: '#dcfce7' },
-  bannerText: { fontSize: 13, color: '#222' },
+  banner: { borderRadius: Radius.sm, padding: 12, marginBottom: 12 },
+  bannerWarn:    { backgroundColor: Colors.warningBg },
+  bannerOk:      { backgroundColor: Colors.successBg },
+  bannerText:    { fontSize: 13, color: Colors.textPrimary },
+  bannerOkText:  { color: Colors.success },
 
   card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
+    backgroundColor: Colors.surface,
+    borderRadius: Radius.md,
     padding: 16,
     marginBottom: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    ...Shadow.sm,
   },
   label: {
     fontSize: 13,
-    color: '#444',
+    color: Colors.textSecondary,
     marginBottom: 6,
     marginTop: 12,
     fontWeight: '600',
   },
   input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
     padding: 12,
     fontSize: 16,
-    backgroundColor: '#fafafa',
+    backgroundColor: Colors.inputBg,
+    color: Colors.textPrimary,
   },
 
   pickerRow: { flexDirection: 'row', gap: 8 },
   pickerOption: {
     flex: 1,
     padding: 12,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#ddd',
+    borderRadius: Radius.sm,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
     alignItems: 'center',
+    backgroundColor: Colors.surface,
   },
   pickerOptionActive: {
-    borderColor: '#1a73e8',
-    backgroundColor: '#e8f0fe',
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primaryLight,
   },
   pickerOptionDisabled: {
-    backgroundColor: '#f5f5f5',
-    borderColor: '#eee',
+    backgroundColor: Colors.inputBg,
+    borderColor: Colors.border,
     opacity: 0.5,
   },
-  pickerText: { color: '#666', fontWeight: '600' },
-  pickerTextActive: { color: '#1a73e8' },
-  pickerTextDisabled: { color: '#aaa' },
+  pickerText:         { color: Colors.textSecondary, fontWeight: '600' },
+  pickerTextActive:   { color: Colors.primary },
+  pickerTextDisabled: { color: Colors.textMuted },
 
   cameraButton: {
-    backgroundColor: '#16a34a',
+    backgroundColor: Colors.accent,
     padding: 16,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     alignItems: 'center',
     marginTop: 16,
   },
@@ -529,61 +507,53 @@ const styles = StyleSheet.create({
 
   divider: {
     textAlign: 'center',
-    color: '#999',
+    color: Colors.textMuted,
     fontSize: 12,
     marginVertical: 12,
   },
 
   scanButton: {
-    backgroundColor: '#1a73e8',
+    backgroundColor: Colors.primary,
     padding: 16,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     alignItems: 'center',
     marginTop: 8,
   },
   scanButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   disabled: { opacity: 0.6 },
 
-  lastScanCard: { borderLeftWidth: 4, borderLeftColor: '#16a34a' },
-  lastTicketCard: { borderLeftColor: '#dc2626', backgroundColor: '#fef2f2' },
-  lastScanTitle: { fontSize: 16, fontWeight: '700', marginBottom: 8 },
+  lastScanCard:  { borderLeftWidth: 4, borderLeftColor: Colors.success },
+  lastTicketCard: { borderLeftColor: Colors.error, backgroundColor: Colors.errorBg },
+  lastScanTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginBottom: 8 },
 
-  kvRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 4,
-  },
-  kvKey: { color: '#666', fontSize: 13 },
-  kvValue: { color: '#222', fontSize: 13, fontWeight: '600' },
+  kvRow:  { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
+  kvKey:  { color: Colors.textSecondary, fontSize: 13 },
+  kvValue: { color: Colors.textPrimary, fontSize: 13, fontWeight: '600' },
 
   doneButton: {
-    backgroundColor: '#16a34a',
+    backgroundColor: Colors.accent,
     padding: 16,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     alignItems: 'center',
     marginBottom: 8,
   },
   doneButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 
-  footer: { alignItems: 'center', marginTop: 8 },
-  footerText: { color: '#888', fontSize: 12 },
+  footer:     { alignItems: 'center', marginTop: 8 },
+  footerText: { color: Colors.textMuted, fontSize: 12 },
 
   toast: {
     position: 'absolute',
     bottom: 24,
     left: 16,
     right: 16,
-    backgroundColor: '#1a73e8',
+    backgroundColor: Colors.primary,
     paddingVertical: 12,
     paddingHorizontal: 16,
-    borderRadius: 8,
+    borderRadius: Radius.md,
     zIndex: 1000,
     elevation: 4,
+    ...Shadow.card,
   },
-  toastText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-    textAlign: 'center',
-  },
+  toastText: { color: '#fff', fontSize: 14, fontWeight: '500', textAlign: 'center' },
 });
