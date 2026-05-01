@@ -9,6 +9,7 @@ from app.models.business_day import BusinessDay
 from app.models.employee_shift import EmployeeShift
 from app.models.shift_books import ShiftBooks
 from app.models.shift_extra_sales import ShiftExtraSales
+from app.models.contact_submission import ContactSubmission
 
 
 __all__ = [
@@ -21,4 +22,5 @@ __all__ = [
     "EmployeeShift",
     "ShiftBooks",
     "ShiftExtraSales",
+    "ContactSubmission",
 ]

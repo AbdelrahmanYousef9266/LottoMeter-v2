@@ -2,14 +2,14 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 
 const NAV_ITEMS = [
-  { to: '/', label: 'Dashboard', icon: '📊', exact: true },
-  { to: '/business-days', label: 'Business Days', icon: '📅' },
-  { to: '/shifts', label: 'Shifts', icon: '🔄' },
-  { to: '/books', label: 'Books', icon: '📚' },
-  { to: '/slots', label: 'Slots', icon: '🎰' },
-  { to: '/users', label: 'Users', icon: '👥' },
-  { to: '/reports', label: 'Reports', icon: '📈' },
-  { to: '/subscription', label: 'Subscription', icon: '💳' },
+  { to: '/dashboard', label: 'Dashboard', icon: '📊', exact: true },
+  { to: '/dashboard/business-days', label: 'Business Days', icon: '📅' },
+  { to: '/dashboard/shifts', label: 'Shifts', icon: '🔄' },
+  { to: '/dashboard/books', label: 'Books', icon: '📚' },
+  { to: '/dashboard/slots', label: 'Slots', icon: '🎰' },
+  { to: '/dashboard/users', label: 'Users', icon: '👥' },
+  { to: '/dashboard/reports', label: 'Reports', icon: '📈' },
+  { to: '/dashboard/subscription', label: 'Subscription', icon: '💳' },
 ]
 
 export default function Sidebar() {

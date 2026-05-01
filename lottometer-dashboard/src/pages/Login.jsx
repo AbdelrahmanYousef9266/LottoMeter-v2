@@ -45,7 +45,7 @@ export default function Login() {
     setError('')
     try {
       await login(form)
-      navigate('/')
+      navigate('/dashboard')
     } catch (err) {
       setError(
         err?.response?.data?.message ||

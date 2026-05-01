@@ -209,7 +209,7 @@ export default function Dashboard() {
           <h2 style={{ fontSize: 16, fontWeight: 700 }}>Recent Shifts</h2>
           <button
             className="btn btn-secondary btn-sm"
-            onClick={() => navigate('/shifts')}
+            onClick={() => navigate('/dashboard/shifts')}
           >
             View All
           </button>
@@ -232,13 +232,13 @@ export default function Dashboard() {
       >
         <button
           className="btn btn-secondary"
-          onClick={() => navigate('/business-days')}
+          onClick={() => navigate('/dashboard/business-days')}
         >
           📅 View Business Days
         </button>
         <button
           className="btn btn-primary"
-          onClick={() => navigate('/reports')}
+          onClick={() => navigate('/dashboard/reports')}
         >
           📈 View Reports
         </button>

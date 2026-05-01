@@ -148,7 +148,7 @@ export default function Shifts() {
           className="btn btn-secondary btn-sm"
           onClick={(e) => {
             e.stopPropagation()
-            navigate(`/reports?shift_id=${row.id || row._id}`)
+            navigate(`/dashboard/reports?shift_id=${row.id || row._id}`)
           }}
         >
           Report
@@ -219,7 +219,7 @@ export default function Shifts() {
           data={shifts}
           loading={loading}
           emptyMessage="No shifts found for the selected filters."
-          onRowClick={(row) => navigate(`/reports?shift_id=${row.id || row._id}`)}
+          onRowClick={(row) => navigate(`/dashboard/reports?shift_id=${row.id || row._id}`)}
         />
       </div>
     </div>
