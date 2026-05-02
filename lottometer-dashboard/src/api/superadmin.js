@@ -12,3 +12,8 @@ export const activateStore = (id) => api.post(`/superadmin/stores/${id}/activate
 export const listSubmissions = (params) => api.get('/superadmin/submissions', { params })
 export const updateSubmission = (id, data) => api.put(`/superadmin/submissions/${id}`, data)
 export const approveSubmission = (id, data) => api.post(`/superadmin/submissions/${id}/approve`, data)
+
+export const listSubscriptions = (params) => api.get('/superadmin/subscriptions', { params })
+export const cancelStoreSubscription = (id, data) => api.post(`/superadmin/stores/${id}/cancel-subscription`, data)
+export const reactivateStoreSubscription = (id) => api.post(`/superadmin/stores/${id}/reactivate-subscription`)
+export const extendStoreTrial = (id, data) => api.post(`/superadmin/stores/${id}/extend-trial`, data)

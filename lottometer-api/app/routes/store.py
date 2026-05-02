@@ -1,10 +1,12 @@
 """Store routes — /api/store/*"""
 
 from flask import Blueprint, request, jsonify
+from flask_jwt_extended import jwt_required
 from marshmallow import ValidationError as MarshmallowValidationError
 
 from app.schemas.store_schema import ChangePinSchema, ChangeScanModeSchema
 from app.services import store_service
+from app.services.store_settings_service import get_settings, update_settings, serialize_settings
 from app.errors import ValidationError
 from app.auth_helpers import admin_required, current_store_id
 
@@ -42,3 +44,20 @@ def change_scan_mode():
         scan_mode=data["scan_mode"],
     )
     return jsonify(result), 200
+
+
+@store_bp.route("/settings", methods=["GET"])
+@jwt_required()
+def get_store_settings():
+    """Any authenticated user: retrieve store settings."""
+    settings = get_settings(current_store_id())
+    return jsonify({"settings": serialize_settings(settings)}), 200
+
+
+@store_bp.route("/settings", methods=["PUT"])
+@admin_required
+def update_store_settings():
+    """Admin-only: update store settings."""
+    body = request.get_json(silent=True) or {}
+    settings = update_settings(current_store_id(), body)
+    return jsonify({"settings": serialize_settings(settings)}), 200

@@ -56,6 +56,9 @@ def setup_first_store(data: dict) -> dict:
     from app.services.subscription_service import create_trial_subscription
     create_trial_subscription(store.store_id)
 
+    from app.services.store_settings_service import create_default_settings
+    create_default_settings(store.store_id)
+
     db.session.commit()
 
     # Issue JWT

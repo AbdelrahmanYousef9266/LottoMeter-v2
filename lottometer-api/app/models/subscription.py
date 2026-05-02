@@ -22,6 +22,17 @@ class Subscription(db.Model):
     stripe_customer_id = db.Column(db.String(100), nullable=True)
     stripe_subscription_id = db.Column(db.String(100), nullable=True)
     cancelled_at = db.Column(db.DateTime, nullable=True)
+
+    plan_price = db.Column(db.Numeric(10, 2), nullable=True)
+    billing_email = db.Column(db.String(150), nullable=True)
+    card_last4 = db.Column(db.String(4), nullable=True)
+    card_brand = db.Column(db.String(20), nullable=True)
+    cancel_at_period_end = db.Column(
+        db.Boolean, nullable=False, default=False, server_default="false"
+    )
+    cancelled_reason = db.Column(db.String(250), nullable=True)
+    notes = db.Column(db.Text, nullable=True)
+
     created_at = db.Column(
         db.DateTime,
         nullable=False,

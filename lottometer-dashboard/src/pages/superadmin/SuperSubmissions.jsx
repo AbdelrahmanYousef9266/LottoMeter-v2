@@ -14,6 +14,11 @@ function getTypeVariant(type) {
   return type === 'apply' ? 'amber' : 'gray'
 }
 
+const EMPTY_APPROVE = {
+  store_name: '', store_code: '', admin_username: '', admin_password: '',
+  owner_name: '', email: '', phone: '', state: '',
+}
+
 export default function SuperSubmissions() {
   const [submissions, setSubmissions] = useState([])
   const [loading, setLoading] = useState(true)
@@ -21,7 +26,7 @@ export default function SuperSubmissions() {
   const [statusFilter, setStatusFilter] = useState('')
   const [selected, setSelected] = useState(null)
   const [approveModal, setApproveModal] = useState(null)
-  const [approveForm, setApproveForm] = useState({ store_name: '', store_code: '', admin_username: '', admin_password: '' })
+  const [approveForm, setApproveForm] = useState(EMPTY_APPROVE)
   const [approveLoading, setApproveLoading] = useState(false)
   const [approveError, setApproveError] = useState('')
   const [actionLoading, setActionLoading] = useState(false)
@@ -55,9 +60,12 @@ export default function SuperSubmissions() {
     setApproveLoading(true)
     setApproveError('')
     try {
-      const res = await approveSubmission(approveModal.id, approveForm)
+      const payload = { ...approveForm }
+      // Strip empty optional fields
+      Object.keys(payload).forEach((k) => { if (!payload[k]?.trim()) delete payload[k] })
+      const res = await approveSubmission(approveModal.id, payload)
       setApproveModal(null)
-      setApproveForm({ store_name: '', store_code: '', admin_username: '', admin_password: '' })
+      setApproveForm(EMPTY_APPROVE)
       load()
       if (selected?.id === approveModal.id) setSelected((p) => ({ ...p, status: 'approved' }))
       alert(`Store "${res.data.store.store_name}" created. Admin: ${res.data.admin.username}`)
@@ -71,14 +79,21 @@ export default function SuperSubmissions() {
   const openApproveModal = (sub) => {
     const suggestedCode = (sub.business_name || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6)
     setApproveForm({
-      store_name: sub.business_name || '',
-      store_code: suggestedCode,
+      store_name:     sub.business_name || '',
+      store_code:     suggestedCode,
       admin_username: '',
       admin_password: '',
+      owner_name:     sub.full_name    || '',
+      email:          sub.email        || '',
+      phone:          sub.phone        || '',
+      state:          sub.state        || '',
     })
     setApproveError('')
     setApproveModal(sub)
   }
+
+  const setApproveField = (k) => (e) =>
+    setApproveForm((p) => ({ ...p, [k]: e.target.value }))
 
   return (
     <div>
@@ -154,8 +169,11 @@ export default function SuperSubmissions() {
                       </button>
                     )}
                     {s.submission_type === 'apply' && s.status !== 'approved' && (
-                      <button className="btn btn-primary btn-sm" style={{ background: '#7C3AED', borderColor: '#7C3AED' }}
-                        onClick={() => openApproveModal(s)}>
+                      <button
+                        className="btn btn-primary btn-sm"
+                        style={{ background: '#7C3AED', borderColor: '#7C3AED' }}
+                        onClick={() => openApproveModal(s)}
+                      >
                         Approve
                       </button>
                     )}
@@ -180,9 +198,8 @@ export default function SuperSubmissions() {
               </Button>
             )}
             {selected?.submission_type === 'apply' && selected?.status !== 'approved' && (
-              <Button onClick={() => { setSelected(null); openApproveModal(selected) }}
-                style={{ background: '#7C3AED' }}>
-                Approve & Create Store
+              <Button onClick={() => { setSelected(null); openApproveModal(selected) }} style={{ background: '#7C3AED' }}>
+                Approve &amp; Create Store
               </Button>
             )}
             <Button variant="secondary" onClick={() => setSelected(null)}>Close</Button>
@@ -198,6 +215,7 @@ export default function SuperSubmissions() {
             <Row label="Email"><a href={`mailto:${selected.email}`} style={{ color: 'var(--blue)' }}>{selected.email}</a></Row>
             {selected.phone && <Row label="Phone">{selected.phone}</Row>}
             {selected.city && <Row label="City">{selected.city}</Row>}
+            {selected.state && <Row label="State">{selected.state}</Row>}
             {selected.num_employees && <Row label="Employees">{selected.num_employees}</Row>}
             {selected.how_heard && <Row label="How Heard">{selected.how_heard}</Row>}
             {selected.message && (
@@ -227,7 +245,7 @@ export default function SuperSubmissions() {
           <>
             <Button variant="secondary" onClick={() => { setApproveModal(null); setApproveError('') }}>Cancel</Button>
             <Button onClick={handleApprove} loading={approveLoading} style={{ background: '#7C3AED' }}>
-              Create Store & Approve
+              Create Store &amp; Approve
             </Button>
           </>
         }
@@ -235,24 +253,50 @@ export default function SuperSubmissions() {
         <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
           This will create a new store and admin account, then mark the submission as approved.
         </p>
+
+        {/* Required fields */}
         {[
-          { key: 'store_name', label: 'Store Name', placeholder: approveModal?.business_name || '' },
-          { key: 'store_code', label: 'Store Code', placeholder: 'e.g. LUCKY1' },
+          { key: 'store_name',     label: 'Store Name',     placeholder: approveModal?.business_name || '' },
+          { key: 'store_code',     label: 'Store Code',     placeholder: 'e.g. LUCKY1' },
           { key: 'admin_username', label: 'Admin Username', placeholder: 'e.g. admin' },
           { key: 'admin_password', label: 'Admin Password', placeholder: 'Temporary password', type: 'password' },
         ].map(({ key, label, placeholder, type = 'text' }) => (
           <div key={key} className="form-group">
-            <label className="form-label">{label}</label>
+            <label className="form-label">{label} <span style={{ color: 'var(--red)' }}>*</span></label>
             <input
               className="input-field"
               type={type}
               placeholder={placeholder}
               value={approveForm[key]}
-              onChange={(e) => setApproveForm((p) => ({ ...p, [key]: e.target.value }))}
+              onChange={setApproveField(key)}
             />
           </div>
         ))}
-        {approveError && <p style={{ color: 'var(--red)', fontSize: 13 }}>{approveError}</p>}
+
+        {/* Pre-filled from submission */}
+        <div style={{ marginTop: 16, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>
+            Store Details <span style={{ fontWeight: 400, textTransform: 'none' }}>(pre-filled from submission)</span>
+          </div>
+          {[
+            { key: 'owner_name', label: 'Owner Name',   placeholder: 'Full name' },
+            { key: 'email',      label: 'Store Email',  placeholder: 'contact@store.com' },
+            { key: 'phone',      label: 'Phone',        placeholder: '+1 (555) 000-0000' },
+            { key: 'state',      label: 'State',        placeholder: 'NY' },
+          ].map(({ key, label, placeholder }) => (
+            <div key={key} className="form-group">
+              <label className="form-label">{label}</label>
+              <input
+                className="input-field"
+                placeholder={placeholder}
+                value={approveForm[key]}
+                onChange={setApproveField(key)}
+              />
+            </div>
+          ))}
+        </div>
+
+        {approveError && <p style={{ color: 'var(--red)', fontSize: 13, marginTop: 8 }}>{approveError}</p>}
       </Modal>
     </div>
   )

@@ -28,15 +28,25 @@ def _hash_password(plain: str) -> str:
 
 def _serialize_store(store, stats=True):
     d = {
-        "store_id": store.store_id,
+        "store_id":   store.store_id,
         "store_name": store.store_name,
         "store_code": store.store_code,
-        "suspended": store.suspended,
+        "suspended":  store.suspended,
+        "is_active":  store.is_active,
+        "owner_name": store.owner_name,
+        "email":      store.email,
+        "phone":      store.phone,
+        "address":    store.address,
+        "city":       store.city,
+        "state":      store.state,
+        "zip_code":   store.zip_code,
+        "created_by": store.created_by,
+        "notes":      store.notes,
         "created_at": store.created_at.isoformat(),
     }
     if stats:
-        d["user_count"] = User.query.filter_by(store_id=store.store_id, deleted_at=None).count()
-        d["book_count"] = Book.query.filter_by(store_id=store.store_id).count()
+        d["user_count"]  = User.query.filter_by(store_id=store.store_id, deleted_at=None).count()
+        d["book_count"]  = Book.query.filter_by(store_id=store.store_id).count()
         d["shift_count"] = EmployeeShift.query.filter_by(store_id=store.store_id).count()
     return d
 
@@ -129,8 +139,8 @@ def get_store(store_id):
 @superadmin_required
 def create_store():
     body = request.get_json(silent=True) or {}
-    store_name = (body.get("store_name") or "").strip()
-    store_code = (body.get("store_code") or "").strip().upper()
+    store_name     = (body.get("store_name") or "").strip()
+    store_code     = (body.get("store_code") or "").strip().upper()
     admin_username = (body.get("admin_username") or "").strip()
     admin_password = (body.get("admin_password") or "").strip()
 
@@ -140,7 +150,20 @@ def create_store():
     if Store.query.filter_by(store_code=store_code).first():
         raise ConflictError(f"Store code '{store_code}' is already in use.")
 
-    store = Store(store_name=store_name, store_code=store_code)
+    actor_id = current_user_id()
+    store = Store(
+        store_name=store_name,
+        store_code=store_code,
+        owner_name=(body.get("owner_name") or "").strip() or None,
+        email=(body.get("email") or "").strip() or None,
+        phone=(body.get("phone") or "").strip() or None,
+        address=(body.get("address") or "").strip() or None,
+        city=(body.get("city") or "").strip() or None,
+        state=(body.get("state") or "").strip() or None,
+        zip_code=(body.get("zip_code") or "").strip() or None,
+        notes=(body.get("notes") or "").strip() or None,
+        created_by=actor_id,
+    )
     db.session.add(store)
     db.session.flush()
 
@@ -155,9 +178,12 @@ def create_store():
     from app.services.subscription_service import create_trial_subscription
     create_trial_subscription(store.store_id)
 
+    from app.services.store_settings_service import create_default_settings
+    create_default_settings(store.store_id)
+
     db.session.commit()
 
-    log_action("store_created", user_id=current_user_id(), store_id=store.store_id,
+    log_action("store_created", user_id=actor_id, store_id=store.store_id,
                entity_type="store", entity_id=store.store_id,
                new_value=f"store_code={store.store_code} admin={admin_username}",
                ip_address=request.remote_addr,
@@ -182,6 +208,10 @@ def update_store(store_id):
         if existing and existing.store_id != store_id:
             raise ConflictError(f"Store code '{new_code}' is already in use.")
         store.store_code = new_code
+    if "notes" in body:
+        store.notes = (body["notes"] or "").strip() or None
+    if "is_active" in body and isinstance(body["is_active"], bool):
+        store.is_active = body["is_active"]
     db.session.commit()
     return jsonify({"store": _serialize_store(store)}), 200
 
@@ -267,7 +297,15 @@ def approve_submission(sub_id):
     if Store.query.filter_by(store_code=store_code).first():
         raise ConflictError(f"Store code '{store_code}' is already in use.")
 
-    store = Store(store_name=store_name, store_code=store_code)
+    store = Store(
+        store_name=store_name,
+        store_code=store_code,
+        owner_name=(body.get("owner_name") or "").strip() or None,
+        email=(body.get("email") or "").strip() or None,
+        phone=(body.get("phone") or "").strip() or None,
+        city=(body.get("city") or "").strip() or None,
+        state=(body.get("state") or "").strip() or None,
+    )
     db.session.add(store)
     db.session.flush()
 
@@ -278,6 +316,12 @@ def approve_submission(sub_id):
         store_id=store.store_id,
     )
     db.session.add(admin)
+
+    from app.services.subscription_service import create_trial_subscription
+    create_trial_subscription(store.store_id)
+
+    from app.services.store_settings_service import create_default_settings
+    create_default_settings(store.store_id)
 
     sub.status = "approved"
     sub.reviewed_at = datetime.now(timezone.utc)
@@ -341,3 +385,106 @@ def list_audit_logs():
             for l in logs
         ]
     }), 200
+
+
+# ── subscriptions ──────────────────────────────────────────────────────────────
+
+def _serialize_subscription(sub, store=None):
+    d = {
+        "id":                    sub.id,
+        "store_id":              sub.store_id,
+        "plan":                  sub.plan,
+        "status":                sub.status,
+        "plan_price":            float(sub.plan_price) if sub.plan_price is not None else None,
+        "billing_email":         sub.billing_email,
+        "card_last4":            sub.card_last4,
+        "card_brand":            sub.card_brand,
+        "cancel_at_period_end":  sub.cancel_at_period_end,
+        "cancelled_reason":      sub.cancelled_reason,
+        "notes":                 sub.notes,
+        "trial_ends_at":         sub.trial_ends_at.isoformat() if sub.trial_ends_at else None,
+        "current_period_start":  sub.current_period_start.isoformat() if sub.current_period_start else None,
+        "current_period_end":    sub.current_period_end.isoformat() if sub.current_period_end else None,
+        "stripe_customer_id":    sub.stripe_customer_id,
+        "stripe_subscription_id": sub.stripe_subscription_id,
+        "cancelled_at":          sub.cancelled_at.isoformat() if sub.cancelled_at else None,
+        "created_at":            sub.created_at.isoformat(),
+    }
+    if store:
+        d["store_name"] = store.store_name
+        d["store_code"] = store.store_code
+    return d
+
+
+@superadmin_bp.get("/subscriptions")
+@jwt_required()
+@superadmin_required
+def list_subscriptions():
+    from app.services.subscription_service import get_all_subscriptions
+    include_cancelled = request.args.get("include_cancelled", "false").lower() == "true"
+    rows = get_all_subscriptions(include_cancelled=include_cancelled)
+    return jsonify({
+        "subscriptions": [_serialize_subscription(sub, store) for sub, store in rows]
+    }), 200
+
+
+@superadmin_bp.post("/stores/<int:store_id>/cancel-subscription")
+@jwt_required()
+@superadmin_required
+def cancel_store_subscription(store_id):
+    store = Store.query.get(store_id)
+    if not store:
+        raise NotFoundError("Store not found.")
+    body = request.get_json(silent=True) or {}
+    reason = (body.get("reason") or "").strip() or None
+    from app.services.subscription_service import cancel_subscription
+    sub = cancel_subscription(store_id, reason=reason)
+    if not sub:
+        raise NotFoundError("No subscription found for this store.")
+    log_action("subscription_cancelled", user_id=current_user_id(), store_id=store_id,
+               entity_type="subscription", entity_id=sub.id,
+               new_value=reason,
+               ip_address=request.remote_addr,
+               user_agent=(request.headers.get("User-Agent") or "")[:200])
+    return jsonify({"subscription": _serialize_subscription(sub)}), 200
+
+
+@superadmin_bp.post("/stores/<int:store_id>/reactivate-subscription")
+@jwt_required()
+@superadmin_required
+def reactivate_store_subscription(store_id):
+    store = Store.query.get(store_id)
+    if not store:
+        raise NotFoundError("Store not found.")
+    from app.services.subscription_service import reactivate_subscription
+    sub = reactivate_subscription(store_id)
+    if not sub:
+        raise NotFoundError("No subscription found for this store.")
+    log_action("subscription_reactivated", user_id=current_user_id(), store_id=store_id,
+               entity_type="subscription", entity_id=sub.id,
+               ip_address=request.remote_addr,
+               user_agent=(request.headers.get("User-Agent") or "")[:200])
+    return jsonify({"subscription": _serialize_subscription(sub)}), 200
+
+
+@superadmin_bp.post("/stores/<int:store_id>/extend-trial")
+@jwt_required()
+@superadmin_required
+def extend_store_trial(store_id):
+    store = Store.query.get(store_id)
+    if not store:
+        raise NotFoundError("Store not found.")
+    body = request.get_json(silent=True) or {}
+    days = body.get("days")
+    if not isinstance(days, int) or days < 1:
+        raise ValidationError("'days' must be a positive integer.")
+    from app.services.subscription_service import extend_trial
+    sub = extend_trial(store_id, days=days)
+    if not sub:
+        raise NotFoundError("No subscription found for this store.")
+    log_action("trial_extended", user_id=current_user_id(), store_id=store_id,
+               entity_type="subscription", entity_id=sub.id,
+               new_value=f"days={days}",
+               ip_address=request.remote_addr,
+               user_agent=(request.headers.get("User-Agent") or "")[:200])
+    return jsonify({"subscription": _serialize_subscription(sub)}), 200

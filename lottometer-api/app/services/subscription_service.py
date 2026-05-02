@@ -111,3 +111,52 @@ def expire_subscription(store_id: int) -> Subscription:
         sub.status = "expired"
         db.session.commit()
     return sub
+
+
+def cancel_subscription(store_id: int, reason: str = None) -> Subscription:
+    """Mark subscription to cancel at the end of the current period."""
+    sub = Subscription.query.filter_by(store_id=store_id).first()
+    if not sub:
+        return None
+    sub.cancel_at_period_end = True
+    sub.cancelled_reason = reason or None
+    db.session.commit()
+    return sub
+
+
+def reactivate_subscription(store_id: int) -> Subscription:
+    """Remove a scheduled cancellation."""
+    sub = Subscription.query.filter_by(store_id=store_id).first()
+    if not sub:
+        return None
+    sub.cancel_at_period_end = False
+    sub.cancelled_reason = None
+    db.session.commit()
+    return sub
+
+
+def extend_trial(store_id: int, days: int) -> Subscription:
+    """Extend or restore a trial by N days (superadmin use)."""
+    sub = Subscription.query.filter_by(store_id=store_id).first()
+    if not sub:
+        return None
+    now = datetime.now(timezone.utc)
+    if sub.status == "trial" and sub.trial_ends_at:
+        sub.trial_ends_at = _aware(sub.trial_ends_at) + timedelta(days=days)
+    else:
+        sub.status = "trial"
+        sub.trial_ends_at = now + timedelta(days=days)
+    db.session.commit()
+    return sub
+
+
+def get_all_subscriptions(include_cancelled: bool = False) -> list:
+    """Return all subscriptions joined with their store, for the superadmin view."""
+    from app.models.store import Store
+    q = (
+        db.session.query(Subscription, Store)
+        .join(Store, Store.store_id == Subscription.store_id)
+    )
+    if not include_cancelled:
+        q = q.filter(Subscription.status != "cancelled")
+    return q.order_by(Subscription.created_at.desc()).all()

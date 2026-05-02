@@ -30,6 +30,25 @@ class Store(db.Model):
         default=False,
         server_default="false",
     )
+    is_active = db.Column(
+        db.Boolean,
+        nullable=False,
+        default=True,
+        server_default="true",
+    )
+    email = db.Column(db.String(150), nullable=True)
+    phone = db.Column(db.String(30), nullable=True)
+    address = db.Column(db.String(250), nullable=True)
+    city = db.Column(db.String(100), nullable=True)
+    state = db.Column(db.String(50), nullable=True)
+    zip_code = db.Column(db.String(20), nullable=True)
+    owner_name = db.Column(db.String(150), nullable=True)
+    created_by = db.Column(
+        db.Integer,
+        db.ForeignKey("users.user_id", use_alter=True, name="fk_stores_created_by"),
+        nullable=True,
+    )
+    notes = db.Column(db.Text, nullable=True)
     created_at = db.Column(
         db.DateTime,
         nullable=False,
