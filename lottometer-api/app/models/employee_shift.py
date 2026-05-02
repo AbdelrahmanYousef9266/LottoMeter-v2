@@ -13,6 +13,7 @@ class EmployeeShift(db.Model):
     __tablename__ = "employee_shifts"
 
     id              = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    uuid            = db.Column(db.String(36), nullable=True, index=True)
     business_day_id = db.Column(db.Integer, db.ForeignKey("business_days.id"), nullable=False, index=True)
     store_id        = db.Column(db.Integer, db.ForeignKey("stores.store_id"), nullable=False, index=True)
     employee_id     = db.Column(db.Integer, db.ForeignKey("users.user_id"), nullable=False)

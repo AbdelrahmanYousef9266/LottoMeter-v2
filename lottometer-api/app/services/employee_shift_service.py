@@ -261,20 +261,32 @@ def get_running_summary(store_id: int, shift_id: int) -> dict:
     whole_book_total = sum((e.value for e in extras), Decimal("0"))
 
     active_books = _all_active_books(store_id)
-    close_codes = {
-        s.static_code for s in
-        ShiftBooks.query
-        .filter_by(shift_id=shift_id, store_id=store_id, scan_type="close")
-        .all()
-    }
+    all_scans = ShiftBooks.query.filter_by(shift_id=shift_id, store_id=store_id).all()
+    close_codes = {s.static_code for s in all_scans if s.scan_type == "close"}
     books_with_close = sum(1 for b in active_books if b.static_code in close_codes)
 
     return {
-        "tickets_total":      str(tickets_total),
-        "whole_book_total":   str(whole_book_total),
-        "books_total_active": len(active_books),
-        "books_with_close":   books_with_close,
+        "tickets_total":       str(tickets_total),
+        "whole_book_total":    str(whole_book_total),
+        "books_total_active":  len(active_books),
+        "books_with_close":    books_with_close,
         "books_pending_close": len(active_books) - books_with_close,
+        "scanned_books": [
+            {
+                "id":                 None,  # composite PK — no standalone integer id
+                "uuid":               scan.uuid,
+                "static_code":        scan.static_code,
+                "scan_type":          scan.scan_type,
+                "start_at_scan":      scan.start_at_scan,
+                "is_last_ticket":     scan.is_last_ticket,
+                "scan_source":        scan.scan_source,
+                "slot_id":            scan.slot_id,
+                "scanned_at":         scan.scanned_at.isoformat(),
+                "scanned_by_user_id": scan.scanned_by_user_id,
+                "store_id":           scan.store_id,
+            }
+            for scan in all_scans
+        ],
     }
 
 
