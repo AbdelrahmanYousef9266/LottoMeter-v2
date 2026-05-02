@@ -83,9 +83,13 @@ export default function ScanScreen() {
           : (summary.books_pending_open  ?? 0);
         setPendingCount(pending);
         setIsInitialized(initialized);
+        // Explicitly set on every load — same-value setState won't re-trigger
+        // the useEffect, so this is the reliable source of truth on re-focus.
+        setScanType(initialized ? 'close' : 'open');
       } catch {
         setPendingCount(0);
         setIsInitialized(true);
+        setScanType('close');
       }
     } catch (err) {
       Alert.alert(t('home.errorLoadingShift'), err.message || t('common.tryAgain'));
@@ -114,9 +118,13 @@ export default function ScanScreen() {
     }, [loadSlots])
   );
 
+  // Auto-switch to close only when transitioning into the initialized state.
+  // Never force back to 'open' here — the toggle is already locked by isInitialized.
   useEffect(() => {
-    setScanType(isInitialized ? 'close' : 'open');
-  }, [isInitialized]);
+    if (isInitialized && scanType === 'open') {
+      setScanType('close');
+    }
+  }, [isInitialized]); // scanType intentionally omitted — only react to phase change
 
   useEffect(() => {
     if (justOpened) {
@@ -307,17 +315,14 @@ export default function ScanScreen() {
               <TouchableOpacity
                 style={[
                   styles.pickerOption,
-                  scanType === 'open' && styles.pickerOptionActive,
-                  isInitialized && styles.pickerOptionDisabled,
+                  scanType === 'open' ? styles.pickerOptionActive : styles.pickerOptionDisabled,
                 ]}
-                onPress={() => !isInitialized && setScanType('open')}
-                disabled={isInitialized}
+                disabled
               >
                 <Text
                   style={[
                     styles.pickerText,
-                    scanType === 'open' && styles.pickerTextActive,
-                    isInitialized && styles.pickerTextDisabled,
+                    scanType === 'open' ? styles.pickerTextActive : styles.pickerTextDisabled,
                   ]}
                 >
                   {t('scan.open')}
@@ -326,17 +331,14 @@ export default function ScanScreen() {
               <TouchableOpacity
                 style={[
                   styles.pickerOption,
-                  scanType === 'close' && styles.pickerOptionActive,
-                  !isInitialized && styles.pickerOptionDisabled,
+                  scanType === 'close' ? styles.pickerOptionActive : styles.pickerOptionDisabled,
                 ]}
-                onPress={() => isInitialized && setScanType('close')}
-                disabled={!isInitialized}
+                disabled
               >
                 <Text
                   style={[
                     styles.pickerText,
-                    scanType === 'close' && styles.pickerTextActive,
-                    !isInitialized && styles.pickerTextDisabled,
+                    scanType === 'close' ? styles.pickerTextActive : styles.pickerTextDisabled,
                   ]}
                 >
                   {t('scan.close')}
