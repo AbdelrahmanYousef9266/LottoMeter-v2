@@ -10,10 +10,11 @@ const LENGTH_BY_PRICE = {
   '5.00': 60,  '10.00': 30, '20.00': 15,
 };
 
-export const seedLocalDatabase = async () => {
+export const seedLocalDatabase = async (storeId) => {
   /**
    * Called after successful online login and after each successful online sync.
-   * Downloads everything needed for offline operation.
+   * storeId is passed explicitly from LoginScreen so books/slots always have a
+   * valid store_id even if the API response omits it.
    * Never throws — failures are logged and return false.
    */
   try {
@@ -40,7 +41,7 @@ export const seedLocalDatabase = async () => {
           is_sold, synced_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
-          book.book_id, book.store_id, book.book_name || '',
+          book.book_id, storeId || book.store_id, book.book_name || '',
           book.barcode, book.static_code, book.start_position,
           parseFloat(book.ticket_price), book.slot_id,
           book.is_active ? 1 : 0, book.is_sold ? 1 : 0, now,
@@ -58,7 +59,7 @@ export const seedLocalDatabase = async () => {
         `INSERT OR REPLACE INTO local_slots
          (server_id, store_id, slot_name, ticket_price, synced_at)
          VALUES (?, ?, ?, ?, ?)`,
-        [slot.slot_id, slot.store_id, slot.slot_name,
+        [slot.slot_id, storeId || slot.store_id, slot.slot_name,
          parseFloat(slot.ticket_price), now]
       );
     }

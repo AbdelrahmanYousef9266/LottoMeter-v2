@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { login } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
 import { seedLocalDatabase, saveOfflineSession } from '../offline';
+import { debugLocalDb } from '../offline/debugDb';
 import AppInput from '../components/AppInput';
 import AppButton from '../components/AppButton';
 import { Colors, Radius, Shadow } from '../theme';
@@ -113,7 +114,9 @@ export default function LoginScreen() {
       setUser(data.user);
       setStore(data.store || null);
       // Seed local DB in background — do not block the login flow
-      seedLocalDatabase().catch(console.error);
+      seedLocalDatabase(data.store?.store_id)
+        .then(() => debugLocalDb())
+        .catch(console.error);
       // Save offline session so the user can log in without network for 72h
       await saveOfflineSession(data.user, data.store || null);
     } catch (err) {
