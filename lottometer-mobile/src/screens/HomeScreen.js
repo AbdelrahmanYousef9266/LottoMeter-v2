@@ -15,7 +15,6 @@ import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../context/AuthContext';
-import { getDb } from '../offline';
 import { openShift, listShifts, closeShift, getShiftSummary, getCurrentOpenShift } from '../api/shifts';
 import { getSubscription } from '../api/subscription';
 import TrialBannerComponent from './TrialBannerComponent';
@@ -32,7 +31,7 @@ import { Colors, Radius, Shadow } from '../theme';
 export default function HomeScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
-  const { user, isOffline } = useAuth();
+  const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
   const [loading, setLoading]       = useState(true);
@@ -46,8 +45,6 @@ export default function HomeScreen() {
 
   const [subscription, setSubscription]     = useState(null);
 
-  const [pendingSyncCount, setPendingSyncCount] = useState(0);
-
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [wbSaleOpen, setWbSaleOpen]         = useState(false);
   const [returnOpen, setReturnOpen]         = useState(false);
@@ -55,14 +52,6 @@ export default function HomeScreen() {
   // ── data loading ───────────────────────────────────────────────────────────
 
   const loadData = useCallback(async () => {
-    try {
-      const db = await getDb();
-      const row = await db.getFirstAsync(
-        `SELECT COUNT(*) as count FROM sync_queue WHERE status = 'pending'`
-      );
-      setPendingSyncCount(row?.count ?? 0);
-    } catch { /* local DB may not be seeded yet */ }
-
     try {
       const subRes = await getSubscription().catch(() => null);
       if (subRes) setSubscription(subRes.data);
@@ -237,16 +226,6 @@ export default function HomeScreen() {
           {t('home.greeting', { name: user?.username || '' })}
         </Text>
 
-        {isOffline && (
-          <View style={styles.offlineBanner}>
-            <Text style={styles.offlineBannerText}>
-              {pendingSyncCount > 0
-                ? t('home.offlineBannerPending', { count: pendingSyncCount })
-                : t('home.offlineBanner')}
-            </Text>
-          </View>
-        )}
-
         <TrialBannerComponent subscription={subscription} />
 
         {isAdmin && <BooksDashboard />}
@@ -408,14 +387,6 @@ const styles = StyleSheet.create({
   scrollContent: { padding: 16, paddingBottom: 40 },
   center:        { flex: 1, justifyContent: 'center', alignItems: 'center' },
   greeting:      { fontSize: 22, fontWeight: '700', color: Colors.textPrimary, marginBottom: 16 },
-
-  offlineBanner: {
-    backgroundColor: '#D97706',
-    borderRadius: Radius.sm,
-    padding: 12,
-    marginBottom: 12,
-  },
-  offlineBannerText: { fontSize: 13, color: '#fff', fontWeight: '600' },
 
   card: {
     backgroundColor: Colors.surface,

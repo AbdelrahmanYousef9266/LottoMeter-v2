@@ -5,7 +5,6 @@ from marshmallow import Schema, fields
 
 class EmployeeShiftSchema(Schema):
     id              = fields.Int()
-    uuid            = fields.Str(dump_default=None, allow_none=True)
     business_day_id = fields.Int()
     store_id        = fields.Int()
     employee_id     = fields.Int()

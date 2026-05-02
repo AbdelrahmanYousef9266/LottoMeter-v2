@@ -13,7 +13,6 @@ class BusinessDay(db.Model):
     __tablename__ = "business_days"
 
     id            = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    uuid          = db.Column(db.String(36), nullable=True, index=True)
     store_id      = db.Column(db.Integer, db.ForeignKey("stores.store_id"), nullable=False, index=True)
     business_date = db.Column(db.Date, nullable=False)
     opened_at     = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))

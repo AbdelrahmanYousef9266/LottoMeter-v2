@@ -19,7 +19,6 @@ import { getCurrentOpenShift, getShiftSummary } from '../api/shifts';
 import { recordScan } from '../api/scan';
 import { listSlots } from '../api/slots';
 import { useAuth } from '../context/AuthContext';
-import { recordOfflineScan } from '../offline';
 import { useFeedback } from '../hooks/useFeedback';
 import { friendlyScanError } from '../utils/scanErrorMessages';
 import { lastPositionFor, parseBarcode } from '../utils/bookConstants';
@@ -39,7 +38,7 @@ export default function ScanScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
   const route = useRoute();
-  const { user, store, isOffline, scanMode } = useAuth();
+  const { scanMode } = useAuth();
   const [loading, setLoading] = useState(true);
   const [shift, setShift] = useState(null);
   const [openSubId, setOpenSubId] = useState(null);
@@ -76,21 +75,12 @@ export default function ScanScreen() {
 
       try {
         const summary = await getShiftSummary(shift.id);
-        // is_initialized = all books have an open scan
-        const initialized = summary.is_initialized ?? false;
-        // show pending-open count while in open phase, pending-close count after
-        const pending = initialized
-          ? (summary.books_pending_close ?? 0)
-          : (summary.books_pending_open  ?? 0);
+        const pending = summary.books_pending_close ?? 0;
         setPendingCount(pending);
-        setIsInitialized(initialized);
-        // Explicitly set on every load — same-value setState won't re-trigger
-        // the useEffect, so this is the reliable source of truth on re-focus.
-        setScanType(initialized ? 'close' : 'open');
+        setIsInitialized(pending === 0);
       } catch {
         setPendingCount(0);
         setIsInitialized(true);
-        setScanType('close');
       }
     } catch (err) {
       Alert.alert(t('home.errorLoadingShift'), err.message || t('common.tryAgain'));
@@ -119,13 +109,9 @@ export default function ScanScreen() {
     }, [loadSlots])
   );
 
-  // Auto-switch to close only when transitioning into the initialized state.
-  // Never force back to 'open' here — the toggle is already locked by isInitialized.
   useEffect(() => {
-    if (isInitialized && scanType === 'open') {
-      setScanType('close');
-    }
-  }, [isInitialized]); // scanType intentionally omitted — only react to phase change
+    setScanType(isInitialized ? 'close' : 'open');
+  }, [isInitialized]);
 
   useEffect(() => {
     if (justOpened) {
@@ -140,22 +126,12 @@ export default function ScanScreen() {
     async (code, force_sold = null) => {
       setBusy(true);
       try {
-        const result = isOffline
-          ? await recordOfflineScan({
-              store_id:   store?.store_id,
-              user_id:    user?.user_id,
-              shift_id:   openSubId,
-              shift_uuid: null,
-              barcode:    code,
-              scan_type:  scanType,
-              force_sold,
-            })
-          : await recordScan({
-              shift_id: openSubId,
-              barcode: code,
-              scan_type: scanType,
-              force_sold,
-            });
+        const result = await recordScan({
+          shift_id: openSubId,
+          barcode: code,
+          scan_type: scanType,
+          force_sold,
+        });
         setLastScan({
           scan: result.scan,
           book: result.book,
@@ -308,12 +284,6 @@ export default function ScanScreen() {
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Text style={styles.title}>{t('scan.title')}</Text>
 
-          {isOffline && (
-            <View style={[styles.banner, styles.bannerOffline]}>
-              <Text style={styles.bannerText}>{t('scan.offlineBanner')}</Text>
-            </View>
-          )}
-
           {!isInitialized ? (
             <View style={[styles.banner, styles.bannerWarn]}>
               <Text style={styles.bannerText}>
@@ -332,14 +302,17 @@ export default function ScanScreen() {
               <TouchableOpacity
                 style={[
                   styles.pickerOption,
-                  scanType === 'open' ? styles.pickerOptionActive : styles.pickerOptionDisabled,
+                  scanType === 'open' && styles.pickerOptionActive,
+                  isInitialized && styles.pickerOptionDisabled,
                 ]}
-                disabled
+                onPress={() => !isInitialized && setScanType('open')}
+                disabled={isInitialized}
               >
                 <Text
                   style={[
                     styles.pickerText,
-                    scanType === 'open' ? styles.pickerTextActive : styles.pickerTextDisabled,
+                    scanType === 'open' && styles.pickerTextActive,
+                    isInitialized && styles.pickerTextDisabled,
                   ]}
                 >
                   {t('scan.open')}
@@ -348,14 +321,17 @@ export default function ScanScreen() {
               <TouchableOpacity
                 style={[
                   styles.pickerOption,
-                  scanType === 'close' ? styles.pickerOptionActive : styles.pickerOptionDisabled,
+                  scanType === 'close' && styles.pickerOptionActive,
+                  !isInitialized && styles.pickerOptionDisabled,
                 ]}
-                disabled
+                onPress={() => isInitialized && setScanType('close')}
+                disabled={!isInitialized}
               >
                 <Text
                   style={[
                     styles.pickerText,
-                    scanType === 'close' ? styles.pickerTextActive : styles.pickerTextDisabled,
+                    scanType === 'close' && styles.pickerTextActive,
+                    !isInitialized && styles.pickerTextDisabled,
                   ]}
                 >
                   {t('scan.close')}
@@ -468,7 +444,6 @@ const styles = StyleSheet.create({
   banner: { borderRadius: Radius.sm, padding: 12, marginBottom: 12 },
   bannerWarn:    { backgroundColor: Colors.warningBg },
   bannerOk:      { backgroundColor: Colors.successBg },
-  bannerOffline: { backgroundColor: '#D97706' },
   bannerText:    { fontSize: 13, color: Colors.textPrimary },
   bannerOkText:  { color: Colors.success },
 

@@ -23,8 +23,6 @@ class ShiftBooks(db.Model):
     static_code = db.Column(db.String(100), primary_key=True)
     scan_type = db.Column(db.String(10), primary_key=True)  # 'open' | 'close'
 
-    uuid = db.Column(db.String(36), nullable=True, index=True)
-
     barcode = db.Column(db.String(100), nullable=False)  # full barcode at scan time
     start_at_scan = db.Column(db.Integer, nullable=False)
     is_last_ticket = db.Column(db.Boolean, nullable=False, default=False)
