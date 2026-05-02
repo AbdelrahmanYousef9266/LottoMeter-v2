@@ -262,15 +262,26 @@ def get_running_summary(store_id: int, shift_id: int) -> dict:
 
     active_books = _all_active_books(store_id)
     all_scans = ShiftBooks.query.filter_by(shift_id=shift_id, store_id=store_id).all()
+
+    open_codes  = {s.static_code for s in all_scans if s.scan_type == "open"}
     close_codes = {s.static_code for s in all_scans if s.scan_type == "close"}
+
+    books_with_open  = sum(1 for b in active_books if b.static_code in open_codes)
     books_with_close = sum(1 for b in active_books if b.static_code in close_codes)
 
+    books_pending_open  = len(active_books) - books_with_open
+    books_pending_close = len(active_books) - books_with_close
+    is_initialized      = (books_pending_open == 0)
+
     return {
-        "tickets_total":       str(tickets_total),
-        "whole_book_total":    str(whole_book_total),
-        "books_total_active":  len(active_books),
-        "books_with_close":    books_with_close,
-        "books_pending_close": len(active_books) - books_with_close,
+        "tickets_total":        str(tickets_total),
+        "whole_book_total":     str(whole_book_total),
+        "books_total_active":   len(active_books),
+        "books_with_open":      books_with_open,
+        "books_with_close":     books_with_close,
+        "books_pending_open":   books_pending_open,
+        "books_pending_close":  books_pending_close,
+        "is_initialized":       is_initialized,
         "scanned_books": [
             {
                 "id":                 None,  # composite PK — no standalone integer id

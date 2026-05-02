@@ -75,9 +75,14 @@ export default function ScanScreen() {
 
       try {
         const summary = await getShiftSummary(shift.id);
-        const pending = summary.books_pending_close ?? 0;
+        // is_initialized = all books have an open scan
+        const initialized = summary.is_initialized ?? false;
+        // show pending-open count while in open phase, pending-close count after
+        const pending = initialized
+          ? (summary.books_pending_close ?? 0)
+          : (summary.books_pending_open  ?? 0);
         setPendingCount(pending);
-        setIsInitialized(pending === 0);
+        setIsInitialized(initialized);
       } catch {
         setPendingCount(0);
         setIsInitialized(true);
