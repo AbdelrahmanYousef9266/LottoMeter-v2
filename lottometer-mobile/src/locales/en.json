@@ -117,7 +117,9 @@
     "closeBizDayTitle": "Close Business Day?",
     "closeBizDayConfirm": "This will lock today's records. Make sure all shifts are closed before continuing.",
     "bizDayClosed": "Business day closed",
-    "bizDayClosedHint": "All shift records for today have been finalised."
+    "bizDayClosedHint": "All shift records for today have been finalised.",
+    "offlineBanner": "⚡ Offline — working from local data.",
+    "offlineBannerPending": "⚡ Offline — {{count}} scan(s) pending sync."
   },
 
   "scan": {
@@ -160,6 +162,7 @@
     "confirmSaleTitle": "Confirm sale",
     "confirmSaleBody": "Slot {{slotName}} ({{price}} book) will be marked sold. This cannot be undone.",
     "yesMarkSold": "Yes, mark sold",
+    "offlineBanner": "⚡ Offline — scans are saved locally and will sync when you reconnect.",
     "errors": {
       "bookNotFound": "Book not found. Check the barcode and try again.",
       "bookNotActive": "This book is not active in any slot.",

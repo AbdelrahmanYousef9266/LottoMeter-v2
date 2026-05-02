@@ -9,3 +9,4 @@ export {
   hasOfflineAccess,
 } from './offlineAuth';
 export { LENGTH_BY_PRICE, getLengthForPrice } from './constants';
+export { recordOfflineScan, getOfflinePendingCounts } from './scanEngine';

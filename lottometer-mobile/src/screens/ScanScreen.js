@@ -19,6 +19,7 @@ import { getCurrentOpenShift, getShiftSummary } from '../api/shifts';
 import { recordScan } from '../api/scan';
 import { listSlots } from '../api/slots';
 import { useAuth } from '../context/AuthContext';
+import { recordOfflineScan } from '../offline';
 import { useFeedback } from '../hooks/useFeedback';
 import { friendlyScanError } from '../utils/scanErrorMessages';
 import { lastPositionFor, parseBarcode } from '../utils/bookConstants';
@@ -38,7 +39,7 @@ export default function ScanScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
   const route = useRoute();
-  const { scanMode } = useAuth();
+  const { user, store, isOffline, scanMode } = useAuth();
   const [loading, setLoading] = useState(true);
   const [shift, setShift] = useState(null);
   const [openSubId, setOpenSubId] = useState(null);
@@ -139,12 +140,22 @@ export default function ScanScreen() {
     async (code, force_sold = null) => {
       setBusy(true);
       try {
-        const result = await recordScan({
-          shift_id: openSubId,
-          barcode: code,
-          scan_type: scanType,
-          force_sold,
-        });
+        const result = isOffline
+          ? await recordOfflineScan({
+              store_id:   store?.store_id,
+              user_id:    user?.user_id,
+              shift_id:   openSubId,
+              shift_uuid: null,
+              barcode:    code,
+              scan_type:  scanType,
+              force_sold,
+            })
+          : await recordScan({
+              shift_id: openSubId,
+              barcode: code,
+              scan_type: scanType,
+              force_sold,
+            });
         setLastScan({
           scan: result.scan,
           book: result.book,
@@ -296,6 +307,12 @@ export default function ScanScreen() {
       >
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Text style={styles.title}>{t('scan.title')}</Text>
+
+          {isOffline && (
+            <View style={[styles.banner, styles.bannerOffline]}>
+              <Text style={styles.bannerText}>{t('scan.offlineBanner')}</Text>
+            </View>
+          )}
 
           {!isInitialized ? (
             <View style={[styles.banner, styles.bannerWarn]}>
@@ -451,6 +468,7 @@ const styles = StyleSheet.create({
   banner: { borderRadius: Radius.sm, padding: 12, marginBottom: 12 },
   bannerWarn:    { backgroundColor: Colors.warningBg },
   bannerOk:      { backgroundColor: Colors.successBg },
+  bannerOffline: { backgroundColor: '#D97706' },
   bannerText:    { fontSize: 13, color: Colors.textPrimary },
   bannerOkText:  { color: Colors.success },
 
