@@ -9,6 +9,7 @@ from app.schemas.close_schema import CloseShiftSchema
 from app.schemas.void_schema import VoidShiftSchema
 from app.services import employee_shift_service
 from app.services.report_service import get_shift_report
+from app.services.audit_service import log_action
 from app.models.employee_shift import EmployeeShift
 from app.errors import NotFoundError, ValidationError
 from app.auth_helpers import admin_required, current_store_id, current_user_id
@@ -25,10 +26,15 @@ _schema = EmployeeShiftSchema()
 @jwt_required()
 def open_shift():
     store_id = current_store_id()
+    user_id = current_user_id()
     shift, pending_books, carried_forward_count = employee_shift_service.open_employee_shift(
         store_id=store_id,
-        user_id=current_user_id(),
+        user_id=user_id,
     )
+    log_action("shift_opened", user_id=user_id, store_id=store_id,
+               entity_type="shift", entity_id=shift.id,
+               ip_address=request.remote_addr,
+               user_agent=(request.headers.get("User-Agent") or "")[:200])
     return jsonify({
         "employee_shift": _schema.dump(shift),
         "carried_forward_count": carried_forward_count,
@@ -105,16 +111,20 @@ def close_shift(shift_id):
         raise ValidationError("Invalid request body.", details=err.messages)
 
     store_id = current_store_id()
+    user_id = current_user_id()
     shift = employee_shift_service.close_employee_shift(
         store_id=store_id,
         shift_id=shift_id,
-        user_id=current_user_id(),
+        user_id=user_id,
         cash_in_hand=data["cash_in_hand"],
         gross_sales=data["gross_sales"],
         cash_out=data["cash_out"],
     )
     report = get_shift_report(store_id, shift_id)
-
+    log_action("shift_closed", user_id=user_id, store_id=store_id,
+               entity_type="shift", entity_id=shift.id,
+               ip_address=request.remote_addr,
+               user_agent=(request.headers.get("User-Agent") or "")[:200])
     return jsonify({
         "shift":  _schema.dump(shift),
         "report": report,
@@ -131,10 +141,17 @@ def void_shift(shift_id):
     except MarshmallowValidationError as err:
         raise ValidationError("Invalid request body.", details=err.messages)
 
+    store_id = current_store_id()
+    admin_user_id = current_user_id()
     shift = employee_shift_service.void_employee_shift(
-        store_id=current_store_id(),
+        store_id=store_id,
         shift_id=shift_id,
-        admin_user_id=current_user_id(),
+        admin_user_id=admin_user_id,
         reason=data["reason"],
     )
+    log_action("shift_voided", user_id=admin_user_id, store_id=store_id,
+               entity_type="shift", entity_id=shift.id,
+               new_value=data["reason"],
+               ip_address=request.remote_addr,
+               user_agent=(request.headers.get("User-Agent") or "")[:200])
     return jsonify({"shift": _schema.dump(shift)}), 200

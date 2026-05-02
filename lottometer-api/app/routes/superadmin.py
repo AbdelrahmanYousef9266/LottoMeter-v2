@@ -6,7 +6,7 @@ import bcrypt
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 
-from app.auth_helpers import superadmin_required
+from app.auth_helpers import superadmin_required, current_user_id
 from app.extensions import db
 from app.errors import NotFoundError, ConflictError, ValidationError
 from app.models.store import Store
@@ -15,6 +15,7 @@ from app.models.book import Book
 from app.models.employee_shift import EmployeeShift
 from app.models.business_day import BusinessDay
 from app.models.contact_submission import ContactSubmission
+from app.services.audit_service import log_action
 
 superadmin_bp = Blueprint("superadmin", __name__, url_prefix="/api/superadmin")
 
@@ -156,6 +157,12 @@ def create_store():
 
     db.session.commit()
 
+    log_action("store_created", user_id=current_user_id(), store_id=store.store_id,
+               entity_type="store", entity_id=store.store_id,
+               new_value=f"store_code={store.store_code} admin={admin_username}",
+               ip_address=request.remote_addr,
+               user_agent=(request.headers.get("User-Agent") or "")[:200])
+
     return jsonify({"store": _serialize_store(store), "admin": _serialize_user(admin)}), 201
 
 
@@ -188,6 +195,10 @@ def suspend_store(store_id):
         raise NotFoundError("Store not found.")
     store.suspended = True
     db.session.commit()
+    log_action("store_suspended", user_id=current_user_id(), store_id=store_id,
+               entity_type="store", entity_id=store_id,
+               ip_address=request.remote_addr,
+               user_agent=(request.headers.get("User-Agent") or "")[:200])
     return jsonify({"store": _serialize_store(store)}), 200
 
 
@@ -277,3 +288,56 @@ def approve_submission(sub_id):
         "admin": _serialize_user(admin),
         "submission": _serialize_submission(sub),
     }), 201
+
+
+# ── audit logs ────────────────────────────────────────────────────────────────
+
+@superadmin_bp.get("/audit-logs")
+@jwt_required()
+@superadmin_required
+def list_audit_logs():
+    from app.models.audit_log import AuditLog
+
+    store_id_filter = request.args.get("store_id", type=int)
+    action_filter   = request.args.get("action", "").strip() or None
+    date_from       = request.args.get("date_from", "").strip() or None
+    date_to         = request.args.get("date_to", "").strip() or None
+
+    q = AuditLog.query.order_by(AuditLog.created_at.desc())
+
+    if store_id_filter:
+        q = q.filter_by(store_id=store_id_filter)
+    if action_filter:
+        q = q.filter_by(action=action_filter)
+    if date_from:
+        try:
+            from datetime import datetime
+            q = q.filter(AuditLog.created_at >= datetime.fromisoformat(date_from))
+        except ValueError:
+            pass
+    if date_to:
+        try:
+            from datetime import datetime
+            q = q.filter(AuditLog.created_at <= datetime.fromisoformat(date_to))
+        except ValueError:
+            pass
+
+    logs = q.limit(500).all()
+    return jsonify({
+        "audit_logs": [
+            {
+                "id":          l.id,
+                "user_id":     l.user_id,
+                "store_id":    l.store_id,
+                "action":      l.action,
+                "entity_type": l.entity_type,
+                "entity_id":   l.entity_id,
+                "old_value":   l.old_value,
+                "new_value":   l.new_value,
+                "ip_address":  l.ip_address,
+                "user_agent":  l.user_agent,
+                "created_at":  l.created_at.isoformat(),
+            }
+            for l in logs
+        ]
+    }), 200

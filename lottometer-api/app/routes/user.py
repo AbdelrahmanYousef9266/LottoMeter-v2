@@ -12,6 +12,7 @@ from app.schemas.user import (
     serialize_user,
 )
 from app.services import user_service
+from app.services.audit_service import log_action
 
 
 user_bp = Blueprint("users", __name__, url_prefix="/api/users")
@@ -55,6 +56,11 @@ def create_user_route():
         raise ValidationError("Invalid input.", details=err.messages)
 
     user = user_service.create_user(store_id, data)
+    log_action("user_created", user_id=int(get_jwt_identity()), store_id=store_id,
+               entity_type="user", entity_id=user.user_id,
+               new_value=f"username={user.username} role={user.role}",
+               ip_address=request.remote_addr,
+               user_agent=(request.headers.get("User-Agent") or "")[:200])
     return jsonify({"user": serialize_user(user)}), 201
 
 
@@ -92,4 +98,8 @@ def delete_user_route(user_id):
     store_id = current_store_id()
     actor_user_id = int(get_jwt_identity())
     user_service.delete_user(store_id, user_id, actor_user_id)
+    log_action("user_deleted", user_id=actor_user_id, store_id=store_id,
+               entity_type="user", entity_id=user_id,
+               ip_address=request.remote_addr,
+               user_agent=(request.headers.get("User-Agent") or "")[:200])
     return "", 204

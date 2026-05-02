@@ -11,6 +11,7 @@ from app.models.shift_books import ShiftBooks
 from app.models.shift_extra_sales import ShiftExtraSales
 from app.models.contact_submission import ContactSubmission
 from app.models.subscription import Subscription
+from app.models.audit_log import AuditLog
 
 
 __all__ = [
@@ -25,4 +26,5 @@ __all__ = [
     "ShiftExtraSales",
     "ContactSubmission",
     "Subscription",
+    "AuditLog",
 ]

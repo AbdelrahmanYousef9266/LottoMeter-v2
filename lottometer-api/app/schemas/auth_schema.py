@@ -29,6 +29,6 @@ class SetupRequestSchema(Schema):
 class LoginRequestSchema(Schema):
     """Validates POST /api/auth/login request body."""
 
-    store_code = fields.Str(required=True)
-    username = fields.Str(required=True)
-    password = fields.Str(required=True)
+    store_code = fields.Str(required=True, validate=validate.Length(min=1, max=50))
+    username   = fields.Str(required=True, validate=validate.Length(min=1, max=100))
+    password   = fields.Str(required=True, validate=validate.Length(min=1, max=128))

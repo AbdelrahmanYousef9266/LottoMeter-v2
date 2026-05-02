@@ -13,7 +13,7 @@ class CreateUserSchema(Schema):
     )
     password = fields.String(
         required=True,
-        validate=validate.Length(min=6, max=128),
+        validate=validate.Length(min=8, max=128),
     )
     role = fields.String(
         required=True,
@@ -32,7 +32,7 @@ class UpdateUserSchema(Schema):
     )
     new_password = fields.String(
         required=False,
-        validate=validate.Length(min=6, max=128),
+        validate=validate.Length(min=8, max=128),
     )
 
     @validates_schema

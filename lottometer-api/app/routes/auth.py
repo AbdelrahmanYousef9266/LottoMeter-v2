@@ -15,6 +15,7 @@ from app.auth_helpers import (
     current_store_id,
     current_role,
 )
+from app.extensions import limiter
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -33,6 +34,7 @@ def setup():
 
 
 @auth_bp.route("/login", methods=["POST"])
+@limiter.limit("5 per minute")
 def login():
     """Authenticate user — returns JWT."""
     try:

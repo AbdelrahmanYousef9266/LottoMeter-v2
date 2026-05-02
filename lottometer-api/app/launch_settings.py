@@ -3,6 +3,8 @@ Launch feature flags for LottoMeter.
 Change these values when each capability is ready to go live.
 """
 
+import os
+
 
 class LaunchSettings:
     # ============================================
@@ -16,17 +18,17 @@ class LaunchSettings:
     EMAIL_ENABLED = False
 
     # ============================================
-    # STRIPE CONFIG — add when ready
+    # STRIPE CONFIG — set via environment variables
     # ============================================
-    STRIPE_SECRET_KEY = ''      # sk_live_xxx
-    STRIPE_WEBHOOK_SECRET = ''  # whsec_xxx
-    STRIPE_PRICE_ID = ''        # price_xxx
+    STRIPE_SECRET_KEY = os.getenv('STRIPE_SECRET_KEY', '')
+    STRIPE_WEBHOOK_SECRET = os.getenv('STRIPE_WEBHOOK_SECRET', '')
+    STRIPE_PRICE_ID = os.getenv('STRIPE_PRICE_ID', '')
 
     # ============================================
-    # EMAIL CONFIG — add when ready
+    # EMAIL CONFIG — set via environment variables
     # ============================================
     EMAIL_PROVIDER = 'sendgrid'  # sendgrid or smtp
-    SENDGRID_API_KEY = ''
+    SENDGRID_API_KEY = os.getenv('SENDGRID_API_KEY', '')
     FROM_EMAIL = 'noreply@lottometer.com'
     FROM_NAME = 'LottoMeter'
 

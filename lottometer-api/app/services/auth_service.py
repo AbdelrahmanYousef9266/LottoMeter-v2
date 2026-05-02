@@ -81,10 +81,18 @@ def setup_first_store(data: dict) -> dict:
 
 def login(data: dict) -> dict:
     """Authenticate by store_code + username + password. Returns JWT."""
+    from flask import request as flask_request
+    from app.services.audit_service import log_action
+
+    ip = flask_request.headers.get("X-Forwarded-For", flask_request.remote_addr or "")
+    ua = (flask_request.headers.get("User-Agent") or "")[:200]
+
     store = Store.query.filter_by(store_code=data["store_code"]).first()
 
     # Same error for unknown store and wrong password (don't leak existence)
     if store is None:
+        log_action("login_failed", ip_address=ip, user_agent=ua,
+                   new_value=f"unknown store_code={data.get('store_code')}")
         raise InvalidCredentials("Invalid credentials.")
 
     if store.suspended:
@@ -95,6 +103,8 @@ def login(data: dict) -> dict:
     ).first()
 
     if user is None or not _check_password(data["password"], user.password_hash):
+        log_action("login_failed", store_id=store.store_id, ip_address=ip, user_agent=ua,
+                   new_value=f"username={data.get('username')}")
         raise InvalidCredentials("Invalid credentials.")
 
     if user.role != "superadmin":
@@ -109,6 +119,10 @@ def login(data: dict) -> dict:
         identity=str(user.user_id),
         additional_claims={"role": user.role, "store_id": store.store_id},
     )
+
+    log_action("login", user_id=user.user_id, store_id=store.store_id,
+               entity_type="user", entity_id=user.user_id,
+               ip_address=ip, user_agent=ua)
 
     return {
         "token": token,

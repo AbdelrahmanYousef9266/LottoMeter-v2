@@ -24,7 +24,7 @@ export default function SuperAdminLogin() {
     setLoading(true)
     setError('')
     try {
-      const data = await login({ store_code: 'LMHQ', username: form.username, password: form.password })
+      const data = await login({ store_code: import.meta.env.VITE_SUPERADMIN_STORE_CODE, username: form.username, password: form.password })
       if (data?.user?.role === 'superadmin') {
         navigate('/superadmin/dashboard')
       } else {

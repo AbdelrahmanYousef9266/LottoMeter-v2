@@ -6,7 +6,7 @@ from flask import Flask, jsonify
 from sentry_sdk.integrations.flask import FlaskIntegration
 
 from app.config import config_by_name
-from app.extensions import db, migrate, jwt, cors
+from app.extensions import db, migrate, jwt, cors, limiter
 from app.errors import register_error_handlers
 from app.token_blocklist import is_blocked
 
@@ -31,10 +31,18 @@ def create_app(config_name: str = None) -> Flask:
     app = Flask(__name__)
     app.config.from_object(config_by_name[config_name])
 
+    if config_name == "production":
+        _DEV_DEFAULTS = {"dev-secret-change-me", "jwt-dev-secret-change-me"}
+        if app.config.get("SECRET_KEY") in _DEV_DEFAULTS:
+            raise RuntimeError("SECRET_KEY must be set to a secure random value in production.")
+        if app.config.get("JWT_SECRET_KEY") in _DEV_DEFAULTS:
+            raise RuntimeError("JWT_SECRET_KEY must be set to a secure random value in production.")
+
     # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
+    limiter.init_app(app)
 
     _dashboard_url = os.getenv("DASHBOARD_URL", "").strip()
     _origins = [

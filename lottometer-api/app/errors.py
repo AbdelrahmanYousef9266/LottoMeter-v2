@@ -14,6 +14,8 @@ Standard error shape (per API Contract §1):
 }
 """
 
+import uuid
+
 from flask import jsonify
 from werkzeug.exceptions import HTTPException
 
@@ -121,14 +123,15 @@ def register_error_handlers(app):
 
     @app.errorhandler(Exception)
     def handle_unexpected_error(err: Exception):
-        # Log the actual exception in real life — for now, generic message
         if app.debug:
-            # Re-raise in debug so the Werkzeug debugger catches it
             raise err
+        error_id = str(uuid.uuid4())
+        app.logger.exception("[error_id=%s] Unhandled exception: %s", error_id, err)
         body = {
             "error": {
                 "code": "INTERNAL_ERROR",
-                "message": "An unexpected error occurred.",
+                "message": "An unexpected error occurred. Please try again later.",
+                "error_id": error_id,
             }
         }
         return jsonify(body), 500

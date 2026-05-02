@@ -12,6 +12,7 @@ from app.schemas.book_schema import (
 )
 from app.schemas.slot_schema import serialize_slot
 from app.services import book_service
+from app.services.audit_service import log_action
 from app.errors import ValidationError
 from app.auth_helpers import admin_required, current_store_id, current_user_id
 from app.models.slot import Slot
@@ -109,18 +110,24 @@ def assign_book(slot_id):
     except MarshmallowValidationError as err:
         raise ValidationError("Invalid request body.", details=err.messages)
 
+    store_id = current_store_id()
+    user_id = current_user_id()
     book, slot = book_service.assign_book_to_slot(
-        store_id=current_store_id(),
+        store_id=store_id,
         slot_id=slot_id,
-        user_id=current_user_id(),
+        user_id=user_id,
         barcode=data["barcode"],
         book_name=data.get("book_name"),
         ticket_price_override=data.get("ticket_price_override"),
         confirm_reassign=data.get("confirm_reassign", False),
     )
 
-    next_slot = book_service.find_next_empty_slot(current_store_id())
-
+    next_slot = book_service.find_next_empty_slot(store_id)
+    log_action("book_assigned", user_id=user_id, store_id=store_id,
+               entity_type="book", entity_id=book.book_id,
+               new_value=f"slot_id={slot_id} barcode={data['barcode']}",
+               ip_address=request.remote_addr,
+               user_agent=(request.headers.get("User-Agent") or "")[:200])
     return jsonify({
         "book": serialize_book(book),
         "slot": serialize_slot(slot),
@@ -150,14 +157,20 @@ def return_to_vendor(book_id):
     except MarshmallowValidationError as err:
         raise ValidationError("Invalid request body.", details=err.messages)
 
+    store_id = current_store_id()
+    user_id = current_user_id()
     book, position, close_scan_recorded = book_service.return_to_vendor(
-        store_id=current_store_id(),
+        store_id=store_id,
         book_id=book_id,
-        user_id=current_user_id(),
+        user_id=user_id,
         barcode=data["barcode"],
         pin=data["pin"],
     )
-
+    log_action("book_returned", user_id=user_id, store_id=store_id,
+               entity_type="book", entity_id=book.book_id,
+               new_value=f"position={position}",
+               ip_address=request.remote_addr,
+               user_agent=(request.headers.get("User-Agent") or "")[:200])
     return jsonify({
         "book": serialize_book(book),
         "close_scan_recorded": close_scan_recorded,
