@@ -48,19 +48,19 @@ erDiagram
         int store_id PK
         string store_name
         string store_code UK
-        string store_pin_hash "nullable"
-        string scan_mode "camera_single|camera_continuous|hardware_scanner"
-        boolean suspended "default false"
-        boolean is_active "default true"
-        string email "nullable"
-        string phone "nullable"
-        string address "nullable"
-        string city "nullable"
-        string state "nullable"
-        string zip_code "nullable"
-        string owner_name "nullable"
-        int created_by FK "nullable — superadmin user_id"
-        text notes "nullable"
+        string store_pin_hash
+        string scan_mode
+        boolean suspended
+        boolean is_active
+        string email
+        string phone
+        string address
+        string city
+        string state
+        string zip_code
+        string owner_name
+        int created_by FK
+        text notes
         datetime created_at
     }
 
@@ -68,34 +68,34 @@ erDiagram
         int user_id PK
         string username
         string password_hash
-        string role "admin | employee | superadmin"
+        string role
         int store_id FK
         datetime created_at
-        datetime deleted_at "soft delete"
+        datetime deleted_at
     }
 
     Slot {
         int slot_id PK
         string slot_name
         decimal ticket_price
-        datetime deleted_at "soft delete"
+        datetime deleted_at
         int store_id FK
         datetime created_at
     }
 
     Book {
         int book_id PK
-        string book_name "nullable"
+        string book_name
         string barcode
-        string static_code "indexed"
+        string static_code
         int start_position
         decimal ticket_price
-        int slot_id FK "nullable"
+        int slot_id FK
         int store_id FK
         boolean is_active
         boolean is_sold
-        datetime returned_at "nullable"
-        int returned_by_user_id FK "nullable"
+        datetime returned_at
+        int returned_by_user_id FK
         datetime created_at
     }
 
@@ -105,54 +105,54 @@ erDiagram
         int slot_id FK
         decimal ticket_price
         datetime assigned_at
-        datetime unassigned_at "nullable"
+        datetime unassigned_at
         int assigned_by_user_id FK
-        int unassigned_by_user_id FK "nullable"
+        int unassigned_by_user_id FK
         string unassign_reason
         int store_id FK
     }
 
     BusinessDay {
         int id PK
-        string uuid UK "for offline sync"
+        string uuid UK
         int store_id FK
         date business_date
         datetime opened_at
-        datetime closed_at "nullable"
-        string status "open|closed|auto_closed"
-        decimal total_sales "nullable"
-        decimal total_variance "nullable"
+        datetime closed_at
+        string status
+        decimal total_sales
+        decimal total_variance
     }
 
     EmployeeShift {
         int id PK
-        string uuid UK "for offline sync"
+        string uuid UK
         int business_day_id FK
         int store_id FK
         int employee_id FK
         int shift_number
         datetime opened_at
-        datetime closed_at "nullable"
-        string status "open|closed"
-        decimal cash_in_hand "nullable"
-        decimal gross_sales "nullable"
-        decimal cash_out "nullable"
-        decimal tickets_total "nullable"
-        decimal expected_cash "nullable"
-        decimal difference "nullable"
-        string shift_status "correct|over|short"
-        int closed_by_user_id FK "nullable"
+        datetime closed_at
+        string status
+        decimal cash_in_hand
+        decimal gross_sales
+        decimal cash_out
+        decimal tickets_total
+        decimal expected_cash
+        decimal difference
+        string shift_status
+        int closed_by_user_id FK
         boolean voided
-        datetime voided_at "nullable"
-        int voided_by_user_id FK "nullable"
-        string void_reason "nullable"
+        datetime voided_at
+        int voided_by_user_id FK
+        string void_reason
     }
 
     ShiftBooks {
         int shift_id PK
         string static_code PK
-        string scan_type PK "open or close"
-        string uuid UK "for offline sync"
+        string scan_type PK
+        string uuid UK
         string barcode
         int start_at_scan
         boolean is_last_ticket
@@ -166,12 +166,12 @@ erDiagram
     ShiftExtraSales {
         int extra_sale_id PK
         int shift_id FK
-        string sale_type "whole_book"
+        string sale_type
         string scanned_barcode
         decimal ticket_price
         int ticket_count
         decimal value
-        string note "nullable"
+        string note
         int created_by_user_id FK
         datetime created_at
         int store_id FK
@@ -179,71 +179,71 @@ erDiagram
 
     Subscription {
         int id PK
-        int store_id FK UK
-        string plan "basic|pro|enterprise"
-        string status "trial|active|expired|suspended|cancelled"
-        datetime trial_ends_at "nullable"
-        datetime current_period_start "nullable"
-        datetime current_period_end "nullable"
-        string stripe_customer_id "nullable"
-        string stripe_subscription_id "nullable"
-        datetime cancelled_at "nullable"
-        decimal plan_price "nullable"
-        string billing_email "nullable"
-        string card_last4 "nullable"
-        string card_brand "nullable"
+        int store_id FK
+        string plan
+        string status
+        datetime trial_ends_at
+        datetime current_period_start
+        datetime current_period_end
+        string stripe_customer_id
+        string stripe_subscription_id
+        datetime cancelled_at
+        decimal plan_price
+        string billing_email
+        string card_last4
+        string card_brand
         boolean cancel_at_period_end
-        string cancelled_reason "nullable"
-        text notes "nullable"
+        string cancelled_reason
+        text notes
         datetime created_at
     }
 
     StoreSettings {
         int id PK
-        int store_id FK UK
-        string timezone "default America/New_York"
-        string currency "default USD"
-        string business_hours_start "nullable HH:MM"
-        string business_hours_end "nullable HH:MM"
-        int max_employees "default 10"
+        int store_id FK
+        string timezone
+        string currency
+        string business_hours_start
+        string business_hours_end
+        int max_employees
         boolean auto_close_business_day
-        string notify_email "nullable"
+        string notify_email
         boolean notify_on_variance
         boolean notify_on_shift_close
     }
 
     AuditLog {
         int id PK
-        int user_id FK "nullable"
-        int store_id FK "nullable"
+        int user_id FK
+        int store_id FK
         string action
-        string entity_type "nullable"
-        int entity_id "nullable"
-        text old_value "nullable"
-        text new_value "nullable"
-        string ip_address "nullable"
-        string user_agent "nullable"
+        string entity_type
+        int entity_id
+        text old_value
+        text new_value
+        string ip_address
+        string user_agent
         datetime created_at
     }
 
     ContactSubmission {
         int id PK
-        string submission_type "contact|apply|waitlist"
+        string submission_type
         string full_name
-        string business_name "nullable"
+        string business_name
         string email
-        string phone "nullable"
-        string city "nullable"
-        string state "nullable"
-        string zip_code "nullable"
-        string num_employees "nullable"
-        int store_count "nullable"
-        string how_heard "nullable"
-        text message "nullable"
-        text current_process "nullable"
-        string status "new|reviewed|approved"
-        text notes "nullable"
-        datetime reviewed_at "nullable"
+        string phone
+        string city
+        string state
+        string zip_code
+        string num_employees
+        int store_count
+        string how_heard
+        text message
+        text current_process
+        string status
+        text notes
+        datetime reviewed_at
         datetime created_at
     }
 ```
