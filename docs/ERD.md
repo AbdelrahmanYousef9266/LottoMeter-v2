@@ -1,14 +1,14 @@
 # Entity Relationship Diagram — LottoMeter v2.0
 
-**Version:** 3.0
-**Date:** 2026-04-30
-**Status:** Final — aligned with refactor completed April 2026
+**Version:** 4.0
+**Date:** May 2026
+**Status:** Current — reflects all models through Phase 4h (subscription system)
 
 ---
 
 ## Overview
 
-LottoMeter v2.0 uses 9 models. Every non-Store table carries `store_id` for multi-tenancy. The former self-referential `ShiftDetails` model has been replaced by two clean models: `BusinessDay` (one per store per calendar date, auto-managed) and `EmployeeShift` (one employee session inside a BusinessDay).
+LottoMeter v2.0 uses 13 models. Every non-Store operational table carries `store_id` for multi-tenancy. The Subscription, StoreSettings, AuditLog, and ContactSubmission models were added in Phase 4h to support commercial operations and the superadmin panel.
 
 ---
 
@@ -23,6 +23,9 @@ erDiagram
     Store ||--o{ ShiftBooks : has
     Store ||--o{ ShiftExtraSales : has
     Store ||--o{ BookAssignmentHistory : has
+    Store ||--|| Subscription : has
+    Store ||--|| StoreSettings : has
+    Store ||--o{ AuditLog : generates
 
     Slot ||--o{ Book : "holds (0..1 active)"
     Slot ||--o{ BookAssignmentHistory : "referenced by"
@@ -39,6 +42,7 @@ erDiagram
     User ||--o{ ShiftExtraSales : "creates"
     User ||--o{ BookAssignmentHistory : "assigns/unassigns"
     User ||--o{ Book : "returns"
+    User ||--o{ AuditLog : "actor"
 
     Store {
         int store_id PK
@@ -46,6 +50,17 @@ erDiagram
         string store_code UK
         string store_pin_hash "nullable"
         string scan_mode "camera_single|camera_continuous|hardware_scanner"
+        boolean suspended "default false"
+        boolean is_active "default true"
+        string email "nullable"
+        string phone "nullable"
+        string address "nullable"
+        string city "nullable"
+        string state "nullable"
+        string zip_code "nullable"
+        string owner_name "nullable"
+        int created_by FK "nullable — superadmin user_id"
+        text notes "nullable"
         datetime created_at
     }
 
@@ -53,7 +68,7 @@ erDiagram
         int user_id PK
         string username
         string password_hash
-        string role "admin or employee"
+        string role "admin | employee | superadmin"
         int store_id FK
         datetime created_at
         datetime deleted_at "soft delete"
@@ -99,6 +114,7 @@ erDiagram
 
     BusinessDay {
         int id PK
+        string uuid UK "for offline sync"
         int store_id FK
         date business_date
         datetime opened_at
@@ -110,6 +126,7 @@ erDiagram
 
     EmployeeShift {
         int id PK
+        string uuid UK "for offline sync"
         int business_day_id FK
         int store_id FK
         int employee_id FK
@@ -135,6 +152,8 @@ erDiagram
         int shift_id PK
         string static_code PK
         string scan_type PK "open or close"
+        string uuid UK "for offline sync"
+        string barcode
         int start_at_scan
         boolean is_last_ticket
         string scan_source
@@ -157,6 +176,76 @@ erDiagram
         datetime created_at
         int store_id FK
     }
+
+    Subscription {
+        int id PK
+        int store_id FK UK
+        string plan "basic|pro|enterprise"
+        string status "trial|active|expired|suspended|cancelled"
+        datetime trial_ends_at "nullable"
+        datetime current_period_start "nullable"
+        datetime current_period_end "nullable"
+        string stripe_customer_id "nullable"
+        string stripe_subscription_id "nullable"
+        datetime cancelled_at "nullable"
+        decimal plan_price "nullable"
+        string billing_email "nullable"
+        string card_last4 "nullable"
+        string card_brand "nullable"
+        boolean cancel_at_period_end
+        string cancelled_reason "nullable"
+        text notes "nullable"
+        datetime created_at
+    }
+
+    StoreSettings {
+        int id PK
+        int store_id FK UK
+        string timezone "default America/New_York"
+        string currency "default USD"
+        string business_hours_start "nullable HH:MM"
+        string business_hours_end "nullable HH:MM"
+        int max_employees "default 10"
+        boolean auto_close_business_day
+        string notify_email "nullable"
+        boolean notify_on_variance
+        boolean notify_on_shift_close
+    }
+
+    AuditLog {
+        int id PK
+        int user_id FK "nullable"
+        int store_id FK "nullable"
+        string action
+        string entity_type "nullable"
+        int entity_id "nullable"
+        text old_value "nullable"
+        text new_value "nullable"
+        string ip_address "nullable"
+        string user_agent "nullable"
+        datetime created_at
+    }
+
+    ContactSubmission {
+        int id PK
+        string submission_type "contact|apply|waitlist"
+        string full_name
+        string business_name "nullable"
+        string email
+        string phone "nullable"
+        string city "nullable"
+        string state "nullable"
+        string zip_code "nullable"
+        string num_employees "nullable"
+        int store_count "nullable"
+        string how_heard "nullable"
+        text message "nullable"
+        text current_process "nullable"
+        string status "new|reviewed|approved"
+        text notes "nullable"
+        datetime reviewed_at "nullable"
+        datetime created_at
+    }
 ```
 
 ---
@@ -171,8 +260,19 @@ Root tenant entity.
 | store_id | Integer | PK, autoincrement | |
 | store_name | String(150) | Not Null | |
 | store_code | String(50) | Unique, Not Null | Human-readable identifier |
-| store_pin_hash | String(256) | Nullable | bcrypt hash of 4-digit PIN; set at setup |
-| scan_mode | String(50) | Not Null, default 'camera_single' | `camera_single` \| `camera_continuous` \| `hardware_scanner` |
+| store_pin_hash | String(256) | Nullable | bcrypt hash of 4-digit PIN |
+| scan_mode | String(30) | Not Null, default 'camera_single' | `camera_single` \| `camera_continuous` \| `hardware_scanner` |
+| suspended | Boolean | Not Null, default False | Set by superadmin to block store access |
+| is_active | Boolean | Not Null, default True | Logical active flag |
+| email | String(150) | Nullable | Store contact email |
+| phone | String(30) | Nullable | Store contact phone |
+| address | String(250) | Nullable | Street address |
+| city | String(100) | Nullable | |
+| state | String(50) | Nullable | |
+| zip_code | String(20) | Nullable | |
+| owner_name | String(150) | Nullable | Owner / primary contact |
+| created_by | Integer | FK → User, Nullable | Superadmin user_id who created this store |
+| notes | Text | Nullable | Internal superadmin notes |
 | created_at | DateTime | Not Null, default now() | UTC |
 
 ### 2. User
@@ -182,17 +282,21 @@ Root tenant entity.
 | user_id | Integer | PK, autoincrement | |
 | username | String(100) | Not Null | |
 | password_hash | String(256) | Not Null | bcrypt |
-| role | String(50) | Not Null, default 'employee' | `admin` or `employee` |
+| role | String(50) | Not Null, default 'employee' | `admin` \| `employee` \| `superadmin` |
 | store_id | Integer | FK → Store, Not Null, Indexed | |
 | created_at | DateTime | Not Null, default now() | |
 | deleted_at | DateTime | Nullable | Soft-delete timestamp; null = active |
 
-**Partial unique index** (SQLite 3.8+ / PostgreSQL):
+**Partial unique index:**
 ```sql
 CREATE UNIQUE INDEX uq_users_store_username_active
   ON users (store_id, username)
   WHERE deleted_at IS NULL;
 ```
+
+**Check:** `role IN ('admin', 'employee', 'superadmin')`
+
+`superadmin` users have cross-store access and are used exclusively for LottoMeter platform staff via the superadmin panel.
 
 ### 3. Slot
 
@@ -205,7 +309,7 @@ CREATE UNIQUE INDEX uq_users_store_username_active
 | store_id | Integer | FK → Store, Not Null, Indexed | |
 | created_at | DateTime | Not Null, default now() | |
 
-**Partial unique index** (SQLite 3.8+ / PostgreSQL):
+**Partial unique index:**
 ```sql
 CREATE UNIQUE INDEX uq_slots_store_name_active
   ON slots (store_id, slot_name)
@@ -229,76 +333,56 @@ CREATE UNIQUE INDEX uq_slots_store_name_active
 | is_active | Boolean | Not Null, default False | True when in a slot |
 | is_sold | Boolean | Not Null, default False | True when last ticket scanned |
 | returned_at | DateTime | Nullable | Set when book returned to vendor |
-| returned_by_user_id | Integer | FK → User, Nullable | Who authorized the return |
+| returned_by_user_id | Integer | FK → User, Nullable | |
 | created_at | DateTime | Not Null, default now() | |
 
-**Composite unique:** `(store_id, barcode)`, `(store_id, static_code)` — both NULL-tolerant
-(In PostgreSQL and SQLite, UNIQUE allows multiple NULL values by default.)
-
-**Check:** `ticket_price IS NULL OR ticket_price IN (1.00, 2.00, 3.00, 5.00, 10.00, 20.00)`
-
-**State invariants:**
-- If `is_active = true` then `slot_id IS NOT NULL` and `is_sold = false` and `returned_at IS NULL`
-- If `is_sold = true` then `slot_id IS NULL` and `is_active = false`
-- If `returned_at IS NOT NULL` then `slot_id IS NULL` and `is_active = false`
-
 ### 5. BookAssignmentHistory
-
-Records every assignment, reassignment, and unassignment event.
 
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
 | assignment_id | Integer | PK, autoincrement | |
 | book_id | Integer | FK → Book, Not Null, Indexed | |
-| slot_id | Integer | FK → Slot, Not Null | Slot at time of this assignment |
+| slot_id | Integer | FK → Slot, Not Null | |
 | ticket_price | Numeric(10,2) | Not Null | Snapshot |
 | assigned_at | DateTime | Not Null, default now() | |
-| unassigned_at | DateTime | Nullable | Set when book leaves this slot |
-| assigned_by_user_id | Integer | FK → User, Not Null | Admin who did it |
-| unassigned_by_user_id | Integer | FK → User, Nullable | Whoever caused the unassign |
+| unassigned_at | DateTime | Nullable | |
+| assigned_by_user_id | Integer | FK → User, Not Null | |
+| unassigned_by_user_id | Integer | FK → User, Nullable | |
 | unassign_reason | String(50) | Nullable | `reassigned` \| `unassigned` \| `sold` \| `returned_to_vendor` |
 | store_id | Integer | FK → Store, Not Null, Indexed | |
 
-**Index:** `(book_id, unassigned_at)` — speeds up "current assignment" lookups
-
 ### 6. BusinessDay
 
-One per store per calendar date. Auto-created when the first EmployeeShift of the day is opened; never manually opened by employees (BR-BD-02).
+One per store per calendar date. Auto-created when the first EmployeeShift of the day opens.
 
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
 | id | Integer | PK, autoincrement | |
+| uuid | String(36) | Unique, Nullable | UUID for offline sync identification |
 | store_id | Integer | FK → Store, Not Null, Indexed | |
 | business_date | Date | Not Null | Calendar date (local to store) |
-| opened_at | DateTime | Not Null, default now() | UTC timestamp of auto-creation |
-| closed_at | DateTime | Nullable | Set when admin closes the day |
+| opened_at | DateTime | Not Null, default now() | |
+| closed_at | DateTime | Nullable | |
 | status | String(20) | Not Null, default 'open' | `open` \| `closed` \| `auto_closed` |
-| total_sales | Numeric(10,2) | Nullable | Sum of all shift tickets_total; set at close |
-| total_variance | Numeric(10,2) | Nullable | Sum of all shift differences; set at close |
+| total_sales | Numeric(10,2) | Nullable | Set at BusinessDay close |
+| total_variance | Numeric(10,2) | Nullable | Set at BusinessDay close |
 
-**Unique constraint:** `(store_id, business_date)` — one BusinessDay per store per date (BR-BD-01)
-
-**Check:** `status IN ('open', 'closed', 'auto_closed')`
-
-**Business rules:**
-- BR-BD-01: Only one BusinessDay per store per calendar date
-- BR-BD-02: Auto-created on first `POST /api/shifts` of the day; never manually created
-- BR-BD-03: Only admins can close a BusinessDay
-- BR-BD-04: Cannot close while any EmployeeShift is still open
+**Unique:** `(store_id, business_date)`
 
 ### 7. EmployeeShift
 
-One employee session within a BusinessDay. `shift_number` increments within the BusinessDay and resets for each new day.
+One employee session within a BusinessDay.
 
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
 | id | Integer | PK, autoincrement | |
+| uuid | String(36) | Unique, Nullable | UUID for offline sync identification |
 | business_day_id | Integer | FK → BusinessDay, Not Null, Indexed | |
 | store_id | Integer | FK → Store, Not Null, Indexed | |
-| employee_id | Integer | FK → User, Not Null | Who opened this shift |
-| shift_number | Integer | Not Null | Sequence within the BusinessDay (starts at 1) |
+| employee_id | Integer | FK → User, Not Null | |
+| shift_number | Integer | Not Null | Sequence within BusinessDay (starts at 1) |
 | opened_at | DateTime | Not Null, default now() | |
-| closed_at | DateTime | Nullable | Set at close |
+| closed_at | DateTime | Nullable | |
 | status | String(20) | Not Null, default 'open' | `open` \| `closed` |
 | cash_in_hand | Numeric(10,2) | Nullable | Entered at close |
 | gross_sales | Numeric(10,2) | Nullable | Entered at close |
@@ -313,71 +397,144 @@ One employee session within a BusinessDay. `shift_number` increments within the 
 | voided_by_user_id | Integer | FK → User, Nullable | |
 | void_reason | String(500) | Nullable | |
 
-**Partial unique index** (enforces BR-ES-01 — one open shift per store):
+**Partial unique index (one open shift per store):**
 ```sql
 CREATE UNIQUE INDEX uq_one_open_employee_shift_per_store
   ON employee_shifts (store_id)
   WHERE status = 'open' AND voided = FALSE;
 ```
 
-**Composite unique:** `(business_day_id, shift_number)` — shift numbers unique within a BusinessDay (BR-ES-02)
-
-**Check constraints:**
-- `status IN ('open', 'closed')`
-- `shift_status IS NULL OR shift_status IN ('correct', 'over', 'short')`
-- `NOT voided OR void_reason IS NOT NULL` — void requires reason
-
-**Business rules:**
-- BR-ES-03: Carry-forward only runs when previous shift `shift_status == 'correct'`
-- BR-ES-04: All active books must have close scans before an EmployeeShift can close
+**Composite unique:** `(business_day_id, shift_number)`
 
 ### 8. ShiftBooks
 
-Scan records. Composite PK keys on `static_code` (book identity) so open and close scans for the same book pair correctly even though their full barcodes differ by position.
+Scan records. The `uuid` column enables the offline sync queue to match mobile-created scans to server records.
 
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
-| shift_id | Integer | PK, FK → EmployeeShift | The employee shift this scan belongs to |
+| shift_id | Integer | PK, FK → EmployeeShift | |
 | static_code | String(100) | PK | Book identifier (barcode minus last 3 digits) |
 | scan_type | String(10) | PK | `open` \| `close` |
-| barcode | String(100) | Not Null | Full barcode string at scan time (audit) |
+| uuid | String(36) | Unique, Nullable | UUID for offline sync identification |
+| barcode | String(100) | Not Null | Full barcode at scan time (audit) |
 | start_at_scan | Integer | Not Null | Position extracted from barcode |
-| is_last_ticket | Boolean | Not Null, default False | True only when scan_type=close AND close > open AND position is last |
-| scan_source | String(25) | Not Null, default 'scanned' | `scanned` \| `carried_forward` \| `whole_book_sale` \| `returned_to_vendor` |
-| slot_id | Integer | FK → Slot, Not Null | Slot at scan time (denormalized for reports) |
+| is_last_ticket | Boolean | Not Null, default False | |
+| scan_source | String(25) | Not Null, default 'scanned' | `scanned` \| `carried_forward` \| `whole_book_sale` \| `returned_to_vendor` \| `offline` |
+| slot_id | Integer | FK → Slot, Not Null | Slot at scan time (denormalized) |
 | store_id | Integer | FK → Store, Not Null, Indexed | |
 | scanned_at | DateTime | Not Null, default now() | |
 | scanned_by_user_id | Integer | FK → User, Not Null | |
 
 **PK:** Composite `(shift_id, static_code, scan_type)`
 
-**Check constraints:**
-- `scan_type IN ('open', 'close')`
-- `scan_source IN ('scanned', 'carried_forward', 'whole_book_sale', 'returned_to_vendor')`
-
-**Index:** `(store_id, scanned_at)` for reporting by date
-
-**Why static_code in the PK:** The barcode includes the position digits, so an open scan at position 0 (`<static_code>000`) and a close scan at position 59 (`<static_code>059`) for the same book would have different PKs under a barcode-keyed scheme — breaking the open/close pairing logic. Keying on `static_code` fixes this; the actual scanned barcode is preserved as a regular column for audit.
-
 ### 9. ShiftExtraSales
-
-Records whole-book sales. Not tied to Book — intentionally decoupled because whole-book sales never enter inventory.
 
 | Column | Type | Constraints | Notes |
 |---|---|---|---|
 | extra_sale_id | Integer | PK, autoincrement | |
 | shift_id | Integer | FK → EmployeeShift, Not Null, Indexed | |
-| sale_type | String(25) | Not Null | `whole_book` (extensible) |
-| scanned_barcode | String(100) | Not Null | Audit record |
+| sale_type | String(25) | Not Null | `whole_book` |
+| scanned_barcode | String(100) | Not Null | Audit |
 | ticket_price | Numeric(10,2) | Not Null | |
-| ticket_count | Integer | Not Null | LENGTH_BY_PRICE[ticket_price] |
-| value | Numeric(10,2) | Not Null | ticket_price × ticket_count |
-| note | String(500) | Nullable | Optional free text |
-| created_by_user_id | Integer | FK → User, Not Null | Employee |
+| ticket_count | Integer | Not Null | |
+| value | Numeric(10,2) | Not Null | |
+| note | String(500) | Nullable | |
+| created_by_user_id | Integer | FK → User, Not Null | |
 | created_at | DateTime | Not Null, default now() | |
 | store_id | Integer | FK → Store, Not Null, Indexed | |
 
-**Check:** `ticket_price IN (1.00, 2.00, 3.00, 5.00, 10.00, 20.00)`
+### 10. Subscription
+
+One row per store. Created automatically (trial) when a store is provisioned by superadmin.
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| id | Integer | PK, autoincrement | |
+| store_id | Integer | FK → Store, Unique, Not Null | One subscription per store |
+| plan | String(20) | Not Null, default 'basic' | `basic` \| `pro` \| `enterprise` |
+| status | String(20) | Not Null, default 'trial' | `trial` \| `active` \| `expired` \| `suspended` \| `cancelled` |
+| trial_ends_at | DateTime | Nullable | |
+| current_period_start | DateTime | Nullable | |
+| current_period_end | DateTime | Nullable | |
+| stripe_customer_id | String(100) | Nullable | Set when Stripe billing activated |
+| stripe_subscription_id | String(100) | Nullable | |
+| cancelled_at | DateTime | Nullable | |
+| plan_price | Numeric(10,2) | Nullable | Monthly price |
+| billing_email | String(150) | Nullable | |
+| card_last4 | String(4) | Nullable | |
+| card_brand | String(20) | Nullable | |
+| cancel_at_period_end | Boolean | Not Null, default False | |
+| cancelled_reason | String(250) | Nullable | |
+| notes | Text | Nullable | Internal superadmin notes |
+| created_at | DateTime | Not Null, default now() | |
+
+**Check:** `status IN ('trial', 'active', 'expired', 'suspended', 'cancelled')`
+
+### 11. StoreSettings
+
+One row per store. Created automatically with defaults when a store is provisioned.
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| id | Integer | PK, autoincrement | |
+| store_id | Integer | FK → Store, Unique, Not Null | One settings row per store |
+| timezone | String(50) | Not Null, default 'America/New_York' | IANA timezone string |
+| currency | String(10) | Not Null, default 'USD' | ISO 4217 code |
+| business_hours_start | String(5) | Nullable | `HH:MM` format, e.g. `"09:00"` |
+| business_hours_end | String(5) | Nullable | `HH:MM` format, e.g. `"23:00"` |
+| max_employees | Integer | Not Null, default 10 | |
+| auto_close_business_day | Boolean | Not Null, default False | |
+| notify_email | String(150) | Nullable | Email for system notifications |
+| notify_on_variance | Boolean | Not Null, default True | Alert on short/over shift result |
+| notify_on_shift_close | Boolean | Not Null, default False | Alert on every shift close |
+
+### 12. AuditLog
+
+Append-only log of significant admin and superadmin actions. Not store-scoped exclusively — superadmin actions may have `store_id = null`.
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| id | Integer | PK, autoincrement | |
+| user_id | Integer | FK → User, Nullable | Actor (null for system actions) |
+| store_id | Integer | FK → Store, Nullable | Affected store (null for cross-store) |
+| action | String(100) | Not Null | e.g. `store_created`, `store_suspended`, `subscription_cancelled` |
+| entity_type | String(50) | Nullable | e.g. `store`, `subscription`, `user` |
+| entity_id | Integer | Nullable | PK of affected entity |
+| old_value | Text | Nullable | JSON or plain string snapshot before change |
+| new_value | Text | Nullable | JSON or plain string snapshot after change |
+| ip_address | String(50) | Nullable | Request IP |
+| user_agent | String(200) | Nullable | Truncated to 200 chars |
+| created_at | DateTime | Not Null, default now() | UTC |
+
+**Index:** `(store_id, created_at)` for per-store audit queries
+
+### 13. ContactSubmission
+
+Stores all public-facing form submissions: contact page, apply page, and waitlist signups. Reviewed in the superadmin panel.
+
+| Column | Type | Constraints | Notes |
+|---|---|---|---|
+| id | Integer | PK, autoincrement | |
+| submission_type | String(20) | Not Null, default 'contact' | `contact` \| `apply` \| `waitlist` |
+| full_name | String(150) | Not Null | |
+| business_name | String(150) | Nullable | |
+| email | String(150) | Not Null | |
+| phone | String(50) | Nullable | |
+| city | String(100) | Nullable | |
+| state | String(50) | Nullable | |
+| zip_code | String(20) | Nullable | |
+| num_employees | String(20) | Nullable | Free-form range, e.g. `"1-5"` |
+| store_count | Integer | Nullable | From apply form |
+| how_heard | String(50) | Nullable | Referral source |
+| message | Text | Nullable | Free-text from contact form |
+| current_process | Text | Nullable | From apply form — describes existing workflow |
+| status | String(20) | Not Null, default 'new' | `new` \| `reviewed` \| `approved` |
+| notes | Text | Nullable | Internal superadmin notes |
+| reviewed_at | DateTime | Nullable | Set when status changes from 'new' |
+| created_at | DateTime | Not Null, default now() | UTC |
+
+**Check:** `status IN ('new', 'reviewed', 'approved')`
+**Check:** `submission_type IN ('contact', 'apply', 'waitlist')`
 
 ---
 
@@ -392,6 +549,9 @@ Records whole-book sales. Not tied to Book — intentionally decoupled because w
 | Store | BusinessDay | 1 : ∞ | RESTRICT |
 | Store | ShiftBooks | 1 : ∞ | RESTRICT |
 | Store | ShiftExtraSales | 1 : ∞ | RESTRICT |
+| Store | Subscription | 1 : 1 | RESTRICT |
+| Store | StoreSettings | 1 : 1 | RESTRICT |
+| Store | AuditLog | 1 : ∞ | SET NULL |
 | Slot | Book | 1 : ∞ (0..1 active) | SET NULL |
 | Slot | BookAssignmentHistory | 1 : ∞ | RESTRICT |
 | Slot | ShiftBooks | 1 : ∞ | RESTRICT |
@@ -404,12 +564,13 @@ Records whole-book sales. Not tied to Book — intentionally decoupled because w
 | User | EmployeeShift (voided_by) | 1 : ∞ | RESTRICT |
 | User | ShiftBooks (scanned_by) | 1 : ∞ | RESTRICT |
 | User | ShiftExtraSales (created_by) | 1 : ∞ | RESTRICT |
-| User | BookAssignmentHistory (assigned_by / unassigned_by) | 1 : ∞ | RESTRICT |
+| User | BookAssignmentHistory | 1 : ∞ | RESTRICT |
 | User | Book (returned_by) | 1 : ∞ | RESTRICT |
+| User | AuditLog (actor) | 1 : ∞ | SET NULL |
 
 ---
 
-## Business Constants (not in DB — code-level)
+## Business Constants
 
 `LENGTH_BY_PRICE` lives in `app/constants.py`:
 
@@ -424,97 +585,27 @@ LENGTH_BY_PRICE = {
     Decimal("10.00"):  30,
     Decimal("20.00"):  30,
 }
-# last_position for a book = LENGTH_BY_PRICE[price] - 1
-```
-
-Any `ticket_price` column is validated against `LENGTH_BY_PRICE.keys()` at the application layer. Check constraints on DB enforce the same set for defense in depth.
-
----
-
-## Query Patterns
-
-### "Which books are currently in slots in store N?"
-```sql
-SELECT * FROM books
-WHERE store_id = :store_id AND is_active = TRUE;
-```
-
-### "What's the current slot for book X?"
-Book.slot_id is the truth (denormalized current state). For audit:
-```sql
-SELECT * FROM book_assignment_history
-WHERE book_id = :book_id AND unassigned_at IS NULL
-ORDER BY assigned_at DESC LIMIT 1;
-```
-
-### "Which books need a pending open scan in shift S?"
-```sql
-SELECT * FROM books b
-WHERE b.store_id = :store_id
-  AND b.is_active = TRUE
-  AND NOT EXISTS (
-    SELECT 1 FROM shift_books sb
-    WHERE sb.shift_id = :shift_id
-      AND sb.scan_type = 'open'
-      AND sb.static_code = b.static_code
-  );
-```
-
-### "What's the tickets_total for shift S?"
-Stored on EmployeeShift.tickets_total after close. Pre-close, compute:
-```sql
--- From scans:
-SELECT SUM(
-  CASE
-    WHEN close.is_last_ticket THEN (close.start_at_scan - open.start_at_scan + 1)
-    ELSE (close.start_at_scan - open.start_at_scan)
-  END * b.ticket_price
-) FROM shift_books open
-JOIN shift_books close ON open.static_code = close.static_code AND open.shift_id = close.shift_id
-JOIN books b ON b.static_code = close.static_code AND b.store_id = close.store_id
-WHERE open.shift_id = :shift_id
-  AND open.scan_type = 'open'
-  AND close.scan_type = 'close';
-
--- Plus whole-book sales:
-SELECT SUM(value) FROM shift_extra_sales WHERE shift_id = :shift_id;
-```
-
-### "Is any shift open for this store?"
-```sql
-SELECT 1 FROM employee_shifts
-WHERE store_id = :store_id
-  AND status = 'open'
-  AND voided = FALSE
-LIMIT 1;
-```
-
-### "What is today's BusinessDay for this store?"
-```sql
-SELECT * FROM business_days
-WHERE store_id = :store_id
-  AND business_date = CURRENT_DATE
-LIMIT 1;
 ```
 
 ---
 
-## Schema Decisions Applied from SRS v5.0–v5.2 Reviews
+## Offline Sync UUID Fields
 
-1. **ShiftBooks PK = (shift_id, static_code, scan_type)** — original v5.0 design used `barcode` in the PK, but barcodes include position digits and so do not pair open/close scans for the same book. Changed to `static_code` in v5.2 implementation phase. The full barcode is preserved as a regular column for audit.
-2. **Book.end and Book.total removed** — derived from LENGTH_BY_PRICE and scan history
-3. **Book.static_code, start_position, ticket_price, slot_id all nullable until assignment** — books don't exist in the DB before assignment anyway in practice, but schema allows partial rows
-4. **Book.returned_at, returned_by_user_id added** — return-to-vendor lifecycle
-5. **Slot.deleted_at added + partial unique index on (store_id, slot_name) WHERE deleted_at IS NULL** — soft delete preserving historical refs
-6. **EmployeeShift.voided + audit columns added** — void as flag, no data deletion
-7. **EmployeeShift.employee_id, closed_by_user_id** — employee attribution
-8. **ShiftBooks.scanned_at, scanned_by_user_id, scan_source** — scan audit + distinguishing carry-forward from physical scans
-9. **Partial unique index for one open employee shift** — DB-level enforcement of BR-ES-01
-10. **Store.store_pin_hash added** — single PIN reused for whole-book-sale and return-to-vendor
-11. **BookAssignmentHistory new table** — assignment audit trail
-12. **ShiftExtraSales new table** — whole-book sales without Book row
-13. **Composite unique constraints** — (store_id, X) for barcode, static_code, slot_name, username
-14. **User soft-delete with partial unique index on (store_id, username) WHERE deleted_at IS NULL** — consistent with Slot soft-delete; allows username reuse after deactivation while preserving login history rows.
-15. **Store.scan_mode column** — admin-configurable preference returned on login so the mobile client applies it immediately; avoids a separate API call per session.
-16. **Admin user management CRUD** — moved up from v2.1; required for multi-store commercialization readiness and day-1 store operations.
-17. **BusinessDay + EmployeeShift replace ShiftDetails (April 2026)** — the self-referential ShiftDetails model (main shift ↔ sub-shifts) was replaced with two dedicated models. BusinessDay is the daily container (auto-managed, admin-closable). EmployeeShift is the unit of employee work. This removes the two-level query pattern, eliminates the `main_shift_id IS NULL` sentinel, and makes the data model match the business domain directly. Three migrations, two new services, two new route files. All 8 end-to-end sequences verified after refactor.
+`EmployeeShift.uuid`, `BusinessDay.uuid`, and `ShiftBooks.uuid` are nullable string columns that hold UUID v4 values. They exist to support the offline sync architecture (Phase 5a) where the mobile app creates local records with client-generated UUIDs before network connectivity is restored. The UUID allows the sync queue to match mobile-created records to their eventual server counterparts.
+
+The mobile offline layer generates UUIDs on the device and stores them in local SQLite tables (`local_employee_shifts`, `local_shift_books`). On sync, the server accepts the UUID and stores it in the corresponding column, enabling idempotent upserts.
+
+---
+
+## Schema Decision Log (v4.0 additions)
+
+18. **Store.suspended + is_active added** — `suspended` = superadmin-imposed block (e.g. payment failure); `is_active` = logical soft-disable. Separated because suspension and deactivation have different semantics and different actors (platform vs. internal).
+19. **Store contact fields (email, phone, address, etc.)** — needed for superadmin panel store management and for future billing/notification integrations.
+20. **Store.created_by FK** — tracks which superadmin provisioned each store; nullable to preserve pre-v4.0 stores.
+21. **User.role adds 'superadmin'** — cross-store platform staff require a role separate from per-store admins. Implemented as a third role value to avoid a separate user table.
+22. **Subscription table** — one row auto-created per store at provisioning with `status='trial'`. Stripe fields nullable until payment integration (Phase 5b).
+23. **StoreSettings table** — one row auto-created per store with defaults. Separates operational preferences from the Store identity record.
+24. **AuditLog table** — append-only; no hard deletes. `store_id` nullable so superadmin cross-store actions can be logged without picking an arbitrary store.
+25. **ContactSubmission table** — single table for all public form types (`contact`, `apply`, `waitlist`) using a discriminator column to avoid three near-identical tables.
+26. **uuid columns on EmployeeShift, BusinessDay, ShiftBooks** — client-generated offline identifiers for the sync queue. Nullable for backward compatibility with records created before offline mode.
+27. **scan_source adds 'offline'** — distinguishes scans created by the offline engine from server-side scans; 'offline' source records are synced to the server via the sync queue.

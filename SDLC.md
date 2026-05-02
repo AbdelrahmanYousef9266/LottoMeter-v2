@@ -43,13 +43,13 @@ The original LottoMeter v1 was a Windows-only desktop app. Store employees are l
 - [x] SRS v4.0 — initial verified document
 - [x] SRS v5.0 — updated after design review (see Phase 3)
 - [x] SRS v5.1 — clarified scan event model + hardware scanner support
+- [x] SRS v5.2 — implementation corrections
+- [x] SRS v6.0 — updated May 2026 (13 models, 47+ endpoints, offline architecture, web dashboard)
 - [x] Business logic verified with product owner
-- [x] Functional requirements (Store, Auth, Slot, Book, Shift, Scan, Whole-book-sale, Return-to-vendor, Void modules)
-- [x] UI & UX requirements (all screens)
+- [x] Functional requirements (Store, Auth, Slot, Book, Shift, Scan, Whole-book-sale, Return-to-vendor, Void, Subscription, Superadmin modules)
+- [x] UI & UX requirements (all screens — mobile + web dashboard)
 - [x] Multilingual & RTL requirements (10 languages across v2.0–v2.2)
-- [x] Accessibility requirements
 - [x] Non-functional requirements
-- [x] Use cases (UC-01 through UC-13)
 - [x] Commercialization requirements
 
 ---
@@ -58,130 +58,162 @@ The original LottoMeter v1 was a Windows-only desktop app. Store employees are l
 
 **Status:** Complete | **Date:** April 2026
 
-### Design Review Outcome
-
-A complete design review was conducted between SRS v4.0 and v5.0. Twenty-two design decisions were made during review; all are documented in SRS §18. Two additional decisions were added in v5.1 for the scan event model clarification and hardware scanner support.
-
-### Key Design Decisions
-
-**Schema decisions made for scalability:**
-- `store_id` on every table — enables multi-tenancy without future migration
-- `role` on User — enforced from v2.0 (moved up from v2.1 scope)
-- `Store` table as root tenant entity
-- Composite unique constraints `(store_id, X)` for barcode, static_code, slot_name, username
-- Partial unique index ensuring only one open main shift per store (DB-level)
-
-**Business logic decisions verified with product owner:**
-- Every main shift auto-creates Sub-shift 1 on open
-- Scanning and closing always happens on sub-shifts, never directly on main shift
-- Main shift totals = sum of non-voided sub-shifts
-- Main shift always has at least one sub-shift
-- Book lengths are fixed by ticket price: $1/$2 → 150, $3 → 100, $5 → 60, $10/$20 → 30
-- `static_code` is globally unique per lottery book (manufacturer guarantee)
-- `Slot.ticket_price` = fixed price; `Book.ticket_price` copied at assignment (overridable)
-- One book per slot at a time (slot capacity = 1)
-- Book assignment and creation unified into one admin action (scan → assign)
-- Reassignment allowed anytime, even during open sub-shifts; requires `confirm_reassign: true`
-- Admin "delete book" = unassign (book row preserved for history)
-- Slot soft-delete only; `slot_name` editable anytime, `ticket_price` only when empty
-- Closing inputs (cash_in_hand, gross_sales, cash_out) entered manually at close
-- tickets_total = scanned sales + whole-book sales + return partials
-- expected_cash = gross_sales + tickets_total - cash_out
-- difference = cash_in_hand - expected_cash
-- shift_status: correct / over / short
-- Trust-based carry-forward: only after 'correct' close; 'short'/'over' forces rescan
-- Pending-scans blocking: sub-shift cannot accept sales until initialization complete
-- Whole-book sale: separate flow, no Book row created, PIN-authorized
-- Return-to-vendor: preserves pre-return revenue, unassigns book, PIN-authorized
-- Single store PIN reused for whole-book-sale and return-to-vendor
-- Store PIN mandatory at initial setup
-- Void = flag + audit, never deletion; does not modify downstream carried data
-- Reports show open_position, close_position, scan_source, slot-at-scan-time per book
-- Ticket breakdown on reports separates scanned from whole_book by price
-- Scans only at shift open, last-ticket of book, return-to-vendor, shift close (not per sale)
-
-**Mobile structure finalized:**
-- Screens including Splash, Onboarding, Settings, Shift, Scan, Books (admin slots view), History
-- Reusable components: SkeletonLoader, ToastNotification, ConfirmDialog, PinDialog, OfflineBanner
-- locales/ folder with translation files per language
-- utils/rtl.js for RTL layout management
-
 ### Deliverables
-- [x] SRS v5.1 — final, with decision log
-- [x] ERD v2.0 — all 8 models with constraints, relationships, partial indexes
-- [x] ERD diagram converted to Mermaid for GitHub rendering
-- [x] API Contract v2.0 — all endpoints with request/response shapes and error codes
-- [x] Updated README.md reflecting v2.0 design
+- [x] ERD v4.0 — 13 models with constraints, relationships, partial indexes
+- [x] ERD Mermaid diagram for GitHub rendering
+- [x] API Contract v3.0 — 47+ endpoints with request/response shapes and error codes
 - [x] Flask folder structure finalized
 - [x] React Native folder structure finalized
+- [x] React web dashboard structure finalized
 - [x] Shift validation formula documented
-- [x] Last ticket detection logic documented (price-indexed)
-- [x] Ticket price breakdown logic documented
-- [x] Report structure documented
-- [x] PIN rate-limiting contract documented
+- [x] Last ticket detection logic documented
 - [x] Barcode parsing contract documented
+- [x] PIN rate-limiting contract documented
 
 ---
 
 ## Phase 4 — Implementation
 
-### Backend (Flask API) ✅
+### Phase 4a — Core Backend + Mobile ✅
 
 **Status:** Complete | **Date:** April 2026
 
-The complete REST API is implemented and tested end-to-end with both Thunder Client and a fully integrated mobile client. All 29 endpoints from the API Contract are functional. PostgreSQL-compatible. Containerized with Docker and docker-compose.
+The complete REST API is implemented and tested end-to-end. All 39 original endpoints from the API Contract are functional. PostgreSQL-compatible. Containerized with Docker.
 
-**Build order completed in sequence:**
-
+**Backend build order:**
 - [x] Project scaffold (app factory, config, extensions, constants.py)
 - [x] Error handlers + APIError hierarchy
 - [x] Store model + schema + service + routes
 - [x] User model + auth module (setup, login, logout) + JWT wiring + role decorator
-- [x] Store settings (PIN) module
+- [x] Store settings (PIN + scan_mode) module
 - [x] Slot model + schema + service + routes (with soft-delete)
 - [x] Book model + BookAssignmentHistory model
 - [x] Slot assignment endpoint (scan-to-assign with reassignment)
 - [x] Book unassign + return-to-vendor endpoints
-- [x] ShiftDetails model + schema
-- [x] Shift open / handover / close service + routes
+- [x] BusinessDay + EmployeeShift models + services + routes
+- [x] Shift open / close service + routes
 - [x] Pending-scans computation
 - [x] Carry-forward logic (correct-status only)
 - [x] ShiftBooks model + scan service + routes
-- [x] Last-ticket detection via LENGTH_BY_PRICE (refined per v5.2 decisions)
-- [x] Scan validation rules 1–8 (Rule 8 narrowed in v5.2)
+- [x] Last-ticket detection via LENGTH_BY_PRICE
+- [x] Scan validation rules 1–8
 - [x] ShiftExtraSales model + whole-book-sale endpoint
 - [x] PIN rate-limiting
-- [x] Void endpoints (sub-shift + main shift)
+- [x] Void endpoints
 - [x] Reports service + endpoint
-- [x] Sub-shift summary endpoint (`GET /api/shifts/{id}/summary`) for live preview
+- [x] Sub-shift summary endpoint
 - [x] Docker + docker-compose setup
 - [x] GET /api/auth/me endpoint
-- [x] Admin user management CRUD (list, create, edit, soft-delete) — 5 endpoints
-- [x] Bulk slot management (POST /api/slots/bulk up to 500, POST /api/slots/bulk-delete)
-- [x] Store scan_mode preference (PUT /api/store/settings/scan-mode)
-- [x] Multi-tenancy audit complete — 19 security fixes applied; T-01–T-10 cross-tenant tests pass
-- [x] BusinessDay + EmployeeShift refactor — April 2026
-    - Replaced self-referential ShiftDetails model with two clean models: BusinessDay (daily container, auto-managed) and EmployeeShift (one employee session per day)
-    - 2 new models, 2 new services (business_day_service, employee_shift_service), 2 new route files, 3 Alembic migrations
-    - Unplanned fixes applied: book_service.py return_to_vendor (two-level ShiftDetails query), report.py employee access guard (shift_service reference)
-    - All 8 end-to-end sequences verified live (open shift → summary → close → carry-forward → BD close guard → BD close)
+- [x] Admin user management CRUD (5 endpoints)
+- [x] Bulk slot management
+- [x] Store scan_mode preference
 
-### Implementation Stats
+**Mobile build order (React Native):**
+- [x] Project scaffold (Expo SDK 54)
+- [x] AuthContext with token validation on mount
+- [x] Login screen
+- [x] Stack + bottom tab navigation (5 tabs)
+- [x] Home screen — shift state, open/close shift, pull-to-refresh
+- [x] Scan screen — camera + manual fallback, scan-type auto-locking
+- [x] Camera barcode scanner via expo-camera
+- [x] Books screen — slots grid, create-slot modal
+- [x] Slot detail screen — assign, reassign, unassign, return to vendor
+- [x] History screen — closed shifts list with status badges
+- [x] Report detail screen — totals, ticket breakdown, books, whole-book sales, returns
+- [x] Close shift modal — live preview (tickets_total, expected_cash, difference)
+- [x] Whole-book sale modal (PIN-protected)
+- [x] Return-to-vendor modal (PIN-protected)
+- [x] Settings screen — language picker, logout, PIN change (admin)
+- [x] English + Arabic translation files (14 namespaces)
+- [x] RTL layout flip via I18nManager.forceRTL
+- [x] Continuous scan mode (2-second deduplication guard)
+- [x] ITF-14 barcode normalization
+- [x] Client-side L1 + L2 validation
+- [x] Hardware scanner mode
+- [x] Bulk slot UI
+- [x] Admin history filters (date range, status, employee)
+- [x] PDF export via expo-print + OS share sheet
+
+### Phase 4b — BusinessDay + EmployeeShift Refactor ✅
+
+**Status:** Complete | **Date:** April 2026
+
+Replaced self-referential ShiftDetails model with two dedicated models. 2 new models, 2 new services, 2 new route files, 3 Alembic migrations. All 8 end-to-end sequences verified live.
+
+### Phase 4c — Security Hardening ✅
+
+**Status:** Complete | **Date:** April 2026
+
+- [x] Multi-tenancy audit — 19 security fixes applied
+- [x] T-01 through T-10 cross-tenant tests pass
+- [x] PIN rate-limiting (in-memory, per user+store)
+- [x] JWT blocklist (in-memory)
+- [x] Admin role enforcement on all admin-only endpoints
+- [x] Soft-delete partial unique indexes (User, Slot)
+- [x] store_id on all tables verified
+
+### Phase 4d — Commercial Database Improvements ✅
+
+**Status:** Complete | **Date:** April 2026
+
+- [x] Store.suspended, Store.is_active columns
+- [x] Store contact fields (email, phone, address, city, state, zip_code, owner_name, created_by, notes)
+- [x] User.role adds 'superadmin' value
+- [x] EmployeeShift.uuid column (for offline sync)
+- [x] BusinessDay.uuid column (for offline sync)
+- [x] ShiftBooks.uuid column (for offline sync)
+- [x] scan_source adds 'offline' value
+
+### Phase 4e — Web Dashboard (React + Vite) ✅
+
+**Status:** Complete | **Date:** April 2026
+
+Full admin web dashboard with 9 pages (dashboard, shifts, reports, books, slots, users, business days, subscription, login). Connects to the same REST API as the mobile app. Includes reusable component library (Card, Button, Badge, StatCard, Table, Modal, Input).
+
+### Phase 4f — Public Marketing Website ✅
+
+**Status:** Complete | **Date:** April 2026
+
+5-page public marketing site (Home, Pricing, Apply, Contact, GetStarted) built as part of the same Vite app. Contact and apply forms wire to the API. Rate-limited and honeypot-protected.
+
+### Phase 4g — Superadmin Panel ✅
+
+**Status:** Complete | **Date:** April 2026
+
+Cross-store management interface for LottoMeter platform staff. Pages: Dashboard (stats), Stores (list + create + suspend), Submissions (review + approve). Separate login flow with `superadmin` role JWT. All actions logged to `audit_logs`.
+
+### Phase 4h — Subscription System Foundation ✅
+
+**Status:** Complete | **Date:** April 2026
+
+- [x] Subscription model + service (trial, active, expired, suspended, cancelled)
+- [x] StoreSettings model + service (timezone, currency, hours, notifications)
+- [x] AuditLog model + service (append-only, cross-store)
+- [x] ContactSubmission model (contact + apply + waitlist)
+- [x] GET /api/subscription endpoint
+- [x] GET/PUT /api/store/settings endpoints
+- [x] POST /api/contact, /api/apply, /api/waitlist endpoints
+- [x] POST /api/stripe/webhook placeholder
+- [x] All /api/superadmin/* endpoints (14 endpoints)
+- [x] Trial subscription auto-provisioned on store creation
+
+---
+
+### Implementation Stats (May 2026)
 
 | Metric | Value |
 |---|---|
-| SQLAlchemy models | 9 |
-| API endpoints | 39 |
-| Flask blueprints | 9 |
-| Marshmallow schemas | 8 |
-| Services | 10 |
-| Database migrations | 10 |
-| Lines of Python (approx) | 5,020 |
+| SQLAlchemy models | 13 |
+| API endpoints | 47+ |
+| Flask blueprints | 12 |
+| Marshmallow schemas | 12 |
+| Services | 14 |
+| Database migrations | 15+ |
+| React web pages | 15 |
+| Lines of Python (approx) | ~8,500 |
+| Lines of JavaScript (approx) | ~12,000 |
 
-### Backend — Outstanding
-
-All backend items are complete. Multi-tenancy audit performed and all 19 identified gaps closed.
-
+---
 
 ### Branching Strategy
 ```
@@ -190,145 +222,80 @@ develop       ← integration branch
 feature/*     ← one branch per feature
 ```
 
-All Phase 4 commits went directly to `main` since this was solo development before any deployment.
-
-### Commit Convention Used
+### Commit Convention
 - `feat:` new feature
 - `fix:` bug fix
 - `docs:` documentation only
 - `test:` adding tests
 - `refactor:` restructure, no behavior change
 - `chore:` tooling, config, dependency updates
-
-### Testing During Implementation
-Each backend module was end-to-end tested via Thunder Client immediately after implementation. Test sequences included:
-- Happy path validation
-- All error codes from the API Contract
-- Edge cases (out-of-range positions, duplicate names, soft-deleted name reuse, etc.)
-- Cross-feature interactions (slot guards triggered by book assignment, FR-CLOSE-01 blocking handover, carry-forward creating real ShiftBooks rows, return-to-vendor creating close scans)
-
-The mobile build (below) then exercised the API as an integrated consumer, surfacing 5 additional bugs that the API-only tests had not caught. All fixed and documented in **Implementation Bug Discoveries** below.
-
-### Mobile App (React Native) ✅
-
-**Status:** ~95% complete | **Date:** April 2026
-
-Cross-platform mobile client built with Expo. Wires up the entire API end-to-end — auth, scanning, slot management, shift lifecycle, PIN-protected actions, reports, and i18n. Tested live on Android via Expo Go.
-
-**Build order completed in sequence:**
-
-- [x] Project scaffold (Expo blank template, ~700 npm packages)
-- [x] Folder structure: `src/{api,components,context,locales,navigation,screens,utils}`
-- [x] Axios client with JWT auto-attach + standardized error envelope
-- [x] SecureStore for token persistence
-- [x] AuthContext with token validation on mount via `/auth/me`
-- [x] Login screen (Store Code + Username + Password)
-- [x] Stack + bottom tab navigation (5 tabs)
-- [x] Safe-area inset fix for Android navigation bar
-- [x] Home screen — current shift state, open shift, pull-to-refresh
-- [x] Scan screen — camera + manual fallback, scan-type auto-locking by sub-shift init state
-- [x] Camera barcode scanner via `expo-camera` (full-screen modal, target rectangle, vibration)
-- [x] Books screen — slots grid, create-slot modal
-- [x] Slot detail screen — assign (camera + manual), reassign confirmation, unassign, return to vendor
-- [x] History screen — closed shifts list with status badges (correct/over/short/voided)
-- [x] Report detail screen — totals, ticket breakdown, sub-shifts, books, whole-book sales, returned books, voided sub-shifts
-- [x] Close shift modal — handover + final close with live preview (tickets_total, expected_cash, difference, status)
-- [x] Pre-close pending-close-scan check via summary endpoint
-- [x] Whole-book sale modal (PIN-protected, live ticket count + value preview)
-- [x] Return-to-vendor modal (PIN-protected, by-id or by-barcode lookup)
-- [x] Settings screen — account info, language picker, logout
-- [x] i18n infrastructure: `i18next` + `react-i18next` + `expo-localization` + AsyncStorage persistence
-- [x] English translation file (14 namespaces, every user-facing string)
-- [x] Arabic translation file (14 namespaces, full translation parity)
-- [x] RTL layout flip via `I18nManager.forceRTL` + restart-required prompt
-- [x] Reusable components: `CloseShiftModal`, `WholeBookSaleModal`, `ReturnBookModal`, `CameraScannerScreen`
-- [x] PIN change modal in Settings (admin only) — wired to PUT /api/store/settings/pin
-- [x] Continuous scan mode (camera stays open, 2-second deduplication guard)
-- [x] ITF-14 barcode normalization (strips leading 0 from 13-digit barcodes)
-- [x] Client-side L1 (book existence) and L2 (position range) validation before API call
-- [x] Hardware scanner mode (hides camera UI, auto-focuses text input for keystroke-wedge devices)
-- [x] Bulk slot UI: Bulk Add modal with Quick and Price Groups tabs, checkbox multi-select, floating delete bar
-- [x] History screen: admin filter bar (date range, status, employee dropdown)
-- [x] History screen: employee view restricted to current open + most recent closed shift in store
-- [x] Report detail: PDF export via expo-print + OS share sheet
-- [x] i18n: new translation keys added for history filters and export labels (en + ar)
-
-### Mobile App — Outstanding
-
-- [ ] Custom splash screen (Expo default in use)
-- [ ] Onboarding screen (deferred to post-launch)
-- [ ] Theme picker (light/dark)
-- [ ] Toast notifications + skeleton loaders (polish, deferred)
-
-### Mobile Stack
-| Layer | Library |
-|---|---|
-| Framework | React Native (Expo SDK 54) |
-| Navigation | `@react-navigation/native` + `native-stack` + `bottom-tabs` |
-| HTTP | `axios` |
-| Token storage | `expo-secure-store` |
-| Local prefs | `@react-native-async-storage/async-storage` |
-| Camera | `expo-camera` |
-| i18n | `i18next` + `react-i18next` |
-| Locale detect | `expo-localization` |
-| Layout safety | `react-native-safe-area-context` |
+- `revert:` rollback
 
 ### Implementation Bug Discoveries
 
-End-to-end testing through the mobile app surfaced 5 backend bugs that the Thunder Client API-only tests did not catch. All fixed during Phase 4 and documented as new entries (#25–#31) in SRS §18.
-
 | # | Discovery | Resolution |
 |---|---|---|
-| 1 | Last-ticket fired on open scans (selling books at the open of a shift) | Required `scan_type == "close"` |
-| 2 | Last-ticket fired without movement (selling books that just sat at last position) | Required `close_position > open_position` |
-| 3 | ShiftBooks PK keyed on full barcode broke open/close pairing | Changed PK to `(shift_id, static_code, scan_type)`; required schema migration |
-| 4 | Slot serializer hardcoded `current_book: null` | Implemented active-book lookup in `_current_book_for_slot` |
-| 5 | Rule 8 blocked legitimate new opens after a close in same sub-shift | Narrowed Rule 8 to rewrites only |
-
-**Why these escaped the API tests:** they all required exercising the mobile-driven workflow — open → close at *different* barcodes, slot assignment + slot list integration, mid-shift book swap with prior closes in the same sub-shift. The Thunder Client tests reused the same barcode for paired open/close calls (PK bug masked), only checked endpoints individually (slot list × book assignment integration not exercised), and didn't simulate the sequential scans within one sub-shift that would trigger Rule 8.
-
-This validates the decision to do mobile + API in the same project rather than treating mobile as an afterthought — the integration testing surfaced bugs that API-only QA could not have caught.
+| 1 | Last-ticket fired on open scans | Required scan_type == "close" |
+| 2 | Last-ticket fired without movement | Required close_position > open_position |
+| 3 | ShiftBooks PK keyed on full barcode broke open/close pairing | Changed PK to (shift_id, static_code, scan_type) |
+| 4 | Slot serializer hardcoded current_book: null | Implemented active-book lookup |
+| 5 | Rule 8 blocked legitimate new opens after a close | Narrowed Rule 8 to rewrites only |
+| 6 | parseBarcode wrong ITF-14 check (length===13 not 14) | Fixed to strip only 14-digit barcodes |
+| 7 | AuthContext NetInfo.addEventListener doesn't fire on mount (Android) | Added NetInfo.fetch() call before listener |
+| 8 | Camera validation blocks offline scans (bookMap empty) | Pass validate:!isOffline to CameraScanner |
 
 ---
 
-## Phase 5 — Testing ⏳
+## Phase 5 — Upcoming
 
-**Status:** Pending
+### Phase 5a — Offline Mode (SQLite-first architecture)
+**Status:** In Progress
 
-### Test Strategy
-| Type | Tool | Target |
-|---|---|---|
-| Unit tests (API) | pytest | All service layer functions |
-| Integration tests | pytest-flask | All route handlers + DB |
-| API manual testing | Thunder Client | All endpoints (✅ already done) |
-| Mobile component tests | Jest | React Native components |
-| Shift validation tests | pytest | expected_cash, difference, shift_status |
-| Last ticket detection tests | pytest | All 6 prices (1, 2, 3, 5, 10, 20) |
-| Ticket breakdown tests | pytest | Scanned + whole-book grouping |
-| Scan rule tests | pytest | All 8 scan validation rules |
-| PIN rate-limit tests | pytest | Lockout + reset |
-| Carry-forward tests | pytest | Correct-status carry, short/over rescan |
-| Pending-scans tests | pytest | Initial, handover, refill, resume |
-| Whole-book-sale tests | pytest | Valid + invalid prices, PIN flows |
-| Return-to-vendor tests | pytest | With/without open sub-shift, revenue preservation |
-| Void tests | pytest | Sub-shift void, main shift void, downstream unchanged |
-| i18n tests | Manual | Language switching, RTL layout flip |
-| End-to-end | Manual | Full: open shift → scan → last ticket → close sub-shift → close main shift |
+- [ ] Local SQLite DB setup (expo-sqlite WAL mode)
+- [ ] DB seeding: sync slots, books, shifts on login
+- [ ] Offline scan engine (mirrors all 8 server rules)
+- [ ] Sync queue (pending scans uploaded on reconnect)
+- [ ] Offline banner + sync status indicator
+- [ ] ScanScreen offline fallbacks (loadShift, loadSlots)
+- [ ] HomeScreen offline fallbacks (loadData)
+- [ ] Sync endpoints on backend (/api/sync/scans)
 
-### Deliverables
-- [ ] pytest test suite (80%+ coverage)
-- [ ] Thunder Client collection for all endpoints
-- [ ] Test results report
-- [ ] RTL layout verification checklist
-- [ ] Shift validation test cases document
+### Phase 5b — Stripe Payment Integration
+**Status:** Planned
+
+- [ ] Stripe customer creation on subscription activation
+- [ ] Checkout session flow
+- [ ] Webhook handler (checkout.session.completed, invoice.payment_failed, customer.subscription.deleted)
+- [ ] Subscription enforcement middleware
+- [ ] Billing UI in web dashboard
+
+### Phase 5c — SendGrid Email Integration
+**Status:** Planned
+
+- [ ] Transactional emails: welcome, trial expiry warning, payment confirmation
+- [ ] Admin notifications: shift variance alerts, shift close summaries
+- [ ] Public form: auto-reply on contact/apply submission
+
+### Phase 5d — Google Play Publishing
+**Status:** Planned
+
+- [ ] EAS production build profile
+- [ ] Play Store listing, screenshots, privacy policy
+- [ ] Production APK submitted for review
+
+### Phase 5e — Web Dashboard Deployment
+**Status:** Planned
+
+- [ ] Build pipeline for Vite + React dashboard
+- [ ] Deploy to production (Render Static Site or Cloudflare Pages)
+- [ ] Configure VITE_API_URL for production
+- [ ] Custom domain: app.lottometer.com
 
 ---
 
 ## Phase 6 — Deployment ✅
 
 **Status:** Complete | **Date:** April 2026
-
-### Deliverables
 
 - [x] Production-ready Dockerfile (env-driven port, migrations on startup, Gunicorn)
 - [x] Render Web Service ($7/mo Starter tier, Ohio region)
@@ -340,11 +307,35 @@ This validates the decision to do mobile + API in the same project rather than t
 - [x] EAS Build pipeline configured (preview profile, Android APK, internal distribution)
 - [x] Mobile app pointed at production API
 - [x] First production store created via /api/auth/setup
-- [x] Deployment runbook published at docs/DEPLOYMENT_RUNBOOK.md
 
 ---
 
-## Phase 7 — Maintenance ⏳
+## Phase 7 — Testing ⏳
+
+**Status:** Pending
+
+### Test Strategy
+| Type | Tool | Target |
+|---|---|---|
+| Unit tests (API) | pytest | All service layer functions |
+| Integration tests | pytest-flask | All route handlers + DB |
+| Shift validation tests | pytest | expected_cash, difference, shift_status |
+| Last ticket detection tests | pytest | All 6 price tiers |
+| Scan rule tests | pytest | All 8 scan rules |
+| PIN rate-limit tests | pytest | Lockout + reset |
+| Carry-forward tests | pytest | correct-status carry, short/over rescan |
+| Offline scan engine tests | Jest/Vitest | All 8 rules in scanEngine.js |
+| i18n tests | Manual | Language switching, RTL layout flip |
+| End-to-end | Manual | Full shift lifecycle |
+
+### Deliverables
+- [ ] pytest test suite (80%+ coverage)
+- [ ] Thunder Client collection for all 47+ endpoints
+- [ ] Test results report
+
+---
+
+## Phase 8 — Maintenance ⏳
 
 **Status:** Pending
 
@@ -353,48 +344,36 @@ This validates the decision to do mobile + API in the same project rather than t
 - CHANGELOG.md with semantic versioning
 - v2.1 feature backlog tracked in GitHub
 
-### Deliverables
-- [ ] CHANGELOG.md
-- [ ] GitHub Issues templates (bug, feature request)
-- [ ] v2.1 backlog documented
-
 ---
 
-## Phase 8 — Commercialization Roadmap 🗺️
+## Phase 9 — Commercialization Roadmap 🗺️
 
-**Status:** Planned | **Target:** Post v2.0 launch
+### 9.1 Multi-Tenant Architecture
+- `store_id` on all tables ✅
+- All queries scoped to store_id ✅
+- Tenant isolation enforced at service layer ✅
+- Superadmin cross-store management ✅
+- Store self-registration (v2.1)
 
-### 8.1 Multi-Tenant Architecture
-- `store_id` on all tables ✅ already done
-- All queries scoped to store_id ✅ enforced from v2.0
-- Store self-registration endpoint (v2.1)
-- Tenant isolation enforced at service layer (v2.0) ✅
+### 9.2 Role-Based Access Control
+- `role` column on User ✅
+- Admin + employee role enforcement ✅
+- `superadmin` role for platform staff ✅
 
-### 8.2 Role-Based Access Control
-- `role` column on User ✅ already done
-- Admin role enforcement + route decorators ✅ already done
-- Admin unlocks: user management, analytics, store settings
+### 9.3 Subscription & Billing
+- Subscription model ✅
+- Trial provisioning ✅
+- Stripe integration (Phase 5b)
 
-### 8.3 Subscription & Billing
-- Plan and Subscription models (v2.1)
-- Stripe integration for payment processing (v2.1)
-- Subscription enforcement middleware (v2.1)
-- Planned tiers: Starter / Pro / Enterprise
+### 9.4 Manager Analytics Dashboard
+- Web dashboard built ✅ (dev only)
+- Web dashboard deployed (Phase 5e)
 
-### 8.4 Manager Analytics Dashboard
-- Analytics API endpoints: sales summary, shifts by day, top books (v2.1)
-- React web dashboard for managers (v2.1)
-
-### 8.5 UI Customization
-- Font size preference (v2.1)
-- Print layout customization (v2.1)
-- Bluetooth thermal printer support (v2.1)
-
-### 8.6 Multilingual Expansion
+### 9.5 Multilingual Expansion
 | Language | RTL | Version |
 |---|---|---|
-| English | No | v2.0 |
-| Arabic | Yes | v2.0 |
+| English | No | v2.0 ✅ |
+| Arabic | Yes | v2.0 ✅ |
 | Hindi | No | v2.1 |
 | Spanish | No | v2.1 |
 | French | No | v2.1 |
@@ -404,16 +383,12 @@ This validates the decision to do mobile + API in the same project rather than t
 | Punjabi | No | v2.2 |
 | Tamil | No | v2.2 |
 
-### 8.7 Infrastructure
-- Production cloud deployment (v2.0)
-- Automated DB backups (v2.0)
-- Sentry error monitoring (v2.1)
-- Uptime monitoring (v2.1)
-
-### 8.8 Support & Documentation
-- Public documentation site (v2.1)
-- Support ticketing process (v2.1)
-- Public changelog (v2.0)
+### 9.6 Infrastructure
+- Production cloud deployment ✅
+- Automated DB backups ✅
+- Sentry error monitoring ✅
+- Uptime monitoring ✅
+- Redis-backed PIN rate-limiter + JWT blocklist (v2.1)
 
 ---
 
@@ -426,61 +401,27 @@ This validates the decision to do mobile + API in the same project rather than t
 | April 2026 | Marshmallow for serialization | Best-in-class for Flask |
 | April 2026 | JWT expiry 8 hours | Matches a standard work shift duration |
 | April 2026 | Add store_id to all tables | Enables multi-tenancy without future migration |
-| April 2026 | Add role to User | Enables RBAC in v2.1 without schema change |
-| April 2026 | Add Store model | Root tenant entity for commercialization |
+| April 2026 | Add role to User | Enables RBAC without schema change |
 | April 2026 | Use i18next for multilingual | Industry standard, supports RTL natively |
 | April 2026 | Enable RTL from v2.0 | Arabic required, cannot bolt on later |
-| April 2026 | Bottom tab navigation | Standard mobile UX pattern for this type of app |
-| April 2026 | Skeleton loaders over spinners | Better perceived performance on slow networks |
-| April 2026 | `ticket_price` on both Slot and Book | Slot = default, Book = permanent for historical reports |
-| April 2026 | Main shift auto-creates Sub-shift 1 | Every main shift must have at least one sub-shift |
-| April 2026 | Scanning/closing on sub-shifts only | Main shift is container only, not a work unit |
-| April 2026 | Book lengths fixed by price | Business constant; $1/$2→150, $3→100, $5→60, $10/$20→30 |
-| April 2026 | cash_in_hand/gross_sales/cash_out manual at close | Employee enters from physical register and cash count |
-| April 2026 | expected_cash = gross_sales + tickets_total - cash_out | Verified formula with product owner |
-| April 2026 | shift_status: correct/over/short | Clear language for store employees to understand result |
-| April 2026 | Ticket breakdown on every report | Both sub-shift and main shift show price breakdown |
-| April 2026 | Main shift report = combined + each sub-shift separately | Managers need both summary and per-employee details |
-| April 2026 | Drop Book.end and Book.total columns | Derivable from LENGTH_BY_PRICE and scan history; avoids stale cache bugs |
-| April 2026 | static_code globally unique per book | Barcode manufacturer guarantee; removes suffix-price ambiguity |
-| April 2026 | Book assignment unified with creation | One admin action: scan-to-assign. No standalone book creation |
-| April 2026 | No hard-delete for Book | "Delete" in admin UI means unassign; preserves history |
-| April 2026 | ShiftBooks PK = (shift_id, barcode, scan_type) | Fix: same book scanned at open AND close of same sub-shift |
-| April 2026 | Slot soft-delete with partial unique index | Preserve historical references while allowing name reuse |
-| April 2026 | Carry-forward only after 'correct' status | Trust boundary; short/over forces full rescan |
-| April 2026 | Pending-scans blocking | Cannot accept sales until sub-shift initialized |
+| April 2026 | BusinessDay + EmployeeShift replace ShiftDetails | Cleaner model matching the business domain |
+| April 2026 | ShiftBooks PK = (shift_id, static_code, scan_type) | Open/close pairs same book across different barcodes |
 | April 2026 | Scan rescan overwrites | Simpler error correction; no 409 on duplicate |
 | April 2026 | Rule 8: no open rescan after close started | Prevents mid-shift history rewriting |
-| April 2026 | Whole-book-sale as ShiftExtraSales (no Book row) | Stockroom books never enter inventory |
-| April 2026 | Single store PIN for both whole-book-sale and return | Simpler mental model for admin |
-| April 2026 | Store PIN mandatory at initial setup | No "configure later" path; avoids unusable state |
-| April 2026 | Return-to-vendor preserves pre-return revenue | Scan captures position, recorded as close scan |
-| April 2026 | Admin role enforced from v2.0 | Moved up from v2.1; too risky to defer |
 | April 2026 | Void preserves all data as flag | Audit integrity; downstream data unchanged |
-| April 2026 | Reassignment requires confirm_reassign | Protects against accidental double-scans |
-| April 2026 | Partial unique: one open main shift per store | DB-level enforcement of FR-SHIFT-02 |
-| April 2026 | Assignment history in dedicated table | Reports show which slot a book was in at each scan |
-| April 2026 | Boolean check constraints use `NOT col` syntax | PostgreSQL strict typing — `col = 0` doesn't work cross-dialect |
-| April 2026 | In-memory PIN rate limiter for v2.0 | Single-instance dev; Redis for production multi-instance |
-| April 2026 | In-memory JWT blocklist for v2.0 | Same reasoning as PIN limiter |
-| April 2026 | Gunicorn 2 workers in Docker | Reasonable default for small deployments |
-| April 2026 | Migrations run on container startup | `flask db upgrade` in docker-compose command |
-| April 2026 | Multi-tenancy audit complete — 19 security fixes; all internal queries scoped to store_id; T-01–T-10 cross-tenant tests pass | Defense in depth; direct exploit on GET /api/shifts/{id}/summary also fixed |
-| April 2026 | Admin user management CRUD with soft-delete added | Required for v2.0 store operations; moved up from v2.1 scope |
-| April 2026 | User.deleted_at soft-delete with partial unique index on (store_id, username) WHERE deleted_at IS NULL | Consistent with Slot pattern; preserves login history; allows username reuse after deactivation |
-| April 2026 | Bulk slot creation: POST /api/slots/bulk (up to 500) and POST /api/slots/bulk-delete | Admin UX: avoids creating slots one at a time during initial store setup |
-| April 2026 | Store.scan_mode preference: camera_single / camera_continuous / hardware_scanner, default camera_single | Replaces incidental hardware scanner support with explicit, admin-configurable mode |
-| April 2026 | Mobile continuous scan mode with 2-second deduplication guard | Prevents accidental double-scan on same barcode in rapid succession |
-| April 2026 | ITF-14 normalization on mobile: strip leading 0 from 13-digit barcodes | Lottery ticket barcodes may be wrapped in ITF-14 by scanner firmware; normalization ensures correct static_code extraction |
-| April 2026 | Client-side L1 + L2 validation before scan API call | Immediate user feedback for inactive books and out-of-range positions without a round-trip |
-| April 2026 | Shift history role-based scoping: admin sees all shifts with filters (date range, status, employee), employee sees current open + most recent closed shift in store | Simpler logic and sufficient for small-store trust model; employee needs visibility of their work without full history access |
-| April 2026 | PDF export client-side via expo-print for v2.0; server-side PDF generation deferred to v2.1 dashboard | No new backend endpoint required; OS share sheet covers print, save, and email in a single action |
-| April 2026 | Single share-sheet export button rather than separate print/save/email actions | OS share sheet already exposes all output options natively; separate buttons would duplicate the sheet UI |
-| April 2026 | Render over Railway/Fly | Simpler Docker deployment, automatic HTTPS, low operational overhead for single-store pilot |
-| April 2026 | Custom domain api.lottometer.com (subdomain pattern) | Leaves apex domain free for future marketing site or web admin |
-| April 2026 | Cloudflare Registrar | At-cost domain pricing (~$10/yr for .com), free DNS, free WHOIS privacy |
-| April 2026 | DNS-only (gray cloud) for api.lottometer.com | Render manages its own SSL via Let's Encrypt; Cloudflare proxy adds complexity without benefit at this scale |
-| April 2026 | EAS preview build, internal distribution | One-tap install for testers without App Store/Play Store overhead; production build deferred to v2.1 |
-| April 2026 | Skip mobile Sentry verification before launch | Integration follows Sentry's documented pattern; first real error will validate; not worth a 20-min EAS rebuild for confirmation |
-| April 2026 | Sentry over alternatives (Bugsnag, Rollbar) | Free tier sufficient for single-store pilot, deploy SHA tagging via RENDER_GIT_COMMIT, mature React Native + Flask integrations |
-| April 2026 | Single in-memory PIN rate-limiter and JWT blocklist | Acceptable for single-instance pilot; Redis-backed implementation deferred to v2.1 (multi-store SaaS) |
+| April 2026 | Single store PIN for whole-book-sale and return | Simpler mental model for employees |
+| April 2026 | Carry-forward only after 'correct' status | Trust boundary; short/over forces full rescan |
+| April 2026 | In-memory PIN rate-limiter and JWT blocklist for v2.0 | Single-instance pilot; Redis deferred to v2.1 |
+| April 2026 | Render over Railway/Fly | Simpler Docker deployment, automatic HTTPS |
+| April 2026 | Custom domain api.lottometer.com | Leaves apex domain for marketing site |
+| April 2026 | EAS preview build, internal distribution | One-tap install without App/Play Store overhead |
+| April 2026 | Subscription model with trial status | Auto-provisioned on store creation; Stripe deferred |
+| April 2026 | StoreSettings separate from Store | Operational preferences decoupled from identity |
+| April 2026 | AuditLog store_id nullable | Superadmin cross-store actions logged without forcing a store FK |
+| April 2026 | ContactSubmission discriminator column | Single table for contact/apply/waitlist avoids three identical tables |
+| April 2026 | superadmin role on User model | Platform staff need cross-store access; separate User table unnecessary |
+| April 2026 | React + Vite for web dashboard | Fast dev server, modern tooling, same JS ecosystem as mobile |
+| April 2026 | validate:false passed to CameraScanner when offline | Skips bookMap validation that would always fail when API unreachable |
+| April 2026 | expo-sqlite WAL mode for offline DB | Write-ahead logging reduces lock contention during sync |
+| May 2026 | NetInfo.fetch() before addEventListener in AuthContext | Android doesn't fire addEventListener on mount; fetch() gives immediate state |
+| May 2026 | Direct SQLite re-query after offline scan (not result.pending_scans_remaining) | recordOfflineScan computed counts before the scan was written; re-query gets post-write truth |

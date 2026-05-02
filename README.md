@@ -1,80 +1,285 @@
 # LottoMeter v2.0
 
-> A shift management system for grocery and retail stores that sell lottery tickets.
+> SaaS shift management system for convenience stores that sell lottery tickets.
 
-LottoMeter v2.0 is a full rebuild of the original [LottoMeter desktop app](https://github.com/AbdelrahmanYousef9266/LottoMeter) (C# / Windows Forms), rebuilt as a cross-platform mobile application backed by a REST API — designed from day one with scalability, auditability, and commercialization in mind.
+LottoMeter v2.0 is a full rebuild of the original [LottoMeter desktop app](https://github.com/AbdelrahmanYousef9266/LottoMeter) (C# / Windows Forms), rebuilt as a cross-platform mobile application backed by a REST API — designed from day one for multi-tenancy, auditability, and commercial scale.
+
+**Live backend:** https://api.lottometer.com
 
 ---
 
 ## What It Does
 
-Stores that sell lottery tickets traditionally rely on manual paperwork to track ticket books during shift opening and closing. LottoMeter replaces that with a fast, barcode-based digital workflow:
+Stores that sell lottery tickets track ticket books across shifts using barcodes. LottoMeter replaces manual paperwork with a fast digital workflow:
 
-- **Admin setup:** creates slots (each with a fixed ticket price) and assigns books to them by scanning barcodes
-- **Shift open:** employee opens a main shift → Sub-shift 1 is auto-created → system lists every book that needs an open scan
-- **During shift:** employees only scan at key events — last ticket of a book sold, whole-book sale, return to vendor, or shift close. Routine ticket sales go through the cash register.
-- **Last-ticket sale:** customer buys the final ticket; employee scans it as a close — system marks book sold and frees the slot
-- **Whole-book sale:** customer buys an entire book in one transaction — PIN-authorized quick flow
-- **Return to vendor:** lottery salesman removes a book — PIN-authorized, preserves pre-return revenue
-- **Sub-shift handover:** clean-close carries positions forward automatically; short/over forces full rescan by the next employee
-- **Sub-shift close:** employee scans final positions of remaining books, enters cash numbers; system calculates totals and status (correct / over / short) with a live preview as they type
-- **Admin void:** safety valve for admin-level errors — flags a shift, preserves all data, excluded from totals
-- **Reports:** main shift totals + each sub-shift separately + ticket price breakdown + per-book open/close positions + whole-book sales + returns + voids
-
----
-
-## Tech Stack
-
-| Layer | Technology |
-|---|---|
-| Mobile App | React Native (Expo SDK 54) |
-| API | Flask (Python 3.11+) |
-| ORM | SQLAlchemy 2.x |
-| Database (Dev) | SQLite |
-| Database (Prod) | PostgreSQL |
-| Auth | JWT (Flask-JWT-Extended) |
-| Serialization | Marshmallow |
-| Camera | expo-camera |
-| Token storage | expo-secure-store |
-| i18n | i18next + react-i18next + expo-localization |
-| Containerization | Docker + docker-compose |
-| CI/CD | GitHub Actions (planned) |
+- **Shift open** — employee opens a shift; system lists every book needing an open scan
+- **During shift** — employees scan at key events: last ticket sold, whole-book sale, return to vendor
+- **Shift close** — employee scans final positions, enters cash totals; system calculates expected cash, difference, and status (correct / over / short)
+- **Admin tools** — slot and book management, user management, void, bulk operations
+- **BusinessDay** — daily container auto-created on first shift; admin closes it at end of day
+- **Superadmin panel** — LottoMeter staff manage stores, subscriptions, and form submissions
+- **Marketing site** — public landing page, pricing, apply, and contact forms
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────┐        HTTPS / REST        ┌──────────────────────┐
-│   React Native App  │ ◄─────────────────────────► │   Flask REST API     │
-│   (iOS / Android)   │       JSON Responses         │   + SQLAlchemy ORM   │
-└─────────────────────┘                              └──────────┬───────────┘
-                                                                │
-                                                     ┌──────────▼───────────┐
-                                                     │  PostgreSQL / SQLite │
-                                                     └──────────────────────┘
+┌───────────────────────┐        HTTPS / REST        ┌──────────────────────────┐
+│  React Native App     │ ◄─────────────────────────► │  Flask REST API          │
+│  (iOS / Android)      │                              │  api.lottometer.com      │
+│  Expo SDK 54          │                              │  Render (Ohio)           │
+└───────────────────────┘                              └──────────┬───────────────┘
+                                                                  │
+┌───────────────────────┐                              ┌──────────▼───────────────┐
+│  React Web Dashboard  │ ◄─────────────────────────► │  PostgreSQL              │
+│  Vite + React 18      │                              │  Render Postgres         │
+│  (dev: localhost:3001)│                              └──────────────────────────┘
+└───────────────────────┘
+┌───────────────────────┐
+│  Public Marketing     │   (static pages, public API endpoints)
+│  Website              │
+│  lottometer.com       │
+└───────────────────────┘
+┌───────────────────────┐
+│  Superadmin Panel     │   (JWT superadmin role, cross-store management)
+│  /superadmin/*        │
+└───────────────────────┘
 ```
 
 ---
 
-## Database — 8 Models
+## Folder Structure
 
-| Model | Description |
-|---|---|
-| `Store` | Root tenant — holds store PIN and scan_mode preference; all data isolated by store_id |
-| `User` | Employees and admins with role-based access; soft-deletable (deleted_at) |
-| `Slot` | Physical location holding a book — fixed ticket price, soft-deletable |
-| `Book` | Lottery ticket book — created via slot assignment, tracked through lifecycle |
-| `BookAssignmentHistory` | Every assignment / reassignment / unassignment event |
-| `ShiftDetails` | Main shift (container) or sub-shift (has scans + financials) |
-| `ShiftBooks` | Scan records — keyed on `(shift_id, static_code, scan_type)` so open and close pair correctly across position changes |
-| `ShiftExtraSales` | Whole-book sales — not tied to Book records |
+```
+LottoMeter-v2/
+├── docs/
+│   ├── ERD.md                    ← Entity Relationship Diagram v4.0 (13 models)
+│   ├── API_Contract.md           ← Full API endpoint reference v3.0 (47+ endpoints)
+│   ├── SRS_LottoMeter_v2.md      ← Software Requirements Specification v6.0
+│   └── DEPLOYMENT_RUNBOOK.md     ← Production ops guide
+├── lottometer-api/               ← Flask REST API
+│   ├── app/
+│   │   ├── models/               ← 13 SQLAlchemy models
+│   │   ├── schemas/              ← Marshmallow serialization schemas
+│   │   ├── services/             ← Business logic layer
+│   │   ├── routes/               ← 12 Flask blueprints
+│   │   ├── config.py
+│   │   ├── constants.py          ← LENGTH_BY_PRICE
+│   │   ├── errors.py
+│   │   ├── auth_helpers.py
+│   │   └── extensions.py
+│   ├── migrations/               ← Alembic migrations
+│   ├── tests/
+│   ├── Dockerfile
+│   ├── docker-compose.yml
+│   └── run.py
+├── lottometer-mobile/            ← React Native (Expo SDK 54)
+│   ├── src/
+│   │   ├── api/                  ← Axios API client modules
+│   │   ├── components/           ← Reusable UI components
+│   │   ├── context/              ← AuthContext
+│   │   ├── hooks/                ← useFeedback
+│   │   ├── locales/              ← en.json, ar.json
+│   │   ├── navigation/           ← Stack + bottom tabs
+│   │   ├── screens/              ← All app screens
+│   │   ├── theme/                ← Colors, Radius, Shadow
+│   │   ├── utils/                ← bookConstants, scanErrorMessages, etc.
+│   │   └── i18n.js
+│   ├── App.js
+│   ├── eas.json
+│   └── package.json
+├── lottometer-dashboard/         ← React + Vite web dashboard
+│   ├── src/
+│   │   ├── components/           ← UI primitives, Layout, Charts
+│   │   ├── context/              ← AuthContext
+│   │   ├── pages/                ← Dashboard, Shifts, Reports, Books, Slots,
+│   │   │                            Users, BusinessDays, Subscription, Login
+│   │   │   ├── public/           ← Home, Pricing, Apply, Contact, GetStarted
+│   │   │   └── superadmin/       ← SuperDashboard, SuperStores, SuperCreateStore,
+│   │   │                            SuperSubmissions, SuperAdminLogin
+│   │   └── App.jsx
+│   └── package.json
+├── README.md
+├── SDLC.md
+└── .gitignore
+```
 
 ---
 
-## Book Lengths by Ticket Price
+## Getting Started
 
-Fixed business constants — not configurable:
+### Backend Setup
+
+**Prerequisites:** Python 3.11+, Docker (optional)
+
+```bash
+cd lottometer-api
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate       # macOS/Linux
+venv\Scripts\activate          # Windows
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Set environment variables (copy and edit)
+cp .env.example .env
+
+# Run database migrations
+flask db upgrade
+
+# Start development server
+flask run
+```
+
+**Or with Docker:**
+```bash
+docker-compose up --build
+```
+
+### Mobile Setup
+
+**Prerequisites:** Node.js 20+, Expo CLI, Android Studio or physical device
+
+```bash
+cd lottometer-mobile
+npm install
+
+# Start Metro bundler
+npx expo start
+
+# Press 'a' for Android emulator, scan QR code for physical device
+```
+
+### Dashboard Setup
+
+**Prerequisites:** Node.js 20+
+
+```bash
+cd lottometer-dashboard
+npm install
+npm run dev
+# Opens at http://localhost:3001
+```
+
+---
+
+## Environment Variables
+
+### Backend (`lottometer-api/.env`)
+
+| Variable | Required | Description |
+|---|---|---|
+| `DATABASE_URL` | Yes | PostgreSQL connection string (or `sqlite:///dev.db` for local) |
+| `JWT_SECRET_KEY` | Yes | Random secret for JWT signing (min 32 chars) |
+| `FLASK_ENV` | No | `development` or `production` |
+| `PORT` | No | Server port (default 5000) |
+| `PAYMENTS_ENABLED` | No | `true` to activate Stripe webhook handler (default false) |
+| `STRIPE_SECRET_KEY` | No | Stripe secret key (required when PAYMENTS_ENABLED=true) |
+| `STRIPE_WEBHOOK_SECRET` | No | Stripe webhook signing secret |
+| `SENTRY_DSN` | No | Sentry DSN for error tracking |
+
+### Dashboard (`lottometer-dashboard/.env`)
+
+| Variable | Required | Description |
+|---|---|---|
+| `VITE_API_URL` | Yes | Backend API base URL (e.g. `https://api.lottometer.com`) |
+| `VITE_SUPERADMIN_STORE_CODE` | Yes | Store code used for superadmin login |
+
+---
+
+## Deployment
+
+### Backend — Render
+1. Push to GitHub
+2. Connect repo to Render Web Service
+3. Set environment variables in Render dashboard
+4. Docker builds automatically; `flask db upgrade` runs on startup
+
+**Live:** https://api.lottometer.com
+
+### Database — Render Postgres
+- Basic-256mb tier ($6/mo)
+- Daily automated backups
+- Connection string injected via `DATABASE_URL` environment variable
+
+### Mobile — EAS Build
+```bash
+cd lottometer-mobile
+eas build --platform android --profile preview
+```
+
+Produces an APK for internal distribution. For Play Store release, use `--profile production`.
+
+---
+
+## Key Features
+
+### Shift Management
+- BusinessDay auto-created on first shift open; admin closes at end of day
+- EmployeeShift: one per employee per day; one open shift per store enforced at DB level
+- Carry-forward from previous shift when `shift_status == 'correct'`; short/over forces full rescan
+- Live close preview: tickets_total, expected_cash, difference computed before commit
+
+### Barcode Scanning
+- **Camera single** — scan one barcode, return to scan screen
+- **Camera continuous** — camera stays open; 2-second dedup guard
+- **Hardware scanner** — keystroke-wedge mode; text input auto-focused
+- ITF-14 normalization: strips leading zero from 14-digit barcodes
+
+### Offline Mode (Phase 5a — in progress)
+- Local SQLite DB seeded with current slots, books, and shift data
+- All 8 scan validation rules run locally — no network required
+- Sync queue uploads offline scans when connection restores
+- Offline banner visible while disconnected; close shift requires network
+
+### Subscription System
+- Each store auto-provisioned with a trial subscription on creation
+- Superadmin can cancel, reactivate, and extend trials
+- Stripe integration is a placeholder; `PAYMENTS_ENABLED` flag gates the webhook
+
+### Superadmin Panel
+- Cross-store store management (create, suspend, activate)
+- Review and approve contact/apply form submissions → provision store
+- Audit log for all significant platform actions
+- Subscription management across all stores
+
+### Public Marketing Site
+- Landing page, pricing, apply form, contact form, waitlist
+- Rate-limited API endpoints (5/min contact, 3/hr apply)
+- All submissions visible in superadmin panel
+
+---
+
+## Data Model
+
+13 SQLAlchemy models. Every operational table carries `store_id` for multi-tenancy.
+
+| Model | Description |
+|---|---|
+| `Store` | Root tenant — holds PIN, scan_mode, contact info |
+| `User` | Employees, admins, superadmins (role-based) |
+| `Slot` | Physical rack position (soft-deletable) |
+| `Book` | Lottery ticket book lifecycle |
+| `BookAssignmentHistory` | Every assignment/unassignment event |
+| `BusinessDay` | Daily container (auto-created, admin-closable) |
+| `EmployeeShift` | Employee work session within a BusinessDay |
+| `ShiftBooks` | Scan records — PK `(shift_id, static_code, scan_type)` |
+| `ShiftExtraSales` | Whole-book sales (not tied to Book rows) |
+| `Subscription` | Store billing state (trial → active → expired) |
+| `StoreSettings` | Timezone, currency, hours, notification prefs |
+| `AuditLog` | Append-only platform action log |
+| `ContactSubmission` | Public form submissions (contact/apply/waitlist) |
+
+Full schema: [docs/ERD.md](docs/ERD.md)
+
+---
+
+## Book Length Constants
+
+Fixed in code — not configurable:
 
 | Ticket Price | Book Length | Last Position |
 |---|---|---|
@@ -85,130 +290,22 @@ Fixed business constants — not configurable:
 | $10 | 30 | 29 |
 | $20 | 30 | 29 |
 
-Barcode parsing: `static_code` = barcode minus the last 3 digits; `position` = last 3 digits as integer.
-
----
-
-## Last-Ticket Detection
-
-The book is marked sold ONLY when ALL three conditions hold:
-
-1. `scan_type == "close"` — open scans at the last position never sell the book
-2. `position == LENGTH_BY_PRICE[ticket_price] - 1` — at the last ticket
-3. `close_position > open_position` — at least one ticket actually sold this sub-shift
-
-This protects against accidental sales during shift opening, and against books that just sat at their last position with no movement (e.g. carried forward from a previous shift).
-
-The mobile UI also auto-locks the scan_type picker — "open" while pending opens exist, "close" once initialized — making the wrong scan_type impossible to select.
-
----
-
-## Shift Validation Formula
-
-```
-tickets_total = scanned_book_sales + whole_book_sales + return_partials
-expected_cash = gross_sales + tickets_total - cash_out
-difference    = cash_in_hand - expected_cash
-
-difference = 0  → ✅ correct
-difference > 0  → ⚠️ over  (more cash than expected)
-difference < 0  → ❌ short (less cash than expected)
-```
-
-The mobile close-shift modal computes `expected_cash` and `difference` live as the employee types, using `GET /api/shifts/{id}/summary` for the running tickets_total.
-
----
-
-## Trust-Based Sub-Shift Handover
-
-When a sub-shift closes and the next opens within the same main shift:
-
-- **Close status = correct** → positions carry forward automatically; next employee can sell immediately
-- **Close status = short or over** → no carry-forward; next employee must rescan all books
-- **Admin added new books during handover** → those become pending scans regardless of previous status
-- **Sub-shift blocks sales until all pending scans complete**
-
-Clean closes reward employees with fast handover. Discrepancies trigger full verification.
-
----
-
-## Features
-
-### v2.0 — Core (complete)
-- Backend: 35 REST endpoints, 8 SQLAlchemy models, JWT auth, Marshmallow schemas, PIN rate-limiting, Docker
-- Mobile: full app — auth, scanning (camera + manual), slot management, shift lifecycle, history, reports
-- Admin bulk slot + book management with scan-to-assign + reassignment confirmation flow
-- Admin bulk slot creation (up to 500 per request) and bulk delete via dedicated endpoints
-- Admin user management: create, list, edit, soft-delete (self-protection rules enforced)
-- Store scan_mode preference (camera_single | camera_continuous | hardware_scanner)
-- Shift management with handover and final close, both with live cash preview
-- Barcode scanning via `expo-camera` with manual fallback on every screen
-- Continuous scan mode with deduplication guard (same barcode within 2 seconds ignored)
-- ITF-14 normalization: strips leading 0 from 13-digit barcodes for lottery scanner compatibility
-- Client-side L1 (book existence) and L2 (position range) validation before API call
-- Hardware scanner mode: hides camera UI, auto-focuses text input for keystroke-wedge devices
-- PIN change UI in Settings (admin-only — backend + mobile wired)
-- Smart scan_type auto-locking by sub-shift initialization state
-- Last-ticket detection refined to require close + real movement
-- Whole-book sale with store PIN
-- Return-to-vendor flow with store PIN (revenue-preserving)
-- Admin void with audit trail (data-preserving)
-- Auto-calculated tickets total, expected cash, difference, shift status
-- Ticket price breakdown on every report (scanned vs whole-book)
-- English + Arabic with full RTL layout flip
-- Bottom tab navigation, pull-to-refresh, status badges
-- Admin role enforcement from day 1
-- PIN rate-limiting (5 attempts / 10 min)
-- Multi-tenancy hardened: 19 security fixes — all queries scoped to store_id, cross-tenant returns 404
-- Admin shift history filters (date range, status, employee)
-- Employee shift history restricted to current open + most recent closed shift in the store
-- PDF export of shift reports via expo-print + OS share sheet
-
-### Production deployment
-- Backend: https://api.lottometer.com (Render)
-- Database: Render Postgres with daily backups
-- Mobile: EAS Build distributable APK (Android)
-- Monitoring: Sentry (error tracking) + UptimeRobot (uptime)
-
-### v2.0 — Outstanding (deferred)
-- Custom splash screen
-- Onboarding flow
-- Theme picker (light/dark)
-- Toast notifications + skeleton loaders (polish)
-
-### v2.1 — Growth (planned)
-- Store self-registration
-- Manager analytics dashboard (web)
-- Stripe subscription billing
-- Print layout customization, Bluetooth thermal printer
-- Hindi, Spanish, French, Urdu languages
-- PDF & Excel export, font size preference
-
-### v2.2 — Expansion
-- Push notifications (enables alternate auth flows)
-- Bengali, Portuguese, Punjabi, Tamil languages
-
-### v3.0 — Platform
-- Multi-store admin, POS integration, offline sync
-
 ---
 
 ## Supported Languages
 
-| Language | RTL | Version | Status |
-|---|---|---|---|
-| English | No | v2.0 | ✅ Implemented |
-| Arabic | Yes | v2.0 | ✅ Implemented (full RTL flip) |
-| Hindi | No | v2.1 | Planned |
-| Spanish | No | v2.1 | Planned |
-| French | No | v2.1 | Planned |
-| Urdu | Yes | v2.1 | Planned |
-| Bengali | No | v2.2 | Planned |
-| Portuguese | No | v2.2 | Planned |
-| Punjabi | No | v2.2 | Planned |
-| Tamil | No | v2.2 | Planned |
-
-The i18n architecture (i18next + JSON translation files + AsyncStorage persistence + I18nManager RTL flip) is fully built — adding new languages in v2.1/v2.2 is just a JSON file drop-in.
+| Language | RTL | Status |
+|---|---|---|
+| English | No | ✅ v2.0 |
+| Arabic | Yes | ✅ v2.0 |
+| Hindi | No | Planned v2.1 |
+| Spanish | No | Planned v2.1 |
+| French | No | Planned v2.1 |
+| Urdu | Yes | Planned v2.1 |
+| Bengali | No | Planned v2.2 |
+| Portuguese | No | Planned v2.2 |
+| Punjabi | No | Planned v2.2 |
+| Tamil | No | Planned v2.2 |
 
 ---
 
@@ -217,56 +314,20 @@ The i18n architecture (i18next + JSON translation files + AsyncStorage persisten
 | Phase | Status |
 |---|---|
 | Planning | ✅ Complete |
-| Requirements (SRS v5.2) | ✅ Complete — Verified |
-| System Design (ERD v2.1, API Contract v2.1) | ✅ Complete |
-| Implementation — Backend | ✅ Complete |
-| Implementation — Mobile | ✅ ~95% complete |
-| Testing | ⏳ Pending (Phase 5) |
-| Deployment | ✅ Complete |
-| Maintenance | ⏳ Pending (Phase 7) |
-| Commercialization | 🗺️ Planned (Phase 8) |
-
----
-
-## Repository Layout
-
-```
-LottoMeter-v2/
-├── docs/
-│   ├── ERD.md
-│   ├── API_Contract.md
-│   └── DEPLOYMENT_RUNBOOK.md
-├── lottometer-api/         ← Flask REST API
-│   ├── app/
-│   │   ├── models/
-│   │   ├── schemas/
-│   │   ├── services/
-│   │   ├── routes/
-│   │   ├── config.py
-│   │   ├── constants.py
-│   │   └── errors.py
-│   ├── migrations/
-│   ├── tests/
-│   ├── Dockerfile
-│   ├── docker-compose.yml
-│   └── run.py
-├── lottometer-mobile/      ← React Native (Expo)
-│   ├── src/
-│   │   ├── api/
-│   │   ├── components/
-│   │   ├── context/
-│   │   ├── locales/        ← en.json, ar.json
-│   │   ├── navigation/
-│   │   ├── screens/
-│   │   ├── utils/
-│   │   └── i18n.js
-│   ├── App.js
-│   ├── eas.json
-│   └── package.json
-├── README.md
-├── SDLC.md
-└── SRS_LottoMeter_v2.md
-```
+| Requirements (SRS v6.0) | ✅ Complete |
+| System Design (ERD v4.0, API v3.0) | ✅ Complete |
+| Backend (47+ endpoints, 13 models) | ✅ Complete |
+| Mobile App (~95%) | ✅ Complete |
+| Web Dashboard (15 pages) | ✅ Complete (dev) |
+| Public Marketing Site | ✅ Complete |
+| Superadmin Panel | ✅ Complete |
+| Subscription Foundation | ✅ Complete |
+| Offline Mode (Phase 5a) | 🔄 In Progress |
+| Stripe Integration (Phase 5b) | ⏳ Planned |
+| SendGrid Email (Phase 5c) | ⏳ Planned |
+| Play Store Publishing (Phase 5d) | ⏳ Planned |
+| Web Dashboard Deployment (Phase 5e) | ⏳ Planned |
+| Automated Testing | ⏳ Planned |
 
 ---
 
@@ -274,17 +335,17 @@ LottoMeter-v2/
 
 | Document | Description |
 |---|---|
-| [SRS_LottoMeter_v2.md](./SRS_LottoMeter_v2.md) | Software Requirements Specification v5.2 |
-| [SDLC.md](./SDLC.md) | SDLC phase tracker + decision log + commercialization roadmap |
-| [docs/ERD.md](./docs/ERD.md) | Entity Relationship Diagram v2.1 — 8 models |
-| [docs/API_Contract.md](./docs/API_Contract.md) | Full API endpoint and JSON contract v2.1 |
-| [docs/DEPLOYMENT_RUNBOOK.md](./docs/DEPLOYMENT_RUNBOOK.md) | Operational guide for production environment |
+| [docs/ERD.md](docs/ERD.md) | Entity Relationship Diagram v4.0 — 13 models |
+| [docs/API_Contract.md](docs/API_Contract.md) | Full API endpoint reference v3.0 — 47+ endpoints |
+| [docs/SRS_LottoMeter_v2.md](docs/SRS_LottoMeter_v2.md) | Software Requirements Specification v6.0 |
+| [SDLC.md](SDLC.md) | SDLC phase tracker + decision log |
+| [docs/DEPLOYMENT_RUNBOOK.md](docs/DEPLOYMENT_RUNBOOK.md) | Production operations guide |
 
 ---
 
 ## Previous Version
 
-Source: [LottoMeter v1](https://github.com/AbdelrahmanYousef9266/LottoMeter) — C# / .NET 8 Windows Forms / SQLite
+[LottoMeter v1](https://github.com/AbdelrahmanYousef9266/LottoMeter) — C# / .NET 8 / Windows Forms / SQLite
 
 ---
 
