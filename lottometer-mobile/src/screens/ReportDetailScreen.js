@@ -209,6 +209,9 @@ export default function ReportDetailScreen({ route }) {
           <KV k={t('report.ticketsTotal')} v={fmt$(shift.tickets_total)} />
           <KV k={t('report.grossSales')} v={fmt$(shift.gross_sales)} />
           <KV k={t('report.cashInHand')} v={fmt$(shift.cash_in_hand)} />
+          {shift.cancels != null && (
+            <KV k={t('report.cancels')} v={fmt$(shift.cancels)} />
+          )}
           <KV k={t('report.expectedCash')} v={fmt$(shift.expected_cash)} />
           <KV
             k={t('report.difference')}
@@ -416,7 +419,8 @@ function buildReportHtml(report, t, isRTL) {
   body += `<div class="card"><div class="header-row"><div>${dateLabel}<h1>${esc(t('report.subshiftTitle', { number: shift.shift_number }))}</h1></div>${badge(shift.shift_status, shift.voided)}</div>${kvRow(t('report.started'), fmtTime(shift.opened_at))}${kvRow(t('report.ended'), fmtTime(shift.closed_at))}${kvRow(t('report.openedBy'), shift.opened_by?.username)}${kvRow(t('report.closedBy'), shift.closed_by?.username)}</div>`;
 
   // Totals
-  body += `<h2>${esc(t('report.totals'))}</h2><div class="card">${kvRow(t('report.ticketsTotal'), money(shift.tickets_total))}${kvRow(t('report.grossSales'), money(shift.gross_sales))}${kvRow(t('report.cashInHand'), money(shift.cash_in_hand))}${kvRow(t('report.expectedCash'), money(shift.expected_cash))}${kvRow(t('report.difference'), money(shift.difference), diffCls(shift.shift_status))}</div>`;
+  const cancelsRow = shift.cancels != null ? kvRow(t('report.cancels'), money(shift.cancels)) : '';
+  body += `<h2>${esc(t('report.totals'))}</h2><div class="card">${kvRow(t('report.ticketsTotal'), money(shift.tickets_total))}${kvRow(t('report.grossSales'), money(shift.gross_sales))}${kvRow(t('report.cashInHand'), money(shift.cash_in_hand))}${cancelsRow}${kvRow(t('report.expectedCash'), money(shift.expected_cash))}${kvRow(t('report.difference'), money(shift.difference), diffCls(shift.shift_status))}</div>`;
 
   // Ticket breakdown
   if (shift.ticket_breakdown?.length > 0) {

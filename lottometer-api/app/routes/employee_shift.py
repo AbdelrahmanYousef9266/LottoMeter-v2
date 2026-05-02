@@ -119,6 +119,7 @@ def close_shift(shift_id):
         cash_in_hand=data["cash_in_hand"],
         gross_sales=data["gross_sales"],
         cash_out=data["cash_out"],
+        cancels=str(data["cancels"]),
     )
     report = get_shift_report(store_id, shift_id)
     log_action("shift_closed", user_id=user_id, store_id=store_id,

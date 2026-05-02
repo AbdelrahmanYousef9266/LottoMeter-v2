@@ -335,6 +335,9 @@ export default function Reports() {
                   { label: 'Expected', value: formatCurrency(reportData.shift?.expected_cash) },
                   { label: 'Cash in Hand', value: formatCurrency(reportData.shift?.cash_in_hand) },
                   { label: 'Difference', value: formatVariance(reportData.shift?.difference ?? 0).text },
+                  ...(reportData.shift?.cancels != null
+                    ? [{ label: 'Cancels', value: formatCurrency(reportData.shift.cancels) }]
+                    : []),
                   { label: 'Whole Books', value: reportData.shift?.whole_book_sales?.length ?? '—' },
                   { label: 'Returned', value: reportData.shift?.returned_books?.length ?? '—' },
                 ].map((item) => (

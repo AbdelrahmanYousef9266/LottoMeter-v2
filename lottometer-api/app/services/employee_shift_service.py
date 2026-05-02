@@ -215,6 +215,7 @@ def close_employee_shift(
     cash_in_hand: str,
     gross_sales: str,
     cash_out: str,
+    cancels: str = "0",
 ) -> EmployeeShift:
     shift = EmployeeShift.query.filter_by(id=shift_id, store_id=store_id).first()
     if shift is None:
@@ -226,17 +227,19 @@ def close_employee_shift(
 
     _verify_all_active_books_have_close_scan(store_id, shift.id)
 
-    cash_in  = Decimal(cash_in_hand)
-    gross    = Decimal(gross_sales)
-    cash_out_d = Decimal(cash_out)
+    cash_in     = Decimal(cash_in_hand)
+    gross       = Decimal(gross_sales)
+    cash_out_d  = Decimal(cash_out)
+    cancels_val = Decimal(cancels)
 
     tickets_total = _compute_shift_tickets_total(shift.id, store_id)
-    expected_cash = gross + tickets_total - cash_out_d
+    expected_cash = gross + tickets_total - cash_out_d - cancels_val
     difference    = cash_in - expected_cash
 
     shift.cash_in_hand      = cash_in
     shift.gross_sales       = gross
     shift.cash_out          = cash_out_d
+    shift.cancels           = cancels_val
     shift.tickets_total     = tickets_total
     shift.expected_cash     = expected_cash
     shift.difference        = difference

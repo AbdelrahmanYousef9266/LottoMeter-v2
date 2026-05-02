@@ -33,6 +33,7 @@ export default function CloseShiftModal({
   const [cashInHand, setCashInHand] = useState('');
   const [grossSales, setGrossSales] = useState('');
   const [cashOut, setCashOut] = useState('');
+  const [cancels, setCancels] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmingClose, setConfirmingClose] = useState(false);
 
@@ -44,6 +45,7 @@ export default function CloseShiftModal({
       setCashInHand('');
       setGrossSales('');
       setCashOut('');
+      setCancels('');
       setConfirmingClose(false);
       loadSummary();
     }
@@ -65,8 +67,9 @@ export default function CloseShiftModal({
   const ticketsTotal = parseFloat(summary?.tickets_total || '0') || 0;
   const grossSalesNum = parseFloat(grossSales) || 0;
   const cashOutNum = parseFloat(cashOut) || 0;
+  const cancelsNum = parseFloat(cancels) || 0;
   const cashInHandNum = parseFloat(cashInHand) || 0;
-  const expectedCash = grossSalesNum + ticketsTotal - cashOutNum;
+  const expectedCash = grossSalesNum + ticketsTotal - cashOutNum - cancelsNum;
   const difference = cashInHandNum - expectedCash;
 
   let status = '—';
@@ -102,6 +105,7 @@ export default function CloseShiftModal({
         cash_in_hand: cashInHand,
         gross_sales: grossSales,
         cash_out: cashOut,
+        cancels: cancels || '0',
       });
       fireFeedback('shift_closed');
     } catch (err) {
@@ -117,7 +121,7 @@ export default function CloseShiftModal({
       Alert.alert(t('closeShift.missingValues'), t('closeShift.missingValuesHint'));
       return;
     }
-    if (cashInHandNum < 0 || grossSalesNum < 0 || cashOutNum < 0) {
+    if (cashInHandNum < 0 || grossSalesNum < 0 || cashOutNum < 0 || cancelsNum < 0) {
       Alert.alert(t('closeShift.invalidValues'), t('closeShift.invalidValuesHint'));
       return;
     }
@@ -163,6 +167,9 @@ export default function CloseShiftModal({
 
                 <View style={styles.previewCard}>
                   <KV k={t('closeShift.ticketsTotal')} v={`$${ticketsTotal.toFixed(2)}`} />
+                  {cancelsNum > 0 && (
+                    <KV k={t('closeShift.cancels')} v={`$${cancelsNum.toFixed(2)}`} />
+                  )}
                   <KV k={t('closeShift.expectedCash')} v={`$${expectedCash.toFixed(2)}`} />
                   <KV
                     k={t('closeShift.difference')}
@@ -253,9 +260,21 @@ export default function CloseShiftModal({
                   keyboardType="decimal-pad"
                 />
 
+                <Text style={styles.label}>{t('closeShift.cancels')}</Text>
+                <TextInput
+                  style={styles.input}
+                  value={cancels}
+                  onChangeText={setCancels}
+                  placeholder={t('closeShift.cancelsPlaceholder')}
+                  keyboardType="decimal-pad"
+                />
+
                 <View style={styles.previewCard}>
                   <Text style={styles.previewTitle}>{t('closeShift.livePreview')}</Text>
                   <KV k={t('closeShift.ticketsTotal')} v={`$${ticketsTotal.toFixed(2)}`} />
+                  {cancelsNum > 0 && (
+                    <KV k={t('closeShift.cancels')} v={`$${cancelsNum.toFixed(2)}`} />
+                  )}
                   <KV k={t('closeShift.expectedCash')} v={`$${expectedCash.toFixed(2)}`} />
                   <KV
                     k={t('closeShift.difference')}

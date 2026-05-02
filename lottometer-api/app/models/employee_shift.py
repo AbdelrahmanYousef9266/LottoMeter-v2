@@ -26,6 +26,7 @@ class EmployeeShift(db.Model):
     cash_in_hand      = db.Column(db.Numeric(10, 2), nullable=True)
     gross_sales       = db.Column(db.Numeric(10, 2), nullable=True)
     cash_out          = db.Column(db.Numeric(10, 2), nullable=True)
+    cancels           = db.Column(db.Numeric(10, 2), nullable=True, default=0)
     tickets_total     = db.Column(db.Numeric(10, 2), nullable=True)
     expected_cash     = db.Column(db.Numeric(10, 2), nullable=True)
     difference        = db.Column(db.Numeric(10, 2), nullable=True)

@@ -1,7 +1,7 @@
 """Shift Marshmallow schemas — validation + serialization."""
 
 from decimal import Decimal
-from marshmallow import Schema, fields, validates, ValidationError as MmValidationError
+from marshmallow import Schema, fields, validates, validate, ValidationError as MmValidationError
 
 
 def _validate_positive_decimal(value, field_name: str):
@@ -20,6 +20,7 @@ class CloseShiftSchema(Schema):
     cash_in_hand = fields.Str(required=True)
     gross_sales = fields.Str(required=True)
     cash_out = fields.Str(required=True)
+    cancels = fields.Decimal(required=False, load_default=Decimal("0"), validate=validate.Range(min=0))
 
     @validates("cash_in_hand")
     def _v_cash(self, v, **kwargs):

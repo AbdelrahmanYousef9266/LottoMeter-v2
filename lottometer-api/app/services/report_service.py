@@ -274,6 +274,7 @@ def get_shift_report(store_id: int, employee_shift_id: int) -> dict:
             "cash_in_hand": _money(shift.cash_in_hand),
             "gross_sales": _money(shift.gross_sales),
             "cash_out": _money(shift.cash_out),
+            "cancels": _money(shift.cancels),
             "tickets_total": _money(shift.tickets_total),
             "expected_cash": _money(shift.expected_cash),
             "difference": _money(shift.difference),

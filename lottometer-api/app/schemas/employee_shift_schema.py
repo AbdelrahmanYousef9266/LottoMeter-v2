@@ -17,6 +17,7 @@ class EmployeeShiftSchema(Schema):
     cash_in_hand  = fields.Decimal(as_string=True, dump_default=None, allow_none=True)
     gross_sales   = fields.Decimal(as_string=True, dump_default=None, allow_none=True)
     cash_out      = fields.Decimal(as_string=True, dump_default=None, allow_none=True)
+    cancels       = fields.Decimal(as_string=True, dump_default=None, allow_none=True)
     tickets_total = fields.Decimal(as_string=True, dump_default=None, allow_none=True)
     expected_cash = fields.Decimal(as_string=True, dump_default=None, allow_none=True)
     difference    = fields.Decimal(as_string=True, dump_default=None, allow_none=True)
