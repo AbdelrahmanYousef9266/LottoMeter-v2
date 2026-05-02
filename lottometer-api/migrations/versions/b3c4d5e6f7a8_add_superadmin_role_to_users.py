@@ -15,6 +15,7 @@ depends_on = None
 
 
 def upgrade():
+    op.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS ck_users_role")
     op.create_check_constraint(
         'ck_users_role',
         'users',
@@ -23,4 +24,9 @@ def upgrade():
 
 
 def downgrade():
-    op.drop_constraint('ck_users_role', 'users', type_='check')
+    op.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS ck_users_role")
+    op.create_check_constraint(
+        'ck_users_role',
+        'users',
+        "role IN ('admin', 'employee')",
+    )
