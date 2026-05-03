@@ -16,7 +16,8 @@ import { useTranslation } from 'react-i18next';
 
 import { login } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
-import { saveOfflineSession, seedLocalDatabase } from '../offline';
+import { saveOfflineSession, seedLocalDatabase, saveLocalStore, saveLocalUser } from '../offline';
+import { setSessionContext } from '../offline/sessionStore';
 import { debugLocalDb } from '../offline/debugDb';
 import settings from '../config/settings';
 import AppInput from '../components/AppInput';
@@ -114,8 +115,13 @@ export default function LoginScreen() {
       const data = await login({ store_code: storeCode, username, password });
       setUser(data.user);
       setStore(data.store || null);
+      // Set session context immediately so write-through works right away
+      setSessionContext(data.user.user_id, data.store.store_id);
       // Save offline session (fire and forget)
       saveOfflineSession(data.user, data.store).catch(console.warn);
+      // Mirror user and store to local DB (fire and forget)
+      saveLocalStore(data.store).catch(console.warn);
+      saveLocalUser(data.user, data.store.store_id).catch(console.warn);
       // Seed local database — always runs so offline data is ready
       console.log('[login] About to seed, storeId:', data.store?.store_id);
       seedLocalDatabase(data.store?.store_id, data.user?.user_id)

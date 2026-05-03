@@ -18,6 +18,17 @@ export const debugLocalDb = async () => {
       );
       console.log(`${table}: ${result.count}`);
     }
+
+    const shifts = await db.getAllAsync(
+      'SELECT server_id, uuid, status FROM local_employee_shifts'
+    );
+    console.log('[db] shifts:', JSON.stringify(shifts));
+
+    const scans = await db.getAllAsync(
+      'SELECT uuid, scan_type, static_code FROM local_shift_books'
+    );
+    console.log('[db] scans:', JSON.stringify(scans));
+
     console.log('======================');
   } catch (e) {
     console.error('[debugDb] Error:', e.message);

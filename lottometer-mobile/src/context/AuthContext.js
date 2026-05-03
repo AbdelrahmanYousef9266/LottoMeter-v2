@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import NetInfo from '@react-native-community/netinfo';
 import { getToken } from '../api/client';
 import { getMe } from '../api/auth';
+import { setSessionContext } from '../offline/sessionStore';
 
 const AuthContext = createContext(null);
 
@@ -26,6 +27,10 @@ export function AuthProvider({ children }) {
             username: me.username,
           });
           setStore(me.store || null);
+          // Restore session context so write-through works after app reload
+          if (me.store) {
+            setSessionContext(me.user_id, me.store.store_id);
+          }
         }
       } catch (_) {
         // Token invalid/expired

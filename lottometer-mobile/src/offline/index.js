@@ -16,3 +16,18 @@ export {
   getLastPosition,
   LENGTH_BY_PRICE,
 } from './constants';
+export {
+  saveLocalStore,
+  saveLocalUser,
+  saveLocalSlot,
+  saveLocalSlots,
+  deleteLocalSlot,
+  saveLocalBook,
+  markLocalBookSold,
+  saveLocalBusinessDay,
+  saveLocalEmployeeShift,
+  closeLocalEmployeeShift,
+  saveLocalScan,
+  saveLocalExtraSale,
+} from './localDb';
+export { setSessionContext, getSessionContext } from './sessionStore';
