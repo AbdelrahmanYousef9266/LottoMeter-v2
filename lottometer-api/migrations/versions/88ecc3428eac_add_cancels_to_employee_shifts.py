@@ -18,24 +18,16 @@ depends_on = None
 
 def upgrade():
     # UUID fields (from deleted 50445ec5cb8b)
-    with op.batch_alter_table('business_days') as batch_op:
-        batch_op.add_column(sa.Column('uuid', sa.String(36), nullable=True))
-        batch_op.create_index('ix_business_days_uuid', ['uuid'])
+    op.execute('ALTER TABLE business_days ADD COLUMN IF NOT EXISTS uuid VARCHAR(36)')
+    op.execute('ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS uuid VARCHAR(36)')
+    op.execute('ALTER TABLE shift_books ADD COLUMN IF NOT EXISTS uuid VARCHAR(36)')
 
-    with op.batch_alter_table('employee_shifts') as batch_op:
-        batch_op.add_column(sa.Column('uuid', sa.String(36), nullable=True))
-        batch_op.create_index('ix_employee_shifts_uuid', ['uuid'])
-
-    with op.batch_alter_table('shift_books') as batch_op:
-        batch_op.add_column(sa.Column('uuid', sa.String(36), nullable=True))
-        batch_op.create_index('ix_shift_books_uuid', ['uuid'])
+    op.execute('CREATE INDEX IF NOT EXISTS ix_business_days_uuid ON business_days(uuid)')
+    op.execute('CREATE INDEX IF NOT EXISTS ix_employee_shifts_uuid ON employee_shifts(uuid)')
+    op.execute('CREATE INDEX IF NOT EXISTS ix_shift_books_uuid ON shift_books(uuid)')
 
     # Cancels column
-    with op.batch_alter_table('employee_shifts') as batch_op:
-        batch_op.add_column(
-            sa.Column('cancels', sa.Numeric(precision=10, scale=2),
-                      nullable=True)
-        )
+    op.execute('ALTER TABLE employee_shifts ADD COLUMN IF NOT EXISTS cancels NUMERIC(10,2)')
 
 
 def downgrade():
