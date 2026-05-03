@@ -58,6 +58,7 @@ export default function ScanScreen() {
 
   const inputRef = useRef(null);
   const lastScanRef = useRef({ barcode: null, timestamp: 0 });
+  const justScanned = useRef(false);
   const fireFeedback = useFeedback();
 
   const loadShift = useCallback(async () => {
@@ -75,7 +76,10 @@ export default function ScanScreen() {
 
       try {
         const summary = await getShiftSummary(shift.id);
-        const pending = summary.books_pending_close ?? 0;
+        // books_pending_open is the correct field (new server); fall back to
+        // books_pending_close which also equals total-active on a fresh shift
+        // (no close scans exist yet), so the new-shift case is always correct.
+        const pending = summary.books_pending_open ?? summary.books_pending_close ?? 0;
         setPendingCount(pending);
         setIsInitialized(pending === 0);
       } catch {
@@ -89,6 +93,10 @@ export default function ScanScreen() {
 
   useFocusEffect(
     useCallback(() => {
+      if (justScanned.current) {
+        justScanned.current = false;
+        return; // skip reload — state is fresh from scan response
+      }
       setLoading(true);
       loadShift().finally(() => setLoading(false));
     }, [loadShift])
@@ -132,6 +140,10 @@ export default function ScanScreen() {
           scan_type: scanType,
           force_sold,
         });
+        console.log('[scan success] full response:', JSON.stringify(result));
+        console.log('[scan success] pending_scans_remaining:', result.pending_scans_remaining);
+        console.log('[scan success] running_totals:', JSON.stringify(result.running_totals));
+        console.log('[scan success] is_initialized:', result.is_initialized);
         setLastScan({
           scan: result.scan,
           book: result.book,
@@ -143,14 +155,17 @@ export default function ScanScreen() {
         setToastVisible(false);
         setScanCount((c) => c + 1);
 
-        const wasPending = pendingCount > 0;
-        const isNowZero = result.pending_scans_remaining === 0;
-        setPendingCount(result.pending_scans_remaining);
-        setIsInitialized(result.is_initialized);
+        const { pending_scans_remaining, is_initialized } = result;
+        justScanned.current = true;
+        setPendingCount(pending_scans_remaining);
+        setIsInitialized(is_initialized);
+        if (is_initialized && scanType === 'open') {
+          setScanType('close');
+        }
         setBarcode('');
         setTimeout(() => inputRef.current?.focus(), 50);
 
-        if (wasPending && isNowZero && scanType === 'open') {
+        if (pending_scans_remaining === 0 && scanType === 'open') {
           Alert.alert(
             t('scan.allOpensDoneTitle'),
             t('scan.allOpensDoneBody'),
@@ -164,7 +179,7 @@ export default function ScanScreen() {
         setBusy(false);
       }
     },
-    [openSubId, scanType, t, fireFeedback, pendingCount]
+    [openSubId, scanType, isInitialized, t, fireFeedback]
   );
 
   const submitScan = useCallback(
