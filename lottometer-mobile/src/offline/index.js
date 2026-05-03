@@ -36,3 +36,9 @@ export {
   getOfflinePendingCounts,
   parseBarcode,
 } from './scanEngine';
+export {
+  getOrCreateOfflineBusinessDay,
+  openOfflineShift,
+  closeOfflineShift,
+  getOfflineShiftSummary,
+} from './shiftEngine';

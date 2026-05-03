@@ -24,7 +24,7 @@ import { friendlyScanError } from '../utils/scanErrorMessages';
 import { lastPositionFor, parseBarcode } from '../utils/bookConstants';
 import { Colors, Radius, Shadow } from '../theme';
 import { getDb } from '../offline/db';
-import { recordOfflineScan } from '../offline';
+import { recordOfflineScan, getOfflinePendingCounts } from '../offline';
 
 function detectLastTicket(trimmedBarcode, scanType, slots) {
   if (scanType !== 'close') return false;
@@ -61,10 +61,46 @@ export default function ScanScreen() {
   const inputRef = useRef(null);
   const lastScanRef = useRef({ barcode: null, timestamp: 0 });
   const justScanned = useRef(false);
+  const shiftUuidRef = useRef(null);
   const fireFeedback = useFeedback();
 
   const loadShift = useCallback(async () => {
     try {
+      if (isOffline) {
+        // OFFLINE PATH — load from local SQLite
+        const db = await getDb();
+        const localShift = await db.getFirstAsync(
+          `SELECT * FROM local_employee_shifts
+           WHERE store_id = ? AND status = 'open'
+           ORDER BY id DESC LIMIT 1`,
+          [store?.store_id]
+        );
+
+        if (!localShift) {
+          setShift(null);
+          setOpenSubId(null);
+          shiftUuidRef.current = null;
+          setPendingCount(0);
+          setIsInitialized(true);
+          return;
+        }
+
+        shiftUuidRef.current = localShift.uuid;
+        setShift(localShift);
+        // Use server_id when available; local rowid as fallback for UI keying
+        setOpenSubId(localShift.server_id || localShift.id);
+
+        const counts = await getOfflinePendingCounts(localShift.uuid, store?.store_id);
+        setIsInitialized(counts.is_initialized);
+        setPendingCount(counts.is_initialized
+          ? counts.books_pending_close
+          : counts.books_pending_open
+        );
+        return;
+      }
+
+      // ONLINE PATH — unchanged
+      shiftUuidRef.current = null;
       const shift = await getCurrentOpenShift();
       if (!shift) {
         setShift(null);
@@ -91,7 +127,7 @@ export default function ScanScreen() {
     } catch (err) {
       Alert.alert(t('home.errorLoadingShift'), err.message || t('common.tryAgain'));
     }
-  }, [t]);
+  }, [t, isOffline, store]);
 
   useFocusEffect(
     useCallback(() => {
@@ -140,19 +176,27 @@ export default function ScanScreen() {
 
         if (isOffline) {
           // ── OFFLINE PATH ────────────────────────────────────────────────────
-          const db = await getDb();
-          const localShift = await db.getFirstAsync(
-            'SELECT uuid FROM local_employee_shifts WHERE server_id = ?',
-            [openSubId]
-          );
-          if (!localShift) {
-            throw { code: 'SHIFT_NOT_FOUND', message: 'Shift not found in local database.' };
+          // shiftUuidRef is populated by loadShift; fall back to server_id lookup
+          // for shifts that were opened online before going offline.
+          let shiftUuid = shiftUuidRef.current;
+          if (!shiftUuid) {
+            const db = await getDb();
+            const localShift = openSubId
+              ? await db.getFirstAsync(
+                  'SELECT uuid FROM local_employee_shifts WHERE server_id = ?',
+                  [openSubId]
+                )
+              : null;
+            if (!localShift) {
+              throw { code: 'SHIFT_NOT_FOUND', message: 'Shift not found in local database.' };
+            }
+            shiftUuid = localShift.uuid;
           }
           result = await recordOfflineScan({
             store_id: store?.store_id,
             user_id: user?.user_id,
             shift_server_id: openSubId,
-            shift_uuid: localShift.uuid,
+            shift_uuid: shiftUuid,
             barcode: code,
             scan_type: scanType,
             force_sold,

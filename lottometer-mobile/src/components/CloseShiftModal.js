@@ -16,12 +16,16 @@ import { useTranslation } from 'react-i18next';
 
 import { getSubshiftSummary } from '../api/shifts';
 import { useFeedback } from '../hooks/useFeedback';
+import { useAuth } from '../context/AuthContext';
+import { getDb } from '../offline/db';
+import { closeOfflineShift, getOfflineShiftSummary } from '../offline';
 
 export default function CloseShiftModal({
   visible,
   mode,
   mainShiftId,
   subshiftId,
+  shiftUuid,
   onCancel,
   onSubmit,
   closedSubshiftCount = 0,
@@ -29,6 +33,7 @@ export default function CloseShiftModal({
 }) {
   const { t } = useTranslation();
   const fireFeedback = useFeedback();
+  const { isOffline, user, store } = useAuth();
 
   const [cashInHand, setCashInHand] = useState('');
   const [grossSales, setGrossSales] = useState('');
@@ -52,17 +57,42 @@ export default function CloseShiftModal({
   }, [visible]);
 
   const loadSummary = useCallback(async () => {
-    if (!subshiftId) return;
+    if (!subshiftId && !shiftUuid) return;
     setSummaryLoading(true);
     try {
-      const data = await getSubshiftSummary(subshiftId);
-      setSummary(data);
-    } catch (err) {
+      if (isOffline) {
+        // OFFLINE PATH — resolve shift UUID then query local DB
+        let resolvedUuid = shiftUuid;
+        if (!resolvedUuid) {
+          const db = await getDb();
+          const row = subshiftId
+            ? await db.getFirstAsync(
+                'SELECT uuid FROM local_employee_shifts WHERE server_id = ?',
+                [subshiftId]
+              )
+            : await db.getFirstAsync(
+                `SELECT uuid FROM local_employee_shifts
+                 WHERE store_id = ? AND status = 'open'
+                 ORDER BY id DESC LIMIT 1`,
+                [store?.store_id]
+              );
+          resolvedUuid = row?.uuid;
+        }
+        if (resolvedUuid) {
+          const data = await getOfflineShiftSummary(resolvedUuid, store?.store_id);
+          setSummary(data);
+        }
+      } else {
+        // ONLINE PATH — unchanged
+        const data = await getSubshiftSummary(subshiftId);
+        setSummary(data);
+      }
+    } catch {
       setSummary(null);
     } finally {
       setSummaryLoading(false);
     }
-  }, [subshiftId]);
+  }, [subshiftId, shiftUuid, isOffline, store]);
 
   const ticketsTotal = parseFloat(summary?.tickets_total || '0') || 0;
   const grossSalesNum = parseFloat(grossSales) || 0;
@@ -101,13 +131,46 @@ export default function CloseShiftModal({
   async function doClose() {
     setBusy(true);
     try {
-      await onSubmit({
-        cash_in_hand: cashInHand,
-        gross_sales: grossSales,
-        cash_out: cashOut,
-        cancels: cancels || '0',
-      });
-      fireFeedback('shift_closed');
+      if (isOffline) {
+        // OFFLINE PATH — close locally without going through onSubmit API call
+        let resolvedUuid = shiftUuid;
+        if (!resolvedUuid) {
+          const db = await getDb();
+          const row = subshiftId
+            ? await db.getFirstAsync(
+                'SELECT uuid FROM local_employee_shifts WHERE server_id = ?',
+                [subshiftId]
+              )
+            : await db.getFirstAsync(
+                `SELECT uuid FROM local_employee_shifts
+                 WHERE store_id = ? AND status = 'open'
+                 ORDER BY id DESC LIMIT 1`,
+                [store?.store_id]
+              );
+          resolvedUuid = row?.uuid;
+        }
+        const result = await closeOfflineShift({
+          store_id: store?.store_id,
+          shift_uuid: resolvedUuid,
+          shift_server_id: subshiftId,
+          user_id: user?.user_id,
+          cash_in_hand: cashInHand,
+          gross_sales: grossSales,
+          cash_out: cashOut,
+          cancels: cancels || '0',
+        });
+        await onSubmit(result);
+        fireFeedback('shift_closed');
+      } else {
+        // ONLINE PATH — unchanged
+        await onSubmit({
+          cash_in_hand: cashInHand,
+          gross_sales: grossSales,
+          cash_out: cashOut,
+          cancels: cancels || '0',
+        });
+        fireFeedback('shift_closed');
+      }
     } catch (err) {
       fireFeedback('error');
     } finally {

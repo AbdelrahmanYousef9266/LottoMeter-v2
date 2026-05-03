@@ -16,6 +16,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../context/AuthContext';
 import { getDb } from '../offline/db';
+import { openOfflineShift } from '../offline';
 import { openShift, listShifts, closeShift, getShiftSummary, getCurrentOpenShift } from '../api/shifts';
 import { getSubscription } from '../api/subscription';
 import TrialBannerComponent from './TrialBannerComponent';
@@ -32,7 +33,7 @@ import { Colors, Radius, Shadow } from '../theme';
 export default function HomeScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
-  const { user, isOffline } = useAuth();
+  const { user, store, isOffline } = useAuth();
   const isAdmin = user?.role === 'admin';
 
   const [loading, setLoading]       = useState(true);
@@ -67,6 +68,77 @@ export default function HomeScreen() {
   }, []);
 
   const loadData = useCallback(async () => {
+    if (isOffline) {
+      try {
+        const db = await getDb();
+        const today = new Date().toISOString().split('T')[0];
+
+        const localDay = await db.getFirstAsync(
+          `SELECT * FROM local_business_days WHERE store_id = ? AND business_date = ?`,
+          [store?.store_id, today]
+        );
+        if (localDay) {
+          setBusinessDay({
+            id: localDay.server_id,
+            uuid: localDay.uuid,
+            business_date: localDay.business_date,
+            status: localDay.status,
+          });
+
+          const localShifts = await db.getAllAsync(
+            `SELECT * FROM local_employee_shifts WHERE business_day_uuid = ?`,
+            [localDay.uuid]
+          );
+          setTodayShifts(localShifts.map(s => ({
+            id: s.server_id,
+            uuid: s.uuid,
+            status: s.status,
+            shift_number: s.shift_number,
+            shift_status: s.shift_status,
+            voided: false,
+          })));
+
+          const openShift = localShifts.find(s => s.status === 'open') || null;
+          if (openShift) {
+            setActiveShift({
+              id: openShift.server_id,
+              uuid: openShift.uuid,
+              shift_number: openShift.shift_number,
+              status: openShift.status,
+              opened_at: openShift.opened_at,
+              employee_id: openShift.employee_id,
+            });
+
+            const closeCount = await db.getFirstAsync(
+              `SELECT COUNT(*) as count FROM local_shift_books
+               WHERE shift_uuid = ? AND scan_type = 'close'`,
+              [openShift.uuid]
+            );
+            const totalActive = await db.getFirstAsync(
+              `SELECT COUNT(*) as count FROM local_books
+               WHERE store_id = ? AND is_active = 1 AND is_sold = 0`,
+              [store?.store_id]
+            );
+            setSummary({
+              books_pending_close: (totalActive?.count || 0) - (closeCount?.count || 0),
+            });
+          } else {
+            setActiveShift(null);
+            setSummary(null);
+          }
+        } else {
+          setBusinessDay(null);
+          setTodayShifts([]);
+          setActiveShift(null);
+          setSummary(null);
+        }
+      } catch (err) {
+        Alert.alert(t('home.errorLoadingShift'), err.message || t('common.networkError'));
+      }
+      return;
+    }
+
+    // ONLINE PATH — unchanged
     try {
       const subRes = await getSubscription().catch(() => null);
       if (subRes) setSubscription(subRes.data);
@@ -98,7 +170,7 @@ export default function HomeScreen() {
     } catch (err) {
       Alert.alert(t('home.errorLoadingShift'), err.message || t('common.networkError'));
     }
-  }, [t]);
+  }, [t, isOffline, store]);
 
   useFocusEffect(
     useCallback(() => {
@@ -118,9 +190,28 @@ export default function HomeScreen() {
   async function handleOpenShift() {
     setBusy(true);
     try {
-      await openShift();
-      await loadData();
-      navigation.navigate('Scan', { scanType: 'open', justOpened: true });
+      if (isOffline) {
+        // OFFLINE PATH
+        const result = await openOfflineShift(store?.store_id, user?.user_id);
+        setActiveShift({
+          id: null,
+          uuid: result.employee_shift.uuid,
+          shift_number: result.employee_shift.shift_number,
+          status: 'open',
+          opened_at: result.employee_shift.opened_at,
+          employee_id: result.employee_shift.employee_id,
+        });
+        navigation.navigate('Scan', {
+          scanType: 'open',
+          justOpened: true,
+          shiftUuid: result.employee_shift.uuid,
+        });
+      } else {
+        // ONLINE PATH — unchanged
+        await openShift();
+        await loadData();
+        navigation.navigate('Scan', { scanType: 'open', justOpened: true });
+      }
     } catch (err) {
       Alert.alert(t('home.couldNotOpenShift'), err.message || t('common.tryAgain'));
     } finally {
@@ -131,10 +222,18 @@ export default function HomeScreen() {
   async function handleCloseShiftSubmit(payload) {
     if (!activeShift) return;
     try {
-      await closeShift(activeShift.id, payload);
-      setCloseModalOpen(false);
-      await loadData();
-      Alert.alert(t('home.mainShiftClosed'), t('home.mainShiftClosedHint'));
+      if (payload?.offline) {
+        // OFFLINE PATH — shift already closed by CloseShiftModal; just refresh UI
+        setCloseModalOpen(false);
+        await loadData();
+        Alert.alert(t('home.mainShiftClosed'), t('home.mainShiftClosedHint'));
+      } else {
+        // ONLINE PATH — unchanged
+        await closeShift(activeShift.id, payload);
+        setCloseModalOpen(false);
+        await loadData();
+        Alert.alert(t('home.mainShiftClosed'), t('home.mainShiftClosedHint'));
+      }
     } catch (err) {
       if (err.code === 'BOOKS_NOT_CLOSED') {
         Alert.alert(t('closeShift.booksNotClosed'), err.message || t('closeShift.booksNotClosedHint'));
@@ -297,6 +396,7 @@ export default function HomeScreen() {
         mode="final"
         mainShiftId={activeShift?.id}
         subshiftId={activeShift?.id}
+        shiftUuid={activeShift?.uuid}
         onCancel={() => setCloseModalOpen(false)}
         onSubmit={handleCloseShiftSubmit}
         closedSubshiftCount={closedShiftsToday.length}
