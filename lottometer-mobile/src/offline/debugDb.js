@@ -3,6 +3,10 @@ import { getDb } from './db';
 export const debugLocalDb = async () => {
   try {
     const db = await getDb();
+    if (!db) {
+      console.log('[debugDb] DB not ready, skipping');
+      return;
+    }
     const tables = [
       'local_slots',
       'local_books',
@@ -28,6 +32,11 @@ export const debugLocalDb = async () => {
       'SELECT uuid, scan_type, static_code FROM local_shift_books'
     );
     console.log('[db] scans:', JSON.stringify(scans));
+
+    const syncItems = await db.getAllAsync(
+      'SELECT operation, status, retry_count, last_error FROM sync_queue'
+    );
+    console.log('[sync check]', JSON.stringify(syncItems));
 
     console.log('======================');
   } catch (e) {

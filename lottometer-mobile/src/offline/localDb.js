@@ -203,10 +203,6 @@ export const saveLocalScan = async (scan, shiftUuid, storeId, userId) => {
     const db = await getDb();
     const scanUuid = scan.uuid || uuidv4();
 
-    console.log('[saveLocalScan] inserting scan uuid:', scan.uuid || 'no-uuid');
-    console.log('[saveLocalScan] shift_uuid:', shiftUuid);
-    console.log('[saveLocalScan] static_code:', scan.static_code);
-
     await db.runAsync(
       `INSERT OR REPLACE INTO local_shift_books
        (server_id, uuid, store_id, shift_uuid, static_code,
@@ -221,11 +217,6 @@ export const saveLocalScan = async (scan, shiftUuid, storeId, userId) => {
        scan.force_sold ? 1 : 0, new Date().toISOString()]
     );
 
-    const saved = await db.getFirstAsync(
-      'SELECT id FROM local_shift_books WHERE shift_uuid = ? AND static_code = ? AND scan_type = ?',
-      [shiftUuid, scan.static_code, scan.scan_type]
-    );
-    console.log('[saveLocalScan] verified save:', saved ? 'YES' : 'NO - FAILED');
   } catch (e) {
     console.warn('[localDb] saveLocalScan failed:', e.message);
   }

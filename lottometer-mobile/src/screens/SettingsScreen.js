@@ -15,7 +15,6 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 
 import { logout } from '../api/auth';
-import { clearOfflineSession, clearLocalDatabase } from '../offline';
 import { changeStorePin, changeScanMode } from '../api/store';
 import { useAuth } from '../context/AuthContext';
 import { setStoredLanguage } from '../i18n';
@@ -71,9 +70,8 @@ export default function SettingsScreen() {
           style: 'destructive',
           onPress: async () => {
             await logout();
-            clearOfflineSession().catch(console.warn);
-            clearLocalDatabase().catch(console.warn);
             setUser(null);
+            setStore(null);
           },
         },
       ]

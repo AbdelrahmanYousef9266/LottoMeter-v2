@@ -50,7 +50,7 @@ export const verifyOfflinePin = async (pin, userId) => {
   }
 };
 
-export const saveOfflineSession = async (user, store) => {
+export const saveOfflineSession = async (user, store, token) => {
   const expiresAt = new Date();
   expiresAt.setHours(
     expiresAt.getHours() + settings.OFFLINE_SESSION_EXPIRY_HOURS
@@ -64,6 +64,7 @@ export const saveOfflineSession = async (user, store) => {
     store_code: store.store_code,
     store_name: store.store_name,
     scan_mode: store.scan_mode || 'camera_single',
+    token: token || null,
     expires_at: expiresAt.toISOString(),
   };
 

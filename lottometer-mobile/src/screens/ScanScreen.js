@@ -23,6 +23,7 @@ import { useFeedback } from '../hooks/useFeedback';
 import { friendlyScanError } from '../utils/scanErrorMessages';
 import { lastPositionFor, parseBarcode } from '../utils/bookConstants';
 import { Colors, Radius, Shadow } from '../theme';
+import NetInfo from '@react-native-community/netinfo';
 import { getDb } from '../offline/db';
 import { recordOfflineScan, getOfflinePendingCounts } from '../offline';
 
@@ -65,10 +66,16 @@ export default function ScanScreen() {
   const fireFeedback = useFeedback();
 
   const loadShift = useCallback(async () => {
+    let currentlyOffline = false;
     try {
-      if (isOffline) {
+      const netState = await NetInfo.fetch();
+      currentlyOffline = !netState.isConnected || netState.isInternetReachable === false;
+
+      if (currentlyOffline) {
         // OFFLINE PATH — load from local SQLite
+        await new Promise(resolve => setTimeout(resolve, 500));
         const db = await getDb();
+        if (!db) return;
         const localShift = await db.getFirstAsync(
           `SELECT * FROM local_employee_shifts
            WHERE store_id = ? AND status = 'open'
@@ -125,7 +132,11 @@ export default function ScanScreen() {
         setIsInitialized(true);
       }
     } catch (err) {
-      Alert.alert(t('home.errorLoadingShift'), err.message || t('common.tryAgain'));
+      if (currentlyOffline) {
+        console.warn('[ScanScreen] offline loadShift error:', err.message);
+      } else {
+        Alert.alert(t('home.errorLoadingShift'), err.message || t('common.tryAgain'));
+      }
     }
   }, [t, isOffline, store]);
 
@@ -212,10 +223,6 @@ export default function ScanScreen() {
         }
 
         // Process result — identical for online and offline
-        console.log('[scan success] full response:', JSON.stringify(result));
-        console.log('[scan success] pending_scans_remaining:', result.pending_scans_remaining);
-        console.log('[scan success] running_totals:', JSON.stringify(result.running_totals));
-        console.log('[scan success] is_initialized:', result.is_initialized);
         setLastScan({
           scan: result.scan,
           book: result.book,

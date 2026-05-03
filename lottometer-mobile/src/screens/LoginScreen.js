@@ -9,17 +9,29 @@ import {
   ScrollView,
   Alert,
   Animated,
+  Modal,
+  TextInput,
+  TouchableOpacity,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import NetInfo from '@react-native-community/netinfo';
 
 import { login } from '../api/auth';
+import { saveToken } from '../api/client';
 import { useAuth } from '../context/AuthContext';
-import { saveOfflineSession, seedLocalDatabase, saveLocalStore, saveLocalUser } from '../offline';
+import {
+  saveOfflineSession,
+  seedLocalDatabase,
+  saveLocalStore,
+  saveLocalUser,
+  hasOfflineAccess,
+  getOfflineSession,
+  verifyOfflinePin,
+  setupOfflinePin,
+} from '../offline';
 import { setSessionContext } from '../offline/sessionStore';
-import { debugLocalDb } from '../offline/debugDb';
-import settings from '../config/settings';
 import AppInput from '../components/AppInput';
 import AppButton from '../components/AppButton';
 import { Colors, Radius, Shadow } from '../theme';
@@ -34,42 +46,23 @@ const TAGLINES = [
 
 function RotatingTagline() {
   const [index, setIndex] = useState(0);
-  const opacity     = useRef(new Animated.Value(1)).current;
-  const translateY  = useRef(new Animated.Value(0)).current;
+  const opacity    = useRef(new Animated.Value(1)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     const cycle = setInterval(() => {
-      // slide up + fade out
       Animated.parallel([
-        Animated.timing(opacity, {
-          toValue: 0,
-          duration: 280,
-          useNativeDriver: true,
-        }),
-        Animated.timing(translateY, {
-          toValue: -10,
-          duration: 280,
-          useNativeDriver: true,
-        }),
+        Animated.timing(opacity,    { toValue: 0,   duration: 280, useNativeDriver: true }),
+        Animated.timing(translateY, { toValue: -10, duration: 280, useNativeDriver: true }),
       ]).start(() => {
-        // swap text, reset position to below, then slide up + fade in
         setIndex(i => (i + 1) % TAGLINES.length);
         translateY.setValue(12);
         Animated.parallel([
-          Animated.timing(opacity, {
-            toValue: 1,
-            duration: 320,
-            useNativeDriver: true,
-          }),
-          Animated.timing(translateY, {
-            toValue: 0,
-            duration: 320,
-            useNativeDriver: true,
-          }),
+          Animated.timing(opacity,    { toValue: 1, duration: 320, useNativeDriver: true }),
+          Animated.timing(translateY, { toValue: 0, duration: 320, useNativeDriver: true }),
         ]).start();
       });
     }, 2600);
-
     return () => clearInterval(cycle);
   }, [opacity, translateY]);
 
@@ -90,20 +83,48 @@ export default function LoginScreen() {
   const navigation = useNavigation();
   const { setUser, setStore } = useAuth();
 
+  // Online login fields
   const [storeCode, setStoreCode] = useState('LM001');
   const [username, setUsername]   = useState('admin');
   const [password, setPassword]   = useState('');
   const [busy, setBusy]           = useState(false);
 
-  // screen fade-in on mount
+  // Offline mode state
+  const [isOfflineMode, setIsOfflineMode]     = useState(false);
+  const [offlinePin, setOfflinePin]           = useState('');
+  const [canLoginOffline, setCanLoginOffline] = useState(false);
+
+  // PIN setup modal state (shown after successful online login)
+  const [showPinSetup, setShowPinSetup]         = useState(false);
+  const [pinSetupValue, setPinSetupValue]       = useState('');
+  const [pinSetupConfirm, setPinSetupConfirm]   = useState('');
+  const [pendingUser, setPendingUser]           = useState(null);
+  const [pendingStore, setPendingStore]         = useState(null);
+
+  // Screen fade-in on mount
   const screenOpacity = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     Animated.timing(screenOpacity, {
-      toValue: 1,
-      duration: 500,
-      useNativeDriver: true,
+      toValue: 1, duration: 500, useNativeDriver: true,
     }).start();
   }, [screenOpacity]);
+
+  // Check connectivity and offline access on mount
+  useEffect(() => {
+    const check = async () => {
+      const netState = await NetInfo.fetch();
+      const offline = !netState.isConnected;
+      setIsOfflineMode(offline);
+
+      if (offline) {
+        const hasAccess = await hasOfflineAccess();
+        setCanLoginOffline(hasAccess);
+      }
+    };
+    check();
+  }, []);
+
+  // ── online login ──────────────────────────────────────────────────────────
 
   async function handleLogin() {
     if (!storeCode || !username || !password) {
@@ -113,22 +134,21 @@ export default function LoginScreen() {
     setBusy(true);
     try {
       const data = await login({ store_code: storeCode, username, password });
-      setUser(data.user);
-      setStore(data.store || null);
-      // Set session context immediately so write-through works right away
+
+      // Persist offline session data immediately
       setSessionContext(data.user.user_id, data.store.store_id);
-      // Save offline session (fire and forget)
-      saveOfflineSession(data.user, data.store).catch(console.warn);
-      // Mirror user and store to local DB (fire and forget)
+      saveOfflineSession(data.user, data.store, data.token).catch(console.warn);
       saveLocalStore(data.store).catch(console.warn);
       saveLocalUser(data.user, data.store.store_id).catch(console.warn);
-      // Seed local database — always runs so offline data is ready
-      console.log('[login] About to seed, storeId:', data.store?.store_id);
       seedLocalDatabase(data.store?.store_id, data.user?.user_id)
-        .then(() => console.log('[login] Seed completed'))
         .catch(e => console.error('[login] Seed error:', e.message));
-      // Temporary: verify DB seeding after 3s delay
-      setTimeout(() => debugLocalDb(), 3000);
+
+      // Stash user/store for PIN setup modal; don't log in yet
+      setPendingUser(data.user);
+      setPendingStore(data.store);
+      setPinSetupValue('');
+      setPinSetupConfirm('');
+      setShowPinSetup(true);
     } catch (err) {
       if (err.code === 'SUBSCRIPTION_EXPIRED') {
         navigation.navigate('SubscriptionExpired');
@@ -139,6 +159,163 @@ export default function LoginScreen() {
       setBusy(false);
     }
   }
+
+  function finishLogin(user, store) {
+    setUser(user);
+    setStore(store || null);
+  }
+
+  // ── PIN setup ─────────────────────────────────────────────────────────────
+
+  async function handlePinSetup() {
+    if (pinSetupValue !== pinSetupConfirm) {
+      Alert.alert('Error', 'PINs do not match');
+      return;
+    }
+    if (!/^\d{4,6}$/.test(pinSetupValue)) {
+      Alert.alert('Error', 'PIN must be 4-6 digits');
+      return;
+    }
+    try {
+      await setupOfflinePin(pinSetupValue, pendingUser.user_id);
+      setShowPinSetup(false);
+      finishLogin(pendingUser, pendingStore);
+      Alert.alert('PIN Set', 'Your offline PIN has been set successfully.');
+    } catch (e) {
+      Alert.alert('Error', e.message);
+    }
+  }
+
+  function handleSkipPinSetup() {
+    setShowPinSetup(false);
+    finishLogin(pendingUser, pendingStore);
+  }
+
+  // ── offline PIN login ─────────────────────────────────────────────────────
+
+  async function handleOfflinePinLogin() {
+    if (!offlinePin || offlinePin.length < 4) {
+      Alert.alert('Error', 'Please enter your 4-6 digit PIN');
+      return;
+    }
+    setBusy(true);
+    try {
+      const session = await getOfflineSession();
+      if (!session) {
+        Alert.alert('Session Expired', 'Please connect to the internet to log in.');
+        return;
+      }
+
+      const valid = await verifyOfflinePin(offlinePin, session.user_id);
+      if (!valid) {
+        Alert.alert('Invalid PIN', 'Incorrect PIN. Please try again.');
+        return;
+      }
+
+      if (session.token) {
+        await saveToken(session.token);
+      }
+      setSessionContext(session.user_id, session.store_id);
+      // Set store before user — RootNavigator triggers on user, so store must
+      // be ready before the navigation re-render happens.
+      setStore({
+        store_id: session.store_id,
+        store_code: session.store_code,
+        store_name: session.store_name,
+        scan_mode: session.scan_mode || 'camera_single',
+      });
+      setUser({
+        user_id: session.user_id,
+        store_id: session.store_id,
+        username: session.username,
+        role: session.role,
+      });
+    } catch (err) {
+      Alert.alert('Error', err.message || 'Offline login failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  // ── render — offline: no stored session ──────────────────────────────────
+
+  if (isOfflineMode && !canLoginOffline) {
+    return (
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.offlineFallback}>
+          <Text style={styles.offlineFallbackTitle}>No Internet Connection</Text>
+          <Text style={styles.offlineFallbackSubtitle}>
+            Please connect to the internet for your first login.
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── render — offline: PIN login ───────────────────────────────────────────
+
+  if (isOfflineMode && canLoginOffline) {
+    return (
+      <SafeAreaView style={{ flex: 1, backgroundColor: '#F6FAFF' }}>
+        <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 }}>
+          <Image
+            source={require('../../assets/app-icon.png')}
+            style={{ width: 80, height: 80, marginBottom: 24 }}
+          />
+          <Text style={{ fontSize: 24, fontWeight: 'bold', color: '#0A1128', marginBottom: 8 }}>
+            LottoMeter
+          </Text>
+          <Text style={{ fontSize: 16, color: '#46627F', marginBottom: 32, textAlign: 'center' }}>
+            ⚠️ Offline Mode{'\n'}Enter your PIN to continue
+          </Text>
+          <TextInput
+            value={offlinePin}
+            onChangeText={setOfflinePin}
+            keyboardType="numeric"
+            secureTextEntry
+            maxLength={6}
+            placeholder="Enter 4-6 digit PIN"
+            placeholderTextColor="#94A3B8"
+            returnKeyType="done"
+            onSubmitEditing={handleOfflinePinLogin}
+            style={{
+              width: '100%',
+              backgroundColor: '#FFFFFF',
+              borderWidth: 1,
+              borderColor: '#E2EAF4',
+              borderRadius: 10,
+              padding: 14,
+              fontSize: 18,
+              color: '#0A1128',
+              textAlign: 'center',
+              marginBottom: 16,
+              letterSpacing: 8,
+            }}
+          />
+          <TouchableOpacity
+            onPress={handleOfflinePinLogin}
+            disabled={busy}
+            style={{
+              width: '100%',
+              backgroundColor: '#0077CC',
+              borderRadius: 14,
+              padding: 16,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ color: '#fff', fontSize: 16, fontWeight: 'bold' }}>
+              {busy ? 'Logging in...' : 'Login with PIN'}
+            </Text>
+          </TouchableOpacity>
+          <Text style={{ marginTop: 24, color: '#46627F', fontSize: 13 }}>
+            Connect to internet for full access
+          </Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── render — normal online login ──────────────────────────────────────────
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -161,10 +338,8 @@ export default function LoginScreen() {
                 resizeMode="contain"
               />
             </View>
-
             <Text style={styles.appName}>LottoMeter</Text>
             <Text style={styles.appSubtitle}>Digital Shift Tracking</Text>
-
             <View style={styles.taglineWrap}>
               <RotatingTagline />
             </View>
@@ -206,7 +381,6 @@ export default function LoginScreen() {
               style={styles.field}
             />
 
-            {/* gradient login button */}
             <AppButton
               title={t('auth.signIn')}
               onPress={handleLogin}
@@ -223,6 +397,67 @@ export default function LoginScreen() {
           </Text>
         </Animated.ScrollView>
       </KeyboardAvoidingView>
+
+      {/* ── PIN setup modal ─────────────────────────────────────────────── */}
+      <Modal
+        visible={showPinSetup}
+        transparent
+        animationType="slide"
+        onRequestClose={handleSkipPinSetup}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={styles.modalBackdrop}
+        >
+          <View style={styles.modalCard}>
+            <Text style={styles.modalTitle}>Set Offline PIN</Text>
+            <Text style={styles.modalSubtitle}>
+              Set a 4-6 digit PIN so you can log in when you're offline.
+            </Text>
+
+            <Text style={styles.pinLabel}>PIN</Text>
+            <TextInput
+              style={styles.pinInput}
+              value={pinSetupValue}
+              onChangeText={setPinSetupValue}
+              keyboardType="numeric"
+              secureTextEntry
+              maxLength={6}
+              placeholder="4-6 digits"
+              placeholderTextColor={Colors.textMuted}
+            />
+
+            <Text style={styles.pinLabel}>Confirm PIN</Text>
+            <TextInput
+              style={styles.pinInput}
+              value={pinSetupConfirm}
+              onChangeText={setPinSetupConfirm}
+              keyboardType="numeric"
+              secureTextEntry
+              maxLength={6}
+              placeholder="Re-enter PIN"
+              placeholderTextColor={Colors.textMuted}
+              returnKeyType="done"
+              onSubmitEditing={handlePinSetup}
+            />
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.skipButton]}
+                onPress={handleSkipPinSetup}
+              >
+                <Text style={styles.skipButtonText}>Skip</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.setPinButton]}
+                onPress={handlePinSetup}
+              >
+                <Text style={styles.setPinButtonText}>Set PIN</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -241,10 +476,7 @@ const styles = StyleSheet.create({
   },
 
   // ── header ─────────────────────────────────────────────────────────────────
-  header: {
-    alignItems: 'center',
-    marginBottom: 28,
-  },
+  header: { alignItems: 'center', marginBottom: 28 },
   iconWrap: {
     width: 92,
     height: 92,
@@ -257,10 +489,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     ...Shadow.card,
   },
-  icon: {
-    width: 68,
-    height: 68,
-  },
+  icon: { width: 68, height: 68 },
   appName: {
     fontSize: 30,
     fontWeight: '800',
@@ -298,19 +527,10 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     ...Shadow.card,
   },
-  cardTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-    marginBottom: 4,
-  },
-  cardSubtitle: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    marginBottom: 20,
-  },
-  field:       { marginBottom: 14 },
-  loginButton: { marginTop: 8 },
+  cardTitle:    { fontSize: 20, fontWeight: '700', color: Colors.textPrimary, marginBottom: 4 },
+  cardSubtitle: { fontSize: 13, color: Colors.textSecondary, marginBottom: 20 },
+  field:        { marginBottom: 14 },
+  loginButton:  { marginTop: 8 },
 
   // ── footer ─────────────────────────────────────────────────────────────────
   footerNote: {
@@ -319,4 +539,70 @@ const styles = StyleSheet.create({
     color: Colors.textMuted,
     marginTop: 24,
   },
+
+  // ── offline PIN login ───────────────────────────────────────────────────────
+  offlinePinBanner: {
+    backgroundColor: '#D97706',
+    borderRadius: Radius.sm,
+    padding: 8,
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  offlinePinBannerText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  pinLabel:  { fontSize: 13, color: Colors.textSecondary, fontWeight: '600', marginBottom: 6, marginTop: 12 },
+  pinInput: {
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    padding: 14,
+    fontSize: 20,
+    letterSpacing: 6,
+    backgroundColor: Colors.inputBg,
+    color: Colors.textPrimary,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+
+  // ── no-connection fallback ──────────────────────────────────────────────────
+  offlineFallback: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+  },
+  offlineFallbackTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  offlineFallbackSubtitle: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
+  },
+
+  // ── PIN setup modal ─────────────────────────────────────────────────────────
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  modalCard: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 24,
+    paddingBottom: 40,
+  },
+  modalTitle:    { fontSize: 22, fontWeight: '700', color: Colors.textPrimary, marginBottom: 8 },
+  modalSubtitle: { fontSize: 13, color: Colors.textSecondary, marginBottom: 4, lineHeight: 20 },
+  modalActions:  { flexDirection: 'row', gap: 12, marginTop: 24 },
+  modalButton:   { flex: 1, padding: 14, borderRadius: Radius.md, alignItems: 'center' },
+  skipButton:    { backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.border },
+  skipButtonText: { color: Colors.textSecondary, fontWeight: '600' },
+  setPinButton:  { backgroundColor: Colors.primary },
+  setPinButtonText: { color: '#fff', fontWeight: '600' },
 });

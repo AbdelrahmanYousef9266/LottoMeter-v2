@@ -42,3 +42,9 @@ export {
   closeOfflineShift,
   getOfflineShiftSummary,
 } from './shiftEngine';
+export {
+  syncPendingItems,
+  startSyncListener,
+  getPendingSyncCount,
+  getFailedSyncCount,
+} from './syncEngine';

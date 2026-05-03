@@ -1,14 +1,37 @@
 import * as SQLite from 'expo-sqlite';
 
 let _db = null;
+let _initializing = false;
 
 export const getDb = async () => {
   if (_db) return _db;
-  _db = await SQLite.openDatabaseAsync('lottometer.db');
-  await _db.execAsync('PRAGMA journal_mode = WAL;');
-  await _db.execAsync('PRAGMA foreign_keys = ON;');
-  await createTables(_db);
-  return _db;
+  if (_initializing) {
+    await new Promise(resolve => setTimeout(resolve, 100));
+    return _db;
+  }
+
+  _initializing = true;
+  try {
+    const db = await SQLite.openDatabaseAsync('lottometer.db');
+    await db.execAsync('PRAGMA journal_mode = WAL;');
+    await db.execAsync('PRAGMA foreign_keys = ON;');
+    await createTables(db);
+    _db = db;
+    return _db;
+  } catch (e) {
+    console.error('[db] Failed to open database:', e.message);
+    _db = null;
+    throw e;
+  } finally {
+    _initializing = false;
+  }
+};
+
+export const closeDb = async () => {
+  if (_db) {
+    await _db.closeAsync();
+    _db = null;
+  }
 };
 
 const createTables = async (db) => {
@@ -146,7 +169,7 @@ const createTables = async (db) => {
       payload TEXT NOT NULL,
       status TEXT NOT NULL DEFAULT 'pending',
       retry_count INTEGER NOT NULL DEFAULT 0,
-      max_retries INTEGER NOT NULL DEFAULT 3,
+      max_retries INTEGER NOT NULL DEFAULT 10,
       last_error TEXT,
       conflict_data TEXT,
       created_at TEXT NOT NULL,

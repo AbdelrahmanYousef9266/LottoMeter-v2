@@ -14,9 +14,10 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
+import NetInfo from '@react-native-community/netinfo';
 import { useAuth } from '../context/AuthContext';
 import { getDb } from '../offline/db';
-import { openOfflineShift } from '../offline';
+import { openOfflineShift, syncPendingItems } from '../offline';
 import { openShift, listShifts, closeShift, getShiftSummary, getCurrentOpenShift } from '../api/shifts';
 import { getSubscription } from '../api/subscription';
 import TrialBannerComponent from './TrialBannerComponent';
@@ -27,6 +28,7 @@ import ReturnBookModal from '../components/ReturnBookModal';
 import BooksDashboard from '../components/BooksDashboard';
 import { formatBusinessDate, formatLocalTime } from '../utils/dateTime';
 import { Colors, Radius, Shadow } from '../theme';
+import { debugLocalDb } from '../offline/debugDb';
 
 // ─── screen ─────────────────────────────────────────────────────────────────
 
@@ -48,6 +50,7 @@ export default function HomeScreen() {
   const [subscription, setSubscription]     = useState(null);
 
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [wbSaleOpen, setWbSaleOpen]         = useState(false);
@@ -68,9 +71,18 @@ export default function HomeScreen() {
   }, []);
 
   const loadData = useCallback(async () => {
-    if (isOffline) {
+    debugLocalDb().catch(() => {});
+
+    // Read connectivity directly — avoids race where context isOffline
+    // hasn't propagated yet when loadData first runs after navigation.
+    const netState = await NetInfo.fetch();
+    const currentlyOffline = !netState.isConnected || netState.isInternetReachable === false;
+
+    if (currentlyOffline) {
       try {
+        await new Promise(resolve => setTimeout(resolve, 500));
         const db = await getDb();
+        if (!db) return;
         const today = new Date().toISOString().split('T')[0];
 
         const localDay = await db.getFirstAsync(
@@ -133,7 +145,7 @@ export default function HomeScreen() {
           setSummary(null);
         }
       } catch (err) {
-        Alert.alert(t('home.errorLoadingShift'), err.message || t('common.networkError'));
+        console.warn('[HomeScreen] offline loadData error:', err.message);
       }
       return;
     }
@@ -183,6 +195,27 @@ export default function HomeScreen() {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
+  }
+
+  async function handleSyncNow() {
+    setIsSyncing(true);
+    try {
+      const result = await syncPendingItems((progress) => {
+        console.log('[sync progress]', progress);
+      });
+
+      if (result.synced > 0) {
+        Alert.alert('Sync Complete', `${result.synced} item(s) synced successfully.`);
+      }
+      if (result.conflicts > 0) {
+        Alert.alert('Sync Conflicts', `${result.conflicts} conflict(s) found. Please review.`);
+      }
+
+      await loadData();
+      await loadPendingSyncCount();
+    } finally {
+      setIsSyncing(false);
+    }
   }
 
   // ── actions ────────────────────────────────────────────────────────────────
@@ -350,6 +383,20 @@ export default function HomeScreen() {
           </View>
         )}
 
+        {!isOffline && pendingSyncCount > 0 && (
+          <TouchableOpacity
+            style={[styles.syncButton, isSyncing && styles.disabled]}
+            onPress={handleSyncNow}
+            disabled={isSyncing}
+          >
+            <Text style={styles.syncButtonText}>
+              {isSyncing
+                ? 'Syncing...'
+                : `Sync Now (${pendingSyncCount} pending)`}
+            </Text>
+          </TouchableOpacity>
+        )}
+
         <TrialBannerComponent subscription={subscription} />
 
         {isAdmin && <BooksDashboard />}
@@ -387,6 +434,34 @@ export default function HomeScreen() {
             ) : (
               <Text style={styles.closeBizDayText}>{t('home.closeBizDay')}</Text>
             )}
+          </TouchableOpacity>
+        )}
+
+        {isAdmin && (
+          <TouchableOpacity
+            onPress={async () => {
+              const db = await getDb();
+              await db.execAsync(`
+                DELETE FROM local_business_days;
+                DELETE FROM local_employee_shifts;
+                DELETE FROM local_shift_books;
+                DELETE FROM local_extra_sales;
+                DELETE FROM sync_queue;
+              `);
+              Alert.alert('Done', 'Local data cleared');
+              await loadData();
+            }}
+            style={{
+              padding: 12,
+              margin: 16,
+              backgroundColor: '#EF4444',
+              borderRadius: 8,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '600' }}>
+              🗑 Clear Local Data (Debug)
+            </Text>
           </TouchableOpacity>
         )}
       </ScrollView>
@@ -636,4 +711,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   offlineBannerText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+
+  syncButton: {
+    backgroundColor: '#2F80ED',
+    borderRadius: Radius.sm,
+    padding: 12,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  syncButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
 });
