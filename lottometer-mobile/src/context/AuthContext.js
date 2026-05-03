@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import NetInfo from '@react-native-community/netinfo';
 import { getToken } from '../api/client';
 import { getMe } from '../api/auth';
 
@@ -8,7 +9,9 @@ export function AuthProvider({ children }) {
   const [user, setUser] = useState(null);
   const [store, setStore] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [isOffline, setIsOffline] = useState(false);
 
+  // Existing auth check — unchanged
   useEffect(() => {
     (async () => {
       try {
@@ -32,6 +35,17 @@ export function AuthProvider({ children }) {
     })();
   }, []);
 
+  // NetInfo listener for offline detection
+  useEffect(() => {
+    const unsubscribe = NetInfo.addEventListener(state => {
+      setIsOffline(!state.isConnected || state.isInternetReachable === false);
+    });
+    NetInfo.fetch().then(state => {
+      setIsOffline(!state.isConnected || state.isInternetReachable === false);
+    });
+    return () => unsubscribe();
+  }, []);
+
   // Helper: pull scan_mode out of the store, with a safe default
   const scanMode = store?.scan_mode || 'camera_single';
 
@@ -44,6 +58,7 @@ export function AuthProvider({ children }) {
         setStore,
         scanMode,
         loading,
+        isOffline,
       }}
     >
       {children}

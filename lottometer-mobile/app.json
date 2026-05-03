@@ -39,7 +39,8 @@
           "project": "lottometer-mobile"
         }
       ],
-      "expo-audio"
+      "expo-audio",
+      "expo-sqlite"
     ],
     "extra": {
       "eas": {

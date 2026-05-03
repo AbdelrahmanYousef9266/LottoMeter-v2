@@ -16,6 +16,9 @@ import { useTranslation } from 'react-i18next';
 
 import { login } from '../api/auth';
 import { useAuth } from '../context/AuthContext';
+import { saveOfflineSession, seedLocalDatabase } from '../offline';
+import { debugLocalDb } from '../offline/debugDb';
+import settings from '../config/settings';
 import AppInput from '../components/AppInput';
 import AppButton from '../components/AppButton';
 import { Colors, Radius, Shadow } from '../theme';
@@ -111,6 +114,15 @@ export default function LoginScreen() {
       const data = await login({ store_code: storeCode, username, password });
       setUser(data.user);
       setStore(data.store || null);
+      // Save offline session (fire and forget)
+      saveOfflineSession(data.user, data.store).catch(console.warn);
+      // Seed local database — always runs so offline data is ready
+      console.log('[login] About to seed, storeId:', data.store?.store_id);
+      seedLocalDatabase(data.store?.store_id, data.user?.user_id)
+        .then(() => console.log('[login] Seed completed'))
+        .catch(e => console.error('[login] Seed error:', e.message));
+      // Temporary: verify DB seeding after 3s delay
+      setTimeout(() => debugLocalDb(), 3000);
     } catch (err) {
       if (err.code === 'SUBSCRIPTION_EXPIRED') {
         navigation.navigate('SubscriptionExpired');
