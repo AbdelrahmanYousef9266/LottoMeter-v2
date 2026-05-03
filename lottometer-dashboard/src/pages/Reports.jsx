@@ -6,8 +6,15 @@ import { listUsers } from '../api/users'
 import Badge from '../components/UI/Badge'
 import Modal from '../components/UI/Modal'
 import Button from '../components/UI/Button'
-import { formatDateTime, formatDate, getDayLabel, formatDuration } from '../utils/dateTime'
+import { formatLocalTime, formatBusinessDate, getDayLabel, formatDuration } from '../utils/dateTime'
 import { formatCurrency, formatVariance } from '../utils/currency'
+
+function getBookStatus(book) {
+  if (book.returned_at) return { label: 'Returned', variant: 'amber' }
+  if (book.is_sold) return { label: 'Sold', variant: 'gray' }
+  if (book.is_active) return { label: 'Active', variant: 'green' }
+  return { label: 'Inactive', variant: 'red' }
+}
 
 function getStatusVariant(status) {
   switch (status) {
@@ -208,7 +215,7 @@ export default function Reports() {
             >
               <h2 style={{ fontSize: 15, fontWeight: 700 }}>{getDayLabel(date)}</h2>
               <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                {formatDate(date)}
+                {formatBusinessDate(date)}
               </span>
               <Badge variant="gray">{grouped[date].length} shift{grouped[date].length !== 1 ? 's' : ''}</Badge>
             </div>
@@ -242,8 +249,8 @@ export default function Reports() {
                     <div style={{ minWidth: 140 }}>
                       <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Time</div>
                       <div style={{ fontSize: 13 }}>
-                        {formatDateTime(shift.opened_at)}
-                        {shift.closed_at && ` — ${formatDateTime(shift.closed_at)}`}
+                        {formatLocalTime(shift.opened_at)}
+                        {shift.closed_at && ` — ${formatLocalTime(shift.closed_at)}`}
                       </div>
                     </div>
                     <div style={{ minWidth: 80 }}>
@@ -256,7 +263,7 @@ export default function Reports() {
                       <Badge variant={getStatusVariant(shift.status)}>{shift.status || '—'}</Badge>
                     </div>
                     <div style={{ minWidth: 90, textAlign: 'right' }}>
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Sales</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Ticket Sales</div>
                       <div style={{ fontWeight: 700 }}>{getSales(shift)}</div>
                     </div>
                     <div style={{ minWidth: 90, textAlign: 'right' }}>
@@ -331,7 +338,7 @@ export default function Reports() {
                 }}
               >
                 {[
-                  { label: 'Total Sales', value: formatCurrency(reportData.shift?.gross_sales) },
+                  { label: 'Ticket Sales', value: formatCurrency(reportData.shift?.tickets_total) },
                   { label: 'Expected', value: formatCurrency(reportData.shift?.expected_cash) },
                   { label: 'Cash in Hand', value: formatCurrency(reportData.shift?.cash_in_hand) },
                   { label: 'Difference', value: formatVariance(reportData.shift?.difference ?? 0).text },
@@ -357,8 +364,7 @@ export default function Reports() {
                 </h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {reportData.shift.books.map((book, i) => {
-                    const status = book.returned_at ? 'Returned' : book.is_sold ? 'Sold' : book.is_active ? 'Active' : 'Inactive'
-                    const variant = book.returned_at ? 'amber' : book.is_sold ? 'gray' : book.is_active ? 'green' : 'red'
+                    const { label: statusLabel, variant } = getBookStatus(book)
                     return (
                       <div
                         key={i}
@@ -379,7 +385,7 @@ export default function Reports() {
                           <span style={{ color: 'var(--text-secondary)' }}>
                             {book.tickets_sold ?? '—'} tickets
                           </span>
-                          <Badge variant={variant}>{status}</Badge>
+                          <Badge variant={variant}>{statusLabel}</Badge>
                         </div>
                       </div>
                     )

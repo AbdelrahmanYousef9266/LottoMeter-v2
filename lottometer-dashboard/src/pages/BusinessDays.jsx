@@ -7,7 +7,7 @@ import Badge from '../components/UI/Badge'
 import Table from '../components/UI/Table'
 import Modal from '../components/UI/Modal'
 import Button from '../components/UI/Button'
-import { formatDate, getDayLabel } from '../utils/dateTime'
+import { formatBusinessDate, getDayLabel } from '../utils/dateTime'
 import { formatCurrency, formatVariance } from '../utils/currency'
 
 function getStatusVariant(status) {
@@ -207,7 +207,7 @@ export default function BusinessDays() {
                       <td>
                         <div style={{ fontWeight: 600 }}>{getDayLabel(row.date || row.business_date)}</div>
                         <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
-                          {formatDate(row.date || row.business_date)}
+                          {formatBusinessDate(row.date || row.business_date)}
                         </div>
                       </td>
                       <td>
@@ -303,7 +303,7 @@ export default function BusinessDays() {
         <p style={{ fontSize: 14, color: 'var(--text-secondary)', lineHeight: 1.6 }}>
           Are you sure you want to close the business day for{' '}
           <strong>
-            {formatDate(closeTarget?.date || closeTarget?.business_date)}
+            {formatBusinessDate(closeTarget?.date || closeTarget?.business_date)}
           </strong>
           ? This action cannot be undone.
         </p>

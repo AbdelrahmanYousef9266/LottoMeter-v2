@@ -1,5 +1,6 @@
 /**
  * Date/Time utility functions for LottoMeter Dashboard
+ * All functions convert UTC timestamps to local time via native Date methods.
  */
 
 const MONTH_NAMES = [
@@ -7,32 +8,22 @@ const MONTH_NAMES = [
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
 ]
 
-/**
- * formatDate("2026-04-30T09:14:00Z") → "Apr 30, 2026"
- */
-export function formatDate(dateString) {
-  if (!dateString) return '—'
+// Internal: normalize any date input to "YYYY-MM-DD" in local time, for comparisons only
+function toLocalYMD(dateString) {
+  if (!dateString) return ''
+  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) return dateString
   const d = new Date(dateString)
-  if (isNaN(d.getTime())) return '—'
-  return `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`
+  if (isNaN(d.getTime())) return ''
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
 }
 
 /**
- * formatDateTime("2026-04-30T09:14:00Z") → "Apr 30, 2026 · 09:14 AM"
+ * formatLocalTime("2026-04-30T09:14:00Z") → "09:14 AM"
  */
-export function formatDateTime(dateString) {
-  if (!dateString) return '—'
-  const d = new Date(dateString)
-  if (isNaN(d.getTime())) return '—'
-  const datePart = `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`
-  const timePart = formatTime(dateString)
-  return `${datePart} · ${timePart}`
-}
-
-/**
- * formatTime("2026-04-30T09:14:00Z") → "09:14 AM"
- */
-export function formatTime(dateString) {
+export function formatLocalTime(dateString) {
   if (!dateString) return '—'
   const d = new Date(dateString)
   if (isNaN(d.getTime())) return '—'
@@ -43,40 +34,67 @@ export function formatTime(dateString) {
   return `${String(hours).padStart(2, '0')}:${minutes} ${ampm}`
 }
 
+// Keep formatTime as alias for backwards compatibility
+export const formatTime = formatLocalTime
+
 /**
- * getDayLabel("2026-04-30") → "Today" | "Yesterday" | "Apr 28, 2026"
+ * formatLocalDate("2026-04-30T09:14:00Z") → "Apr 30, 2026"
  */
-export function getDayLabel(dateString) {
+export function formatLocalDate(dateString) {
   if (!dateString) return '—'
-  const inputDate = formatBusinessDate(dateString)
-  const today = formatBusinessDate(new Date().toISOString().slice(0, 10))
-  if (inputDate === today) return 'Today'
-
-  const yesterdayDate = new Date()
-  yesterdayDate.setDate(yesterdayDate.getDate() - 1)
-  const yesterday = formatBusinessDate(yesterdayDate.toISOString().slice(0, 10))
-  if (inputDate === yesterday) return 'Yesterday'
-
-  return formatDate(dateString)
+  const d = new Date(dateString)
+  if (isNaN(d.getTime())) return '—'
+  return `${MONTH_NAMES[d.getMonth()]} ${d.getDate()}, ${d.getFullYear()}`
 }
 
+// Keep formatDate as alias for backwards compatibility
+export const formatDate = formatLocalDate
+
 /**
- * formatBusinessDate("2026-04-30") → "2026-04-30" (parse without timezone shift)
- * Parses YYYY-MM-DD string treating it as local date, not UTC.
+ * formatLocalDateTime("2026-04-30T09:14:00Z") → "Apr 30 · 09:14 AM"
+ */
+export function formatLocalDateTime(dateString) {
+  if (!dateString) return '—'
+  const d = new Date(dateString)
+  if (isNaN(d.getTime())) return '—'
+  return `${MONTH_NAMES[d.getMonth()]} ${d.getDate()} · ${formatLocalTime(dateString)}`
+}
+
+// Keep formatDateTime as alias for backwards compatibility
+export const formatDateTime = formatLocalDateTime
+
+/**
+ * formatBusinessDate("2026-04-30") → "Wed, Apr 30, 2026"
+ * Parses YYYY-MM-DD as local date to avoid timezone shift.
  */
 export function formatBusinessDate(dateString) {
   if (!dateString) return '—'
-  // If it's already a YYYY-MM-DD string, return as-is to avoid timezone shift
-  if (/^\d{4}-\d{2}-\d{2}$/.test(dateString)) {
-    return dateString
-  }
-  // For ISO strings, extract the date portion in local time
-  const d = new Date(dateString)
-  if (isNaN(d.getTime())) return '—'
-  const year = d.getFullYear()
-  const month = String(d.getMonth() + 1).padStart(2, '0')
-  const day = String(d.getDate()).padStart(2, '0')
-  return `${year}-${month}-${day}`
+  const ymd = toLocalYMD(dateString)
+  if (!ymd) return '—'
+  const [year, month, day] = ymd.split('-').map(Number)
+  const d = new Date(year, month - 1, day)
+  return d.toLocaleDateString([], {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  })
+}
+
+/**
+ * getDayLabel("2026-04-30") → "Today" | "Yesterday" | "Wed, Apr 30, 2026"
+ */
+export function getDayLabel(dateString) {
+  if (!dateString) return '—'
+  const input = toLocalYMD(dateString)
+  const today = toLocalYMD(new Date().toISOString().slice(0, 10))
+  if (input === today) return 'Today'
+
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  if (input === toLocalYMD(yesterday.toISOString().slice(0, 10))) return 'Yesterday'
+
+  return formatBusinessDate(dateString)
 }
 
 /**

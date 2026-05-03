@@ -9,7 +9,7 @@ import Table from '../components/UI/Table'
 import Badge from '../components/UI/Badge'
 import SalesChart from '../components/Charts/SalesChart'
 import { formatCurrency, formatVariance } from '../utils/currency'
-import { formatDateTime, formatDate } from '../utils/dateTime'
+import { formatLocalTime, formatLocalDate } from '../utils/dateTime'
 
 // Mock sales data for last 7 days
 function getMockSalesData() {
@@ -43,8 +43,8 @@ function getShiftStatusVariant(status) {
 const SHIFT_COLUMNS = [
   { key: 'shift_number', label: 'Shift #' },
   { key: 'employee', label: 'Employee', render: (_, row) => row.employee?.username || row.employee_name || '—' },
-  { key: 'started_at', label: 'Started', render: (v) => formatDateTime(v) },
-  { key: 'ended_at', label: 'Ended', render: (v) => v ? formatDateTime(v) : <Badge variant="green">Active</Badge> },
+  { key: 'started_at', label: 'Started', render: (v) => formatLocalTime(v) },
+  { key: 'ended_at', label: 'Ended', render: (v) => v ? formatLocalTime(v) : <Badge variant="green">Active</Badge> },
   {
     key: 'status',
     label: 'Status',
@@ -120,7 +120,7 @@ export default function Dashboard() {
           <h1 style={{ fontSize: 22, fontWeight: 800 }}>
             {greeting()}, {user?.username || 'there'} 👋
           </h1>
-          <p className="page-header-sub">{formatDate(new Date().toISOString())}</p>
+          <p className="page-header-sub">{formatLocalDate(new Date().toISOString())}</p>
         </div>
         <div style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
           {todaysBizDay ? (
@@ -152,7 +152,7 @@ export default function Dashboard() {
         />
         <StatCard
           icon="💰"
-          label="Total Sales"
+          label="Ticket Sales"
           value={loading ? '...' : formatCurrency(totalSales)}
         />
         <StatCard

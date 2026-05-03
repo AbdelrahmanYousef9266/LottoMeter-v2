@@ -6,7 +6,7 @@ import { listUsers } from '../api/users'
 import useApi from '../hooks/useApi'
 import Badge from '../components/UI/Badge'
 import Table from '../components/UI/Table'
-import { formatDateTime, formatDuration } from '../utils/dateTime'
+import { formatLocalTime, formatDuration } from '../utils/dateTime'
 import { formatCurrency, formatVariance } from '../utils/currency'
 
 function getStatusVariant(status) {
@@ -53,10 +53,18 @@ export default function Shifts() {
   }
 
   const getSales = (shift) => {
-    if (shift.tickets_total !== null && shift.tickets_total !== undefined) {
-      return formatCurrency(shift.tickets_total)
-    }
-    return '—'
+    if (shift.status !== 'closed') return '—'
+    if (shift.tickets_total === null || shift.tickets_total === undefined) return '—'
+    return formatCurrency(shift.tickets_total)
+  }
+
+  const getVariance = (shift) => {
+    if (shift.status !== 'closed') return null
+    if (shift.difference === null || shift.difference === undefined) return null
+    const diff = parseFloat(shift.difference)
+    const color = diff > 0 ? '#16A34A' : diff < 0 ? '#DC2626' : '#16A34A'
+    const label = diff > 0 ? 'Over' : diff < 0 ? 'Short' : 'Correct'
+    return { value: `$${Math.abs(diff).toFixed(2)}`, color, label }
   }
 
   const bizDayApiFn = useCallback(() => listBusinessDays({ limit: 100 }), [])
@@ -101,12 +109,12 @@ export default function Shifts() {
     {
       key: 'opened_at',
       label: 'Started',
-      render: (v) => formatDateTime(v),
+      render: (v) => formatLocalTime(v),
     },
     {
       key: 'closed_at',
       label: 'Ended',
-      render: (v) => v ? formatDateTime(v) : <Badge variant="green">Active</Badge>,
+      render: (v) => v ? formatLocalTime(v) : <Badge variant="green">Active</Badge>,
     },
     {
       key: 'duration',
@@ -120,22 +128,18 @@ export default function Shifts() {
     },
     {
       key: 'tickets_total',
-      label: 'Sales',
+      label: 'Ticket Sales',
       render: (_, row) => <span style={{ fontWeight: 600 }}>{getSales(row)}</span>,
     },
     {
       key: 'difference',
       label: 'Variance',
-      render: (v) => {
-        const info = formatVariance(v ?? 0)
+      render: (_, row) => {
+        const v = getVariance(row)
+        if (!v) return <span style={{ color: 'var(--text-secondary)' }}>—</span>
         return (
-          <span
-            style={{
-              color: info.isPositive ? 'var(--green)' : info.isNegative ? 'var(--red)' : 'inherit',
-              fontWeight: 600,
-            }}
-          >
-            {info.text}
+          <span style={{ color: v.color, fontWeight: 600 }}>
+            {v.value} <span style={{ fontSize: 11, opacity: 0.8 }}>{v.label}</span>
           </span>
         )
       },
