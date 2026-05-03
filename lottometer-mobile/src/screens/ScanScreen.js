@@ -23,6 +23,8 @@ import { useFeedback } from '../hooks/useFeedback';
 import { friendlyScanError } from '../utils/scanErrorMessages';
 import { lastPositionFor, parseBarcode } from '../utils/bookConstants';
 import { Colors, Radius, Shadow } from '../theme';
+import { getDb } from '../offline/db';
+import { recordOfflineScan } from '../offline';
 
 function detectLastTicket(trimmedBarcode, scanType, slots) {
   if (scanType !== 'close') return false;
@@ -38,7 +40,7 @@ export default function ScanScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
   const route = useRoute();
-  const { scanMode } = useAuth();
+  const { scanMode, isOffline, user, store } = useAuth();
   const [loading, setLoading] = useState(true);
   const [shift, setShift] = useState(null);
   const [openSubId, setOpenSubId] = useState(null);
@@ -134,12 +136,38 @@ export default function ScanScreen() {
     async (code, force_sold = null) => {
       setBusy(true);
       try {
-        const result = await recordScan({
-          shift_id: openSubId,
-          barcode: code,
-          scan_type: scanType,
-          force_sold,
-        });
+        let result;
+
+        if (isOffline) {
+          // ── OFFLINE PATH ────────────────────────────────────────────────────
+          const db = await getDb();
+          const localShift = await db.getFirstAsync(
+            'SELECT uuid FROM local_employee_shifts WHERE server_id = ?',
+            [openSubId]
+          );
+          if (!localShift) {
+            throw { code: 'SHIFT_NOT_FOUND', message: 'Shift not found in local database.' };
+          }
+          result = await recordOfflineScan({
+            store_id: store?.store_id,
+            user_id: user?.user_id,
+            shift_server_id: openSubId,
+            shift_uuid: localShift.uuid,
+            barcode: code,
+            scan_type: scanType,
+            force_sold,
+          });
+        } else {
+          // ── ONLINE PATH — unchanged ─────────────────────────────────────────
+          result = await recordScan({
+            shift_id: openSubId,
+            barcode: code,
+            scan_type: scanType,
+            force_sold,
+          });
+        }
+
+        // Process result — identical for online and offline
         console.log('[scan success] full response:', JSON.stringify(result));
         console.log('[scan success] pending_scans_remaining:', result.pending_scans_remaining);
         console.log('[scan success] running_totals:', JSON.stringify(result.running_totals));
@@ -179,7 +207,7 @@ export default function ScanScreen() {
         setBusy(false);
       }
     },
-    [openSubId, scanType, isInitialized, t, fireFeedback]
+    [openSubId, scanType, isInitialized, t, fireFeedback, isOffline, user, store]
   );
 
   const submitScan = useCallback(
@@ -262,6 +290,7 @@ export default function ScanScreen() {
     const isContinuous = scanMode === 'camera_continuous';
     navigation.navigate('CameraScanner', {
       mode: isContinuous ? 'continuous' : 'single',
+      validate: !isOffline,
       onScanned: (data) => { submitScan(data); },
     });
   }
@@ -298,6 +327,12 @@ export default function ScanScreen() {
       >
         <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
           <Text style={styles.title}>{t('scan.title')}</Text>
+
+          {isOffline && (
+            <View style={styles.offlineBanner}>
+              <Text style={styles.offlineBannerText}>⚠️ Offline Mode — scans saved locally</Text>
+            </View>
+          )}
 
           {!isInitialized ? (
             <View style={[styles.banner, styles.bannerWarn]}>
@@ -455,6 +490,15 @@ const styles = StyleSheet.create({
   center:    { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
   title:     { fontSize: 28, fontWeight: '700', color: Colors.textPrimary, marginBottom: 12 },
   subtitle:  { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', marginBottom: 4 },
+
+  offlineBanner: {
+    backgroundColor: '#D97706',
+    borderRadius: Radius.sm,
+    padding: 10,
+    marginBottom: 8,
+    alignItems: 'center',
+  },
+  offlineBannerText: { color: '#fff', fontWeight: '600', fontSize: 14 },
 
   banner: { borderRadius: Radius.sm, padding: 12, marginBottom: 12 },
   bannerWarn:    { backgroundColor: Colors.warningBg },

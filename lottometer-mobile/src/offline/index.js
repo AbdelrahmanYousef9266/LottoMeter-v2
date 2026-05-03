@@ -31,3 +31,8 @@ export {
   saveLocalExtraSale,
 } from './localDb';
 export { setSessionContext, getSessionContext } from './sessionStore';
+export {
+  recordOfflineScan,
+  getOfflinePendingCounts,
+  parseBarcode,
+} from './scanEngine';

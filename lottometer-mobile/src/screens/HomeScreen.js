@@ -15,6 +15,7 @@ import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
 import { useAuth } from '../context/AuthContext';
+import { getDb } from '../offline/db';
 import { openShift, listShifts, closeShift, getShiftSummary, getCurrentOpenShift } from '../api/shifts';
 import { getSubscription } from '../api/subscription';
 import TrialBannerComponent from './TrialBannerComponent';
@@ -31,7 +32,7 @@ import { Colors, Radius, Shadow } from '../theme';
 export default function HomeScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
-  const { user } = useAuth();
+  const { user, isOffline } = useAuth();
   const isAdmin = user?.role === 'admin';
 
   const [loading, setLoading]       = useState(true);
@@ -45,11 +46,25 @@ export default function HomeScreen() {
 
   const [subscription, setSubscription]     = useState(null);
 
+  const [pendingSyncCount, setPendingSyncCount] = useState(0);
+
   const [closeModalOpen, setCloseModalOpen] = useState(false);
   const [wbSaleOpen, setWbSaleOpen]         = useState(false);
   const [returnOpen, setReturnOpen]         = useState(false);
 
   // ── data loading ───────────────────────────────────────────────────────────
+
+  const loadPendingSyncCount = useCallback(async () => {
+    try {
+      const db = await getDb();
+      const result = await db.getFirstAsync(
+        `SELECT COUNT(*) as count FROM sync_queue WHERE status = 'pending'`
+      );
+      setPendingSyncCount(result?.count ?? 0);
+    } catch {
+      setPendingSyncCount(0);
+    }
+  }, []);
 
   const loadData = useCallback(async () => {
     try {
@@ -88,8 +103,8 @@ export default function HomeScreen() {
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      loadData().finally(() => setLoading(false));
-    }, [loadData])
+      Promise.all([loadData(), loadPendingSyncCount()]).finally(() => setLoading(false));
+    }, [loadData, loadPendingSyncCount])
   );
 
   async function handleRefresh() {
@@ -225,6 +240,16 @@ export default function HomeScreen() {
         <Text style={styles.greeting}>
           {t('home.greeting', { name: user?.username || '' })}
         </Text>
+
+        {isOffline && (
+          <View style={styles.offlineBanner}>
+            <Text style={styles.offlineBannerText}>
+              {pendingSyncCount > 0
+                ? `Offline — ${pendingSyncCount} scan(s) pending sync`
+                : 'Offline Mode — working from local data'}
+            </Text>
+          </View>
+        )}
 
         <TrialBannerComponent subscription={subscription} />
 
@@ -502,4 +527,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   closeBizDayText: { color: Colors.error, fontSize: 15, fontWeight: '600' },
+
+  offlineBanner: {
+    backgroundColor: '#D97706',
+    borderRadius: Radius.sm,
+    padding: 10,
+    marginBottom: 12,
+    alignItems: 'center',
+  },
+  offlineBannerText: { color: '#fff', fontWeight: '600', fontSize: 14 },
 });
