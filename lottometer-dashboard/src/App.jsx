@@ -12,6 +12,7 @@ import Slots from './pages/Slots'
 import Users from './pages/Users'
 import Reports from './pages/Reports'
 import Subscription from './pages/Subscription'
+import AccountSettings from './pages/AccountSettings'
 
 import HomePage from './pages/public/HomePage'
 import ContactPage from './pages/public/ContactPage'
@@ -89,6 +90,7 @@ function AppRoutes() {
         <Route path="users" element={<Users />} />
         <Route path="reports" element={<Reports />} />
         <Route path="subscription" element={<Subscription />} />
+        <Route path="account" element={<AccountSettings />} />
       </Route>
 
       {/* Fallback */}

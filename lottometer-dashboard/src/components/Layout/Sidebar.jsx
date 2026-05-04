@@ -45,6 +45,16 @@ export default function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
+        <NavLink
+          to="/dashboard/account"
+          className={({ isActive }) =>
+            `sidebar-nav-item${isActive ? ' active' : ''}`
+          }
+          style={{ marginBottom: 8 }}
+        >
+          <span className="nav-icon">⚙️</span>
+          <span>Account Settings</span>
+        </NavLink>
         <button
           className="btn btn-secondary btn-sm"
           style={{ width: '100%' }}

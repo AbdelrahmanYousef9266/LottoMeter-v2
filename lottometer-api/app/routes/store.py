@@ -63,6 +63,28 @@ def update_store_settings():
     return jsonify({"settings": serialize_settings(settings)}), 200
 
 
+@store_bp.route("/profile", methods=["GET"])
+@jwt_required()
+def get_store_profile():
+    """Any authenticated user: retrieve store profile fields."""
+    from app.models.store import Store
+    store = Store.query.filter_by(store_id=current_store_id()).first()
+    if store is None:
+        from app.errors import NotFoundError
+        raise NotFoundError("Store not found.", code="STORE_NOT_FOUND")
+    return jsonify({
+        "store_name": store.store_name,
+        "store_code": store.store_code,
+        "owner_name": store.owner_name,
+        "email":      store.email,
+        "phone":      store.phone,
+        "address":    store.address,
+        "city":       store.city,
+        "state":      store.state,
+        "zip_code":   store.zip_code,
+    }), 200
+
+
 @store_bp.route("/profile", methods=["PUT"])
 @admin_required
 def update_store_profile():
