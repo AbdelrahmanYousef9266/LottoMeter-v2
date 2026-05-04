@@ -64,6 +64,14 @@ def get_day(day_id):
     })
 
 
+@business_day_bp.route("/<int:day_id>/ticket-breakdown", methods=["GET"])
+@jwt_required()
+def get_ticket_breakdown(day_id):
+    store_id = current_store_id()
+    result = business_day_service.get_ticket_breakdown_for_day(store_id, day_id)
+    return jsonify(result)
+
+
 @business_day_bp.route("/<int:day_id>/close", methods=["POST"])
 @admin_required
 def close_day(day_id):

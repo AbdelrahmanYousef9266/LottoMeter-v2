@@ -2,11 +2,15 @@
 
 from datetime import datetime, timezone, date
 from decimal import Decimal
+from collections import defaultdict
 from sqlalchemy.exc import IntegrityError
 
 from app.extensions import db
 from app.models.business_day import BusinessDay
 from app.models.employee_shift import EmployeeShift
+from app.models.shift_books import ShiftBooks
+from app.models.shift_extra_sales import ShiftExtraSales
+from app.models.book import Book
 from app.errors import NotFoundError, BusinessRuleError
 
 
@@ -115,3 +119,90 @@ def close_business_day(
 
     db.session.commit()
     return day
+
+
+def get_ticket_breakdown_for_day(store_id: int, business_day_id: int) -> dict:
+    """Aggregate tickets sold by price across all shifts in a business day.
+
+    Combines scanned book sales (open/close scan pairs) and whole-book sales
+    (ShiftExtraSales), grouped by ticket_price.
+    """
+    _get_business_day(store_id, business_day_id)
+
+    shift_ids = [
+        s.id for s in
+        EmployeeShift.query
+        .filter_by(business_day_id=business_day_id, store_id=store_id, voided=False)
+        .with_entities(EmployeeShift.id)
+        .all()
+    ]
+    if not shift_ids:
+        return {"breakdown": [], "total_tickets": 0, "total_value": "0.00"}
+
+    open_scans_q = ShiftBooks.query.filter(
+        ShiftBooks.shift_id.in_(shift_ids),
+        ShiftBooks.store_id == store_id,
+        ShiftBooks.scan_type == "open",
+    ).all()
+    close_scans_q = ShiftBooks.query.filter(
+        ShiftBooks.shift_id.in_(shift_ids),
+        ShiftBooks.store_id == store_id,
+        ShiftBooks.scan_type == "close",
+    ).all()
+
+    # Key: (shift_id, static_code) → scan row
+    open_map = {(s.shift_id, s.static_code): s for s in open_scans_q}
+
+    all_static_codes = {s.static_code for s in open_scans_q} | {s.static_code for s in close_scans_q}
+    book_map = {}
+    if all_static_codes:
+        books = Book.query.filter(
+            Book.store_id == store_id,
+            Book.static_code.in_(all_static_codes),
+        ).all()
+        book_map = {b.static_code: b for b in books}
+
+    scanned_totals: dict[Decimal, int] = defaultdict(int)
+    for close in close_scans_q:
+        open_scan = open_map.get((close.shift_id, close.static_code))
+        if open_scan is None:
+            continue
+        book = book_map.get(close.static_code)
+        if book is None or book.ticket_price is None:
+            continue
+        sold = close.start_at_scan - open_scan.start_at_scan
+        if close.is_last_ticket:
+            sold += 1
+        if sold > 0:
+            scanned_totals[book.ticket_price] += sold
+
+    whole_totals: dict[Decimal, int] = defaultdict(int)
+    extra_sales = ShiftExtraSales.query.filter(
+        ShiftExtraSales.shift_id.in_(shift_ids),
+        ShiftExtraSales.store_id == store_id,
+    ).all()
+    for e in extra_sales:
+        whole_totals[e.ticket_price] += e.ticket_count
+
+    # Merge both sources by price
+    all_prices = set(scanned_totals) | set(whole_totals)
+    breakdown = []
+    total_tickets = 0
+    total_value = Decimal("0.00")
+
+    for price in sorted(all_prices):
+        count = scanned_totals.get(price, 0) + whole_totals.get(price, 0)
+        subtotal = (price * count).quantize(Decimal("0.01"))
+        breakdown.append({
+            "ticket_price": str(price.quantize(Decimal("0.01"))),
+            "tickets_sold": count,
+            "subtotal": str(subtotal),
+        })
+        total_tickets += count
+        total_value += subtotal
+
+    return {
+        "breakdown": breakdown,
+        "total_tickets": total_tickets,
+        "total_value": str(total_value.quantize(Decimal("0.01"))),
+    }

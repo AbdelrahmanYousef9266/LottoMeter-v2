@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { getTodaysBusinessDay } from '../api/businessDays'
+import { getTodaysBusinessDay, getBusinessDayTicketBreakdown } from '../api/businessDays'
 import { listShifts } from '../api/shifts'
 import { getBooksSummary } from '../api/books'
 import StatCard from '../components/UI/StatCard'
@@ -64,6 +64,7 @@ export default function Dashboard() {
   const [todaysBizDay, setTodaysBizDay] = useState(null)
   const [recentShifts, setRecentShifts] = useState([])
   const [booksSummary, setBooksSummary] = useState(null)
+  const [ticketBreakdown, setTicketBreakdown] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -72,17 +73,37 @@ export default function Dashboard() {
 
     Promise.allSettled([
       getTodaysBusinessDay(),
-      listShifts({ limit: 5, sort: '-created_at' }),
       getBooksSummary(),
-    ]).then(([bizDayResult, shiftsResult, booksResult]) => {
+    ]).then(async ([bizDayResult, booksResult]) => {
       if (cancelled) return
-      if (bizDayResult.status === 'fulfilled') setTodaysBizDay(bizDayResult.value.data)
-      if (shiftsResult.status === 'fulfilled') {
-        const d = shiftsResult.value.data
-        setRecentShifts(Array.isArray(d) ? d : d?.shifts || d?.data || [])
+
+      let bizDay = null
+      if (bizDayResult.status === 'fulfilled') {
+        const d = bizDayResult.value.data
+        bizDay = d?.business_day || d
+        setTodaysBizDay(bizDay)
       }
       if (booksResult.status === 'fulfilled') setBooksSummary(booksResult.value.data)
-      setLoading(false)
+
+      if (bizDay?.id) {
+        try {
+          const [shiftsRes, breakdownRes] = await Promise.allSettled([
+            listShifts({ business_day_id: bizDay.id }),
+            getBusinessDayTicketBreakdown(bizDay.id),
+          ])
+          if (!cancelled) {
+            if (shiftsRes.status === 'fulfilled') {
+              const d = shiftsRes.value.data
+              setRecentShifts(Array.isArray(d) ? d : d?.shifts || d?.data || [])
+            }
+            if (breakdownRes.status === 'fulfilled') {
+              setTicketBreakdown(breakdownRes.value.data)
+            }
+          }
+        } catch {}
+      }
+
+      if (!cancelled) setLoading(false)
     })
 
     return () => { cancelled = true }
@@ -95,19 +116,17 @@ export default function Dashboard() {
     return 'Good evening'
   }
 
-  const todayShifts = todaysBizDay
-    ? recentShifts.filter((s) => s.business_day_id === todaysBizDay.id)
-    : []
+  const closedShifts = recentShifts.filter((s) => s.status === 'closed' && !s.voided)
 
-  const totalOver = todayShifts
+  const totalOver = closedShifts
     .filter((s) => s.shift_status === 'over')
     .reduce((sum, s) => sum + Math.abs(parseFloat(s.difference || 0)), 0)
 
-  const totalShort = todayShifts
+  const totalShort = closedShifts
     .filter((s) => s.shift_status === 'short')
     .reduce((sum, s) => sum + Math.abs(parseFloat(s.difference || 0)), 0)
 
-  const totalSales = todayShifts.reduce((sum, s) => sum + parseFloat(s.gross_sales || 0), 0)
+  const totalSales = recentShifts.reduce((sum, s) => sum + parseFloat(s.tickets_total || 0), 0)
 
   const variance = totalOver - totalShort
   const varianceInfo = formatVariance(variance)
@@ -148,7 +167,7 @@ export default function Dashboard() {
         <StatCard
           icon="🔄"
           label="Shifts Today"
-          value={loading ? '...' : (todaysBizDay?.shifts_count ?? recentShifts.length ?? '—')}
+          value={loading ? '...' : recentShifts.length}
         />
         <StatCard
           icon="💰"
@@ -194,6 +213,80 @@ export default function Dashboard() {
           <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Daily revenue</span>
         </div>
         <SalesChart data={MOCK_SALES_DATA} />
+      </div>
+
+      {/* Ticket Breakdown */}
+      <div className="card" style={{ marginBottom: 24 }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+          <h2 style={{ fontSize: 16, fontWeight: 700 }}>Tickets Sold Today</h2>
+          {ticketBreakdown && !loading && (
+            <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+              {ticketBreakdown.total_tickets} tickets &middot; {formatCurrency(parseFloat(ticketBreakdown.total_value))}
+            </span>
+          )}
+        </div>
+        {loading ? (
+          <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>Loading...</div>
+        ) : !ticketBreakdown || ticketBreakdown.breakdown.length === 0 ? (
+          <div style={{ color: 'var(--text-secondary)', fontSize: 14 }}>No tickets sold today.</div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {ticketBreakdown.breakdown.map((row) => (
+              <div
+                key={row.ticket_price}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                  padding: '10px 14px',
+                  background: 'var(--bg-secondary, #F8FAFC)',
+                  borderRadius: 8,
+                  border: '1px solid var(--border, #E2E8F0)',
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <span style={{
+                    fontWeight: 700,
+                    fontSize: 15,
+                    color: 'var(--text-primary)',
+                    minWidth: 52,
+                  }}>
+                    {formatCurrency(parseFloat(row.ticket_price))}
+                  </span>
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>tickets</span>
+                </div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                  <span style={{ fontWeight: 700, fontSize: 18, color: '#0A1128' }}>
+                    {row.tickets_sold}
+                    <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 4 }}>sold</span>
+                  </span>
+                  <span style={{ fontWeight: 600, fontSize: 14, color: '#16A34A', minWidth: 72, textAlign: 'right' }}>
+                    {formatCurrency(parseFloat(row.subtotal))}
+                  </span>
+                </div>
+              </div>
+            ))}
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              padding: '10px 14px',
+              borderTop: '2px solid var(--border, #E2E8F0)',
+              marginTop: 4,
+            }}>
+              <span style={{ fontWeight: 700, fontSize: 14 }}>Total</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <span style={{ fontWeight: 700, fontSize: 18, color: '#0A1128' }}>
+                  {ticketBreakdown.total_tickets}
+                  <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 4 }}>tickets</span>
+                </span>
+                <span style={{ fontWeight: 700, fontSize: 14, color: '#16A34A', minWidth: 72, textAlign: 'right' }}>
+                  {formatCurrency(parseFloat(ticketBreakdown.total_value))}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Recent Shifts */}

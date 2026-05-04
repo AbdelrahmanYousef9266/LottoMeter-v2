@@ -6,14 +6,41 @@ import { listUsers } from '../api/users'
 import Badge from '../components/UI/Badge'
 import Modal from '../components/UI/Modal'
 import Button from '../components/UI/Button'
-import { formatLocalTime, formatBusinessDate, getDayLabel, formatDuration } from '../utils/dateTime'
+import { formatLocalTime, formatLocalDateTime, formatDate, formatBusinessDate, getDayLabel, formatDuration } from '../utils/dateTime'
 import { formatCurrency, formatVariance } from '../utils/currency'
+import { getTicketsRemaining } from '../utils/bookConstants'
+import { getBookDetail } from '../api/books'
 
-function getBookStatus(book) {
+function getDetailBookStatus(book) {
   if (book.returned_at) return { label: 'Returned', variant: 'amber' }
   if (book.is_sold) return { label: 'Sold', variant: 'gray' }
   if (book.is_active) return { label: 'Active', variant: 'green' }
   return { label: 'Inactive', variant: 'red' }
+}
+
+function unassignReasonLabel(reason) {
+  switch (reason) {
+    case 'reassigned': return 'Reassigned'
+    case 'unassigned': return 'Unassigned'
+    case 'sold': return 'Sold'
+    case 'returned_to_vendor': return 'Returned'
+    default: return reason || '—'
+  }
+}
+
+function reasonVariant(reason) {
+  switch (reason) {
+    case 'sold': return 'gray'
+    case 'returned_to_vendor': return 'amber'
+    case 'reassigned': return 'blue'
+    default: return 'gray'
+  }
+}
+
+function getBookStatus(book) {
+  if (book.fully_sold) return { label: 'Sold', color: '#64748B' }
+  if (book.returned_at) return { label: 'Returned', color: '#D97706' }
+  return { label: 'Active', color: '#16A34A' }
 }
 
 function getStatusVariant(status) {
@@ -42,6 +69,10 @@ export default function Reports() {
   const [reportData, setReportData] = useState(null)
   const [reportLoading, setReportLoading] = useState(false)
   const [reportError, setReportError] = useState('')
+
+  const [selectedReportBook, setSelectedReportBook] = useState(null)
+  const [reportBookDetail, setReportBookDetail] = useState(null)
+  const [loadingBookDetail, setLoadingBookDetail] = useState(false)
 
   useEffect(() => {
     let cancelled = false
@@ -118,6 +149,20 @@ export default function Reports() {
       setReportError(err?.response?.data?.message || 'Failed to load report.')
     } finally {
       setReportLoading(false)
+    }
+  }
+
+  const handleReportBookClick = async (book) => {
+    setSelectedReportBook(book)
+    setReportBookDetail(null)
+    setLoadingBookDetail(true)
+    try {
+      const res = await getBookDetail(book.book_id)
+      setReportBookDetail(res.data)
+    } catch {
+      setReportBookDetail(null)
+    } finally {
+      setLoadingBookDetail(false)
     }
   }
 
@@ -364,28 +409,50 @@ export default function Reports() {
                 </h4>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                   {reportData.shift.books.map((book, i) => {
-                    const { label: statusLabel, variant } = getBookStatus(book)
+                    const remaining = getTicketsRemaining(book.close_position, book.ticket_price)
                     return (
                       <div
                         key={i}
+                        onClick={() => handleReportBookClick(book)}
                         style={{
                           display: 'flex',
-                          justifyContent: 'space-between',
                           alignItems: 'center',
                           padding: '8px 12px',
                           background: '#F8FAFF',
                           borderRadius: 6,
                           fontSize: 13,
+                          gap: 0,
+                          cursor: 'pointer',
                         }}
                       >
-                        <span style={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                        <span style={{ fontFamily: 'monospace', fontWeight: 600, whiteSpace: 'nowrap', minWidth: 120 }}>
                           {book.static_code || book.barcode || `Book ${i + 1}`}
                         </span>
-                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <span style={{ color: 'var(--text-secondary)' }}>
-                            {book.tickets_sold ?? '—'} tickets
+                        <span style={{ fontWeight: 600, color: '#0A1128', whiteSpace: 'nowrap', marginLeft: 32 }}>
+                          {book.slot_name || '—'}
+                        </span>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 'auto', flexShrink: 0 }}>
+                          <span style={{
+                            padding: '2px 8px',
+                            borderRadius: 12,
+                            fontSize: 12,
+                            fontWeight: 600,
+                            whiteSpace: 'nowrap',
+                            backgroundColor: book.fully_sold ? '#F1F5F9' : '#DCFCE7',
+                            color: book.fully_sold ? '#64748B' : '#16A34A',
+                          }}>
+                            {book.fully_sold ? 'Sold' : 'Active'}
                           </span>
-                          <Badge variant={variant}>{statusLabel}</Badge>
+                          {remaining !== null && remaining > 0 && (
+                            <span style={{ fontWeight: 600, color: '#0A1128', whiteSpace: 'nowrap' }}>
+                              <span style={{ color: '#DC2626' }}>{remaining}</span> Tickets Left
+                            </span>
+                          )}
+                          {remaining === 0 && (
+                            <span style={{ color: '#64748B', fontWeight: 600, whiteSpace: 'nowrap' }}>
+                              📦 Book Sold
+                            </span>
+                          )}
                         </div>
                       </div>
                     )
@@ -540,6 +607,112 @@ export default function Reports() {
           <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No report data available.</p>
         )}
       </Modal>
+
+      {/* Book Detail Modal */}
+      <Modal
+        open={!!selectedReportBook}
+        onClose={() => { setSelectedReportBook(null); setReportBookDetail(null) }}
+        title={`Book — ${selectedReportBook?.static_code || selectedReportBook?.book_barcode || ''}`}
+        footer={
+          <button className="btn btn-secondary btn-sm" onClick={() => { setSelectedReportBook(null); setReportBookDetail(null) }}>
+            Close
+          </button>
+        }
+      >
+        {loadingBookDetail ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <div className="loading-spinner md" style={{ margin: '0 auto' }} />
+            <p style={{ marginTop: 12, color: 'var(--text-secondary)', fontSize: 13 }}>Loading book details...</p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+            {/* Book Information */}
+            <div>
+              <h4 style={detailSectionHead}>Book Information</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px' }}>
+                {(() => {
+                  const d = reportBookDetail?.book
+                  const status = d ? getDetailBookStatus(d) : null
+                  return [
+                    { label: 'Status', value: status ? <Badge variant={status.variant}>{status.label}</Badge> : '—' },
+                    { label: 'Barcode', value: d?.barcode || selectedReportBook?.book_barcode || '—', mono: true },
+                    { label: 'Static Code', value: d?.static_code || selectedReportBook?.static_code || '—', mono: true },
+                    { label: 'Ticket Price', value: formatCurrency(d?.ticket_price ?? selectedReportBook?.ticket_price) },
+                    { label: 'Current Slot', value: selectedReportBook?.slot_name || '—' },
+                    { label: 'Created', value: formatDate(d?.created_at) },
+                  ].map((item) => (
+                    <div key={item.label}>
+                      <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+                        {item.label}
+                      </div>
+                      <div style={{ fontWeight: 600, fontSize: 14, fontFamily: item.mono ? 'monospace' : undefined }}>
+                        {item.value}
+                      </div>
+                    </div>
+                  ))
+                })()}
+              </div>
+            </div>
+
+            {/* Assignment History */}
+            <div>
+              <h4 style={detailSectionHead}>
+                Assignment History{reportBookDetail?.assignment_history?.length > 0 && ` (${reportBookDetail.assignment_history.length})`}
+              </h4>
+              {!reportBookDetail?.assignment_history?.length ? (
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '12px 0' }}>No assignment history.</p>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        {['Slot', 'Price', 'Assigned At', 'Assigned By', 'Unassigned At', 'Reason'].map((h) => (
+                          <th key={h} style={{ padding: '6px 10px', textAlign: 'left', fontSize: 11, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.05em', whiteSpace: 'nowrap' }}>
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportBookDetail.assignment_history.map((entry, i) => (
+                        <tr key={entry.assignment_id ?? i} style={{ borderBottom: i < reportBookDetail.assignment_history.length - 1 ? '1px solid var(--border)' : 'none' }}>
+                          <td style={detailTd}>{entry.slot_name || '—'}</td>
+                          <td style={detailTd}>{formatCurrency(entry.ticket_price)}</td>
+                          <td style={{ ...detailTd, whiteSpace: 'nowrap' }}>{formatLocalDateTime(entry.assigned_at)}</td>
+                          <td style={detailTd}>{entry.assigned_by?.username || '—'}</td>
+                          <td style={{ ...detailTd, whiteSpace: 'nowrap' }}>
+                            {entry.unassigned_at
+                              ? formatLocalDateTime(entry.unassigned_at)
+                              : <Badge variant="green">Active</Badge>}
+                          </td>
+                          <td style={detailTd}>
+                            {entry.unassign_reason
+                              ? <Badge variant={reasonVariant(entry.unassign_reason)}>{unassignReasonLabel(entry.unassign_reason)}</Badge>
+                              : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }
+
+const detailSectionHead = {
+  fontSize: 13,
+  fontWeight: 700,
+  marginBottom: 10,
+  color: 'var(--text-secondary)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+}
+
+const detailTd = { padding: '8px 10px', verticalAlign: 'top' }
