@@ -13,33 +13,30 @@ export const getCurrentOpenShift = async () => {
 export async function openShift() {
   const { data } = await api.post('/shifts');
 
-  // Write-through: save business day + shift to local DB (fire and forget)
+  // Write-through: save business day + shift to local DB before returning
+  // so offline loadData can always find the shift in SQLite immediately.
   const { storeId } = getSessionContext();
   if (storeId && data.employee_shift) {
-    (async () => {
-      try {
-        const shift = data.employee_shift;
-        const db = await getDb();
-        // Look up business day uuid — may already be seeded
-        let dayRow = await db.getFirstAsync(
-          'SELECT uuid FROM local_business_days WHERE server_id = ?',
-          [shift.business_day_id]
-        );
-        if (!dayRow) {
-          // Business day not seeded yet (first shift of the day) — fetch and save
-          const day = await getTodaysBusinessDay();
-          if (day) {
-            const dayUuid = await saveLocalBusinessDay(day, storeId);
-            if (dayUuid) dayRow = { uuid: dayUuid };
-          }
+    try {
+      const shift = data.employee_shift;
+      const db = await getDb();
+      let dayRow = await db.getFirstAsync(
+        'SELECT uuid FROM local_business_days WHERE server_id = ?',
+        [shift.business_day_id]
+      );
+      if (!dayRow) {
+        const day = await getTodaysBusinessDay();
+        if (day) {
+          const dayUuid = await saveLocalBusinessDay(day, storeId);
+          if (dayUuid) dayRow = { uuid: dayUuid };
         }
-        if (dayRow?.uuid) {
-          await saveLocalEmployeeShift(shift, dayRow.uuid, storeId);
-        }
-      } catch (e) {
-        console.warn('[shifts] write-through openShift:', e.message);
       }
-    })();
+      if (dayRow?.uuid) {
+        await saveLocalEmployeeShift(shift, dayRow.uuid, storeId);
+      }
+    } catch (e) {
+      console.warn('[shifts] write-through openShift:', e.message);
+    }
   }
 
   return data;

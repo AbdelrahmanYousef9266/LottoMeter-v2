@@ -19,11 +19,14 @@ import * as Sharing from 'expo-sharing';
 
 import { getShiftReport } from '../api/reports';
 import { formatLocalDateTime, formatBusinessDate } from '../utils/dateTime';
+import { useAuth } from '../context/AuthContext';
+import { getDb } from '../offline/db';
 
 export default function ReportDetailScreen({ route }) {
   const { t, i18n } = useTranslation();
   const { shiftId } = route.params;
   const navigation = useNavigation();
+  const { isOffline, store } = useAuth();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -33,12 +36,104 @@ export default function ReportDetailScreen({ route }) {
 
   const loadReport = useCallback(async () => {
     try {
+      if (isOffline) {
+        const db = await getDb();
+
+        const localShift = await db.getFirstAsync(
+          `SELECT * FROM local_employee_shifts
+           WHERE (server_id = ? OR id = ?) AND store_id = ?`,
+          [shiftId, shiftId, store?.store_id]
+        );
+
+        if (!localShift) return; // report stays null → renders "not found"
+
+        const localDay = await db.getFirstAsync(
+          'SELECT * FROM local_business_days WHERE uuid = ?',
+          [localShift.business_day_uuid]
+        );
+
+        // JOIN local_slots to get slot_name for the books section
+        const scans = await db.getAllAsync(
+          `SELECT lsb.*, lb.ticket_price, lb.slot_id, ls.slot_name
+           FROM local_shift_books lsb
+           JOIN local_books lb ON lb.static_code = lsb.static_code
+           LEFT JOIN local_slots ls ON ls.server_id = lb.slot_id
+           WHERE lsb.shift_uuid = ?
+           ORDER BY lsb.scanned_at ASC`,
+          [localShift.uuid]
+        );
+
+        const extraSales = await db.getAllAsync(
+          'SELECT * FROM local_extra_sales WHERE shift_uuid = ?',
+          [localShift.uuid]
+        );
+
+        const openScans = scans.filter(s => s.scan_type === 'open');
+        const closeScans = scans.filter(s => s.scan_type === 'close');
+
+        const books = openScans.map(openScan => {
+          const closeScan = closeScans.find(c => c.static_code === openScan.static_code);
+          const ticketsSold = closeScan
+            ? (closeScan.is_last_ticket
+                ? closeScan.start_at_scan - openScan.start_at_scan + 1
+                : closeScan.start_at_scan - openScan.start_at_scan)
+            : 0;
+          return {
+            static_code: openScan.static_code,
+            slot_name: openScan.slot_name || `#${openScan.slot_id}`,
+            ticket_price: openScan.ticket_price,
+            open_position: openScan.start_at_scan,
+            close_position: closeScan?.start_at_scan,
+            tickets_sold: ticketsSold,
+            value: (ticketsSold * parseFloat(openScan.ticket_price)).toFixed(2),
+            fully_sold: !!closeScan?.is_last_ticket,
+          };
+        });
+
+        setReport({
+          shift: {
+            id: localShift.server_id || localShift.id,
+            uuid: localShift.uuid,
+            shift_number: localShift.shift_number,
+            status: localShift.status,
+            opened_at: localShift.opened_at,
+            closed_at: localShift.closed_at,
+            cash_in_hand: localShift.cash_in_hand,
+            gross_sales: localShift.gross_sales,
+            cash_out: localShift.cash_out,
+            cancels: localShift.cancels,
+            tickets_total: localShift.tickets_total,
+            expected_cash: localShift.expected_cash,
+            difference: localShift.difference,
+            shift_status: localShift.shift_status,
+            employee_id: localShift.employee_id,
+            books,
+            whole_book_sales: extraSales.map(s => ({
+              scanned_barcode: s.scanned_barcode,
+              ticket_price: s.ticket_price,
+              ticket_count: s.ticket_count,
+              value: s.value,
+            })),
+            returned_books: [],
+            ticket_breakdown: [],
+          },
+          business_day: localDay ? {
+            id: localDay.server_id,
+            uuid: localDay.uuid,
+            business_date: localDay.business_date,
+            status: localDay.status,
+          } : null,
+          offline: true,
+        });
+        return;
+      }
+
       const data = await getShiftReport(shiftId);
       setReport(data);
     } catch (err) {
       Alert.alert(t('common.error'), err.message || t('report.errorLoadingReport'));
     }
-  }, [shiftId, t]);
+  }, [shiftId, t, isOffline, store]);
 
   useFocusEffect(
     useCallback(() => {

@@ -56,8 +56,16 @@ export const seedLocalDatabase = async (storeId, userId) => {
       const day = await getTodaysBusinessDay();
       if (day) {
         const dayUuid = day.uuid || uuidv4();
+        // DELETE before INSERT so repeated seeds never accumulate duplicate rows
+        // for the same (store_id, business_date). No UNIQUE constraint on that
+        // pair exists in the schema, so INSERT OR REPLACE would append instead
+        // of replace.
         await db.runAsync(
-          `INSERT OR REPLACE INTO local_business_days
+          `DELETE FROM local_business_days WHERE store_id = ? AND business_date = ?`,
+          [storeId, day.business_date]
+        );
+        await db.runAsync(
+          `INSERT INTO local_business_days
            (server_id, uuid, store_id, business_date, status,
             opened_at, closed_at, total_sales, total_variance,
             sync_status, synced_at)

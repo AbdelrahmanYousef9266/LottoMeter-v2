@@ -85,6 +85,20 @@ export default function HomeScreen() {
         if (!db) return;
         const today = new Date().toISOString().split('T')[0];
 
+        const allShifts = await db.getAllAsync(
+          'SELECT server_id, uuid, status, store_id FROM local_employee_shifts'
+        );
+        console.log('[home offline] all local shifts:', JSON.stringify(allShifts));
+        console.log('[home offline] looking for store_id:', store?.store_id);
+
+        const localShift = await db.getFirstAsync(
+          `SELECT * FROM local_employee_shifts
+           WHERE store_id = ? AND status = 'open'
+           ORDER BY id DESC LIMIT 1`,
+          [store?.store_id]
+        );
+        console.log('[home offline] found shift:', JSON.stringify(localShift));
+
         const localDay = await db.getFirstAsync(
           `SELECT * FROM local_business_days WHERE store_id = ? AND business_date = ?`,
           [store?.store_id, today]
@@ -110,21 +124,23 @@ export default function HomeScreen() {
             voided: false,
           })));
 
-          const openShift = localShifts.find(s => s.status === 'open') || null;
-          if (openShift) {
+          // Prefer shift found via business_day_uuid; fall back to localShift
+          // (found by store_id) to handle business_day_uuid mismatch cases.
+          const activeShiftRow = localShifts.find(s => s.status === 'open') || localShift || null;
+          if (activeShiftRow) {
             setActiveShift({
-              id: openShift.server_id,
-              uuid: openShift.uuid,
-              shift_number: openShift.shift_number,
-              status: openShift.status,
-              opened_at: openShift.opened_at,
-              employee_id: openShift.employee_id,
+              id: activeShiftRow.server_id,
+              uuid: activeShiftRow.uuid,
+              shift_number: activeShiftRow.shift_number,
+              status: activeShiftRow.status,
+              opened_at: activeShiftRow.opened_at,
+              employee_id: activeShiftRow.employee_id,
             });
 
             const closeCount = await db.getFirstAsync(
               `SELECT COUNT(*) as count FROM local_shift_books
                WHERE shift_uuid = ? AND scan_type = 'close'`,
-              [openShift.uuid]
+              [activeShiftRow.uuid]
             );
             const totalActive = await db.getFirstAsync(
               `SELECT COUNT(*) as count FROM local_books
@@ -256,8 +272,10 @@ export default function HomeScreen() {
     if (!activeShift) return;
     try {
       if (payload?.offline) {
-        // OFFLINE PATH — shift already closed by CloseShiftModal; just refresh UI
+        // OFFLINE PATH — shift already closed by CloseShiftModal
         setCloseModalOpen(false);
+        setActiveShift(null);   // clear immediately so UI flips before loadData resolves
+        setSummary(null);
         await loadData();
         Alert.alert(t('home.mainShiftClosed'), t('home.mainShiftClosedHint'));
       } else {

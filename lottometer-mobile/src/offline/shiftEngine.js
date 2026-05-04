@@ -1,15 +1,28 @@
 import { getDb } from './db';
 import { v4 as uuidv4 } from 'uuid';
 
-const getTodayDate = () => new Date().toISOString().split('T')[0];
+const getTodayDate = () => {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, '0');
+  const day = String(now.getDate()).padStart(2, '0');
+  return `${year}-${month}-${day}`;
+};
 
 export const getOrCreateOfflineBusinessDay = async (store_id) => {
   const db = await getDb();
   const today = getTodayDate();
   const now = new Date().toISOString();
 
+  // Prefer the server-seeded row (server_id IS NOT NULL) over any
+  // offline-created row, then fall back to latest by id.
   let day = await db.getFirstAsync(
-    `SELECT * FROM local_business_days WHERE store_id = ? AND business_date = ?`,
+    `SELECT * FROM local_business_days
+     WHERE store_id = ? AND business_date = ?
+     ORDER BY
+       CASE WHEN server_id IS NOT NULL THEN 0 ELSE 1 END,
+       id DESC
+     LIMIT 1`,
     [store_id, today]
   );
   if (day) return day;
