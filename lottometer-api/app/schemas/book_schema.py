@@ -45,6 +45,7 @@ def serialize_book(book) -> dict:
         "is_active": book.is_active,
         "is_sold": book.is_sold,
         "returned_at": book.returned_at.isoformat() + "Z" if book.returned_at else None,
+        "created_at": book.created_at.isoformat() + "Z" if book.created_at else None,
     }
 
 

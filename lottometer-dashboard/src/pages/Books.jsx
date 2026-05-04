@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react'
-import { listBooks, getBooksSummary } from '../api/books'
+import { listBooks, getBooksSummary, getBookDetail } from '../api/books'
 import useApi from '../hooks/useApi'
 import Badge from '../components/UI/Badge'
 import Table from '../components/UI/Table'
-import { formatDate } from '../utils/dateTime'
+import Modal from '../components/UI/Modal'
+import { formatDate, formatLocalDateTime } from '../utils/dateTime'
 import { formatCurrency } from '../utils/currency'
 
 function getBookStatus(book) {
@@ -23,12 +24,26 @@ function getStatusVariant(status) {
   }
 }
 
+function unassignReasonLabel(reason) {
+  switch (reason) {
+    case 'reassigned': return 'Reassigned'
+    case 'unassigned': return 'Unassigned'
+    case 'sold': return 'Sold'
+    case 'returned_to_vendor': return 'Returned'
+    default: return reason || '—'
+  }
+}
+
 const PAGE_SIZE = 20
 
 export default function Books() {
   const [search, setSearch] = useState('')
   const [activeSearch, setActiveSearch] = useState('')
   const [page, setPage] = useState(1)
+
+  const [selectedBook, setSelectedBook] = useState(null)
+  const [bookDetail, setBookDetail] = useState(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
 
   const summaryFn = useCallback(() => getBooksSummary(), [])
   const { data: summaryData } = useApi(summaryFn)
@@ -52,6 +67,25 @@ export default function Books() {
     setSearch('')
     setActiveSearch('')
     setPage(1)
+  }
+
+  const handleBookClick = async (book) => {
+    setSelectedBook(book)
+    setBookDetail(null)
+    setLoadingDetail(true)
+    try {
+      const res = await getBookDetail(book.book_id)
+      setBookDetail(res.data)
+    } catch {
+      setBookDetail(null)
+    } finally {
+      setLoadingDetail(false)
+    }
+  }
+
+  const closeModal = () => {
+    setSelectedBook(null)
+    setBookDetail(null)
   }
 
   const columns = [
@@ -89,6 +123,10 @@ export default function Books() {
     },
   ]
 
+  const detail = bookDetail?.book
+  const history = bookDetail?.assignment_history || []
+  const status = selectedBook ? getBookStatus(selectedBook) : null
+
   return (
     <div>
       <div className="page-header">
@@ -100,14 +138,7 @@ export default function Books() {
 
       {/* Summary chips */}
       {summaryData && (
-        <div
-          style={{
-            display: 'flex',
-            gap: 12,
-            flexWrap: 'wrap',
-            marginBottom: 20,
-          }}
-        >
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
           {[
             { label: 'Total', value: summaryData.total_count ?? summaryData.total, color: 'var(--text-primary)' },
             { label: 'Active', value: summaryData.active_count ?? summaryData.active, color: 'var(--green)' },
@@ -165,6 +196,7 @@ export default function Books() {
           data={books}
           loading={loading}
           emptyMessage="No books found. Books are created when scanned using the mobile app."
+          onRowClick={handleBookClick}
         />
       </div>
 
@@ -198,6 +230,146 @@ export default function Books() {
           </button>
         </div>
       )}
+
+      {/* Book Detail Modal */}
+      <Modal
+        open={!!selectedBook}
+        onClose={closeModal}
+        title={`Book — ${selectedBook?.barcode || selectedBook?.static_code || ''}`}
+        footer={
+          <button className="btn btn-secondary btn-sm" onClick={closeModal}>
+            Close
+          </button>
+        }
+      >
+        {loadingDetail ? (
+          <div style={{ textAlign: 'center', padding: 40 }}>
+            <div className="loading-spinner md" style={{ margin: '0 auto' }} />
+            <p style={{ marginTop: 12, color: 'var(--text-secondary)', fontSize: 13 }}>
+              Loading book details...
+            </p>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+
+            {/* Section 1 — Book Information */}
+            <div>
+              <h4 style={sectionHeadStyle}>Book Information</h4>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px 24px' }}>
+                {[
+                  {
+                    label: 'Status',
+                    value: status ? <Badge variant={getStatusVariant(status)}>{status}</Badge> : '—',
+                  },
+                  { label: 'Barcode', value: selectedBook?.barcode || '—', mono: true },
+                  { label: 'Static Code', value: selectedBook?.static_code || detail?.static_code || '—', mono: true },
+                  { label: 'Ticket Price', value: formatCurrency(detail?.ticket_price ?? selectedBook?.ticket_price) },
+                  {
+                    label: 'Current Slot',
+                    value: selectedBook?.slot_name || selectedBook?.slot?.slot_name || '—',
+                  },
+                  { label: 'Created', value: formatDate(selectedBook?.created_at) },
+                ].map((item) => (
+                  <div key={item.label}>
+                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 2 }}>
+                      {item.label}
+                    </div>
+                    <div style={{ fontWeight: 600, fontSize: 14, fontFamily: item.mono ? 'monospace' : undefined }}>
+                      {item.value}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Section 2 — Assignment History */}
+            <div>
+              <h4 style={sectionHeadStyle}>
+                Assignment History {history.length > 0 && `(${history.length})`}
+              </h4>
+              {history.length === 0 ? (
+                <p style={{ fontSize: 13, color: 'var(--text-secondary)', padding: '12px 0' }}>
+                  No assignment history.
+                </p>
+              ) : (
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                    <thead>
+                      <tr style={{ borderBottom: '1px solid var(--border)' }}>
+                        {['Slot', 'Price', 'Assigned At', 'Assigned By', 'Unassigned At', 'Reason'].map((h) => (
+                          <th
+                            key={h}
+                            style={{
+                              padding: '6px 10px',
+                              textAlign: 'left',
+                              fontSize: 11,
+                              fontWeight: 700,
+                              color: 'var(--text-secondary)',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.05em',
+                              whiteSpace: 'nowrap',
+                            }}
+                          >
+                            {h}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {history.map((entry, i) => (
+                        <tr
+                          key={entry.assignment_id ?? i}
+                          style={{ borderBottom: i < history.length - 1 ? '1px solid var(--border)' : 'none' }}
+                        >
+                          <td style={tdStyle}>{entry.slot_name || '—'}</td>
+                          <td style={tdStyle}>{formatCurrency(entry.ticket_price)}</td>
+                          <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>{formatLocalDateTime(entry.assigned_at)}</td>
+                          <td style={tdStyle}>{entry.assigned_by?.username || '—'}</td>
+                          <td style={{ ...tdStyle, whiteSpace: 'nowrap' }}>
+                            {entry.unassigned_at ? formatLocalDateTime(entry.unassigned_at) : (
+                              <Badge variant="green">Active</Badge>
+                            )}
+                          </td>
+                          <td style={tdStyle}>
+                            {entry.unassign_reason
+                              ? <Badge variant={reasonVariant(entry.unassign_reason)}>{unassignReasonLabel(entry.unassign_reason)}</Badge>
+                              : '—'
+                            }
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+          </div>
+        )}
+      </Modal>
     </div>
   )
+}
+
+function reasonVariant(reason) {
+  switch (reason) {
+    case 'sold': return 'gray'
+    case 'returned_to_vendor': return 'amber'
+    case 'reassigned': return 'blue'
+    default: return 'gray'
+  }
+}
+
+const sectionHeadStyle = {
+  fontSize: 13,
+  fontWeight: 700,
+  marginBottom: 10,
+  color: 'var(--text-secondary)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.06em',
+}
+
+const tdStyle = {
+  padding: '8px 10px',
+  verticalAlign: 'top',
 }

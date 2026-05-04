@@ -599,28 +599,6 @@ function buildReportHtml(report, t, isRTL) {
     body += `</div>`;
   }
 
-  // Slot information
-  if (shift.slot_information?.length > 0) {
-    body += `<h2>Slot Information</h2>`;
-    for (const item of shift.slot_information) {
-      body += `<div class="card slot-card">`;
-      body += `<div class="slot-header"><span class="slot-name">${esc(item.slot_name)}</span><span class="slot-price">$${esc(item.ticket_price)}</span></div>`;
-      body += kvRow('Slot Created', item.slot_created_at ? fmtTime(item.slot_created_at) : '—');
-      body += kvRow('Book Assigned', item.assigned_at ? fmtTime(item.assigned_at) : '—');
-      body += kvRow('Assigned By', item.assigned_by || '—');
-      body += kvRow('Barcode', item.book_barcode || '—');
-      body += `<hr class="divider" />`;
-      body += kvRow('Open Position', item.open_position ?? '—');
-      body += kvRow('Close Position', item.close_position ?? '—');
-      body += kvRow('Tickets Sold', item.tickets_sold);
-      body += `<div class="slot-total-row"><span class="slot-total-label">Subtotal</span><span class="slot-total-value">$${esc(item.subtotal)}</span></div>`;
-      if (item.is_last_ticket) {
-        body += `<span class="last-ticket-badge">Last Ticket Sold</span>`;
-      }
-      body += `</div>`;
-    }
-  }
-
   body += `<div class="footer">${esc(t('report.export.generatedAt'))}: ${new Date().toLocaleString()}</div>`;
 
   // ── CSS ───────────────────────────────────────────────────────────────────
@@ -663,14 +641,6 @@ hr.divider { border: none; border-top: 1px solid #eee; margin: 10px 0; }
 .book-meta { font-size: 11px; color: #666; margin-top: 2px; }
 .date-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
 .footer { text-align: center; color: #aaa; font-size: 11px; margin-top: 24px; }
-.slot-card { border-left: 3px solid #1a73e8; }
-.slot-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-.slot-name { font-size: 15px; font-weight: 700; color: #222; }
-.slot-price { font-size: 13px; font-weight: 700; color: #1a73e8; }
-.slot-total-row { display: flex; justify-content: space-between; padding: 6px 0; margin-top: 4px; }
-.slot-total-label { font-size: 13px; font-weight: 700; color: #333; }
-.slot-total-value { font-size: 14px; font-weight: 700; color: #222; }
-.last-ticket-badge { display: inline-block; background: #dcfce7; color: #166534; border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 700; margin-top: 8px; }
 </style>
 </head>
 <body>
