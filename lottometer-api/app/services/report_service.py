@@ -10,6 +10,7 @@ from app.models.shift_extra_sales import ShiftExtraSales
 from app.models.book import Book
 from app.models.slot import Slot
 from app.models.user import User
+from app.models.book_assignment_history import BookAssignmentHistory
 from app.errors import NotFoundError
 
 
@@ -218,6 +219,81 @@ def _ticket_breakdown_for_subshift(
     return lines
 
 
+def _build_slot_information(
+    store_id: int,
+    all_scan_rows: list,
+) -> list[dict]:
+    """One card per open-scanned book: slot metadata + assignment provenance."""
+    open_scans = {s.static_code: s for s in all_scan_rows if s.scan_type == "open"}
+    close_scans = {s.static_code: s for s in all_scan_rows if s.scan_type == "close"}
+    if not open_scans:
+        return []
+
+    book_map = _build_book_map_by_static_code(set(open_scans), store_id)
+    book_ids = [b.book_id for b in book_map.values()]
+
+    # Batch slot objects (need created_at, not just name)
+    slot_ids = {b.slot_id for b in book_map.values() if b.slot_id}
+    slot_obj_map: dict[int, Slot] = (
+        {s.slot_id: s for s in Slot.query.filter(Slot.slot_id.in_(slot_ids)).all()}
+        if slot_ids else {}
+    )
+
+    # Batch latest BookAssignmentHistory per book
+    assignment_map: dict[int, BookAssignmentHistory] = {}
+    if book_ids:
+        for a in (
+            BookAssignmentHistory.query
+            .filter(
+                BookAssignmentHistory.book_id.in_(book_ids),
+                BookAssignmentHistory.store_id == store_id,
+            )
+            .order_by(BookAssignmentHistory.assigned_at.desc())
+            .all()
+        ):
+            assignment_map.setdefault(a.book_id, a)
+
+    assignor_ids = {a.assigned_by_user_id for a in assignment_map.values() if a.assigned_by_user_id}
+    assignor_map = _build_user_map(assignor_ids)
+
+    result = []
+    for static_code in sorted(open_scans):
+        book = book_map.get(static_code)
+        if book is None:
+            continue
+
+        open_scan  = open_scans[static_code]
+        close_scan = close_scans.get(static_code)
+        slot       = slot_obj_map.get(book.slot_id) if book.slot_id else None
+        assignment = assignment_map.get(book.book_id)
+        assignor   = assignor_map.get(assignment.assigned_by_user_id) if assignment else None
+
+        tickets_sold = 0
+        subtotal = Decimal("0.00")
+        if close_scan:
+            tickets_sold = close_scan.start_at_scan - open_scan.start_at_scan
+            if close_scan.is_last_ticket:
+                tickets_sold += 1
+            subtotal = (Decimal(tickets_sold) * (book.ticket_price or Decimal("0.00"))).quantize(Decimal("0.01"))
+
+        result.append({
+            "slot_name":       slot.slot_name if slot else "—",
+            "slot_created_at": slot.created_at.isoformat() + "Z" if slot and slot.created_at else None,
+            "book_barcode":    book.barcode,
+            "static_code":     book.static_code,
+            "ticket_price":    _money(book.ticket_price),
+            "assigned_at":     assignment.assigned_at.isoformat() + "Z" if assignment else None,
+            "assigned_by":     assignor.username if assignor else "—",
+            "open_position":   open_scan.start_at_scan,
+            "close_position":  close_scan.start_at_scan if close_scan else None,
+            "tickets_sold":    tickets_sold,
+            "subtotal":        str(subtotal),
+            "is_last_ticket":  close_scan.is_last_ticket if close_scan else False,
+        })
+
+    return result
+
+
 def get_shift_report(store_id: int, employee_shift_id: int) -> dict:
     """Assemble the full report payload for an EmployeeShift."""
     shift = (
@@ -257,6 +333,7 @@ def get_shift_report(store_id: int, employee_shift_id: int) -> dict:
     )
     whole_book_sales = _whole_book_sales_for_subshift(employee_shift_id, store_id, user_map)
     ticket_breakdown = _ticket_breakdown_for_subshift(employee_shift_id, store_id)
+    slot_information = _build_slot_information(store_id, all_scan_rows)
 
     return {
         "shift": {
@@ -283,6 +360,7 @@ def get_shift_report(store_id: int, employee_shift_id: int) -> dict:
             "books": regular_books,
             "whole_book_sales": whole_book_sales,
             "returned_books": returned_books,
+            "slot_information": slot_information,
         },
         "business_day": {
             "id": business_day.id,

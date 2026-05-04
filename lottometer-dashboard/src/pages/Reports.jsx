@@ -485,6 +485,56 @@ export default function Reports() {
                 </div>
               </div>
             )}
+
+            {/* Slot Information */}
+            {reportData.shift?.slot_information?.length > 0 && (
+              <div>
+                <h4 style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
+                  Slot Information ({reportData.shift.slot_information.length})
+                </h4>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {reportData.shift.slot_information.map((item, i) => (
+                    <div
+                      key={i}
+                      style={{
+                        background: '#F8FAFF',
+                        borderRadius: 8,
+                        padding: '12px 14px',
+                        borderLeft: '3px solid #1a73e8',
+                      }}
+                    >
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                        <span style={{ fontWeight: 700, fontSize: 14, color: '#222' }}>{item.slot_name}</span>
+                        <span style={{ fontWeight: 700, fontSize: 13, color: '#1a73e8' }}>${item.ticket_price}</span>
+                      </div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '4px 16px', fontSize: 12 }}>
+                        <div style={{ color: 'var(--text-secondary)' }}>Barcode</div>
+                        <div style={{ fontFamily: 'monospace', fontWeight: 600 }}>{item.book_barcode || '—'}</div>
+                        <div style={{ color: 'var(--text-secondary)' }}>Assigned By</div>
+                        <div>{item.assigned_by || '—'}</div>
+                        <div style={{ color: 'var(--text-secondary)' }}>Book Assigned</div>
+                        <div>{item.assigned_at ? formatLocalTime(item.assigned_at) : '—'}</div>
+                        <div style={{ color: 'var(--text-secondary)' }}>Open Position</div>
+                        <div>{item.open_position ?? '—'}</div>
+                        <div style={{ color: 'var(--text-secondary)' }}>Close Position</div>
+                        <div>{item.close_position ?? '—'}</div>
+                        <div style={{ color: 'var(--text-secondary)' }}>Tickets Sold</div>
+                        <div style={{ fontWeight: 600 }}>{item.tickets_sold}</div>
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 8, borderTop: '1px solid var(--border)' }}>
+                        <span style={{ fontSize: 13, fontWeight: 700, color: '#333' }}>Subtotal</span>
+                        <span style={{ fontSize: 14, fontWeight: 700, color: '#222' }}>${item.subtotal}</span>
+                      </div>
+                      {item.is_last_ticket && (
+                        <div style={{ marginTop: 6 }}>
+                          <Badge variant="green">Last Ticket Sold</Badge>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         ) : (
           <p style={{ color: 'var(--text-secondary)', fontSize: 13 }}>No report data available.</p>

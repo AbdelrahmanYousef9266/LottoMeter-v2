@@ -390,6 +390,41 @@ export default function ReportDetailScreen({ route }) {
             </View>
           </>
         )}
+
+        {shift.slot_information?.length > 0 && (
+          <>
+            <SectionTitle text="Slot Information" />
+            {shift.slot_information.map((item, index) => (
+              <View key={index} style={styles.slotCard}>
+                <View style={styles.slotHeader}>
+                  <Text style={styles.slotName}>{item.slot_name}</Text>
+                  <Text style={styles.slotTicketPrice}>${item.ticket_price}</Text>
+                </View>
+
+                <SlotRow label="Slot Created"   value={item.slot_created_at ? formatLocalDateTime(item.slot_created_at) : '—'} />
+                <SlotRow label="Book Assigned"  value={item.assigned_at ? formatLocalDateTime(item.assigned_at) : '—'} />
+                <SlotRow label="Assigned By"    value={item.assigned_by} />
+                <SlotRow label="Barcode"        value={item.book_barcode} />
+
+                <View style={styles.slotDivider} />
+
+                <SlotRow label="Open Position"  value={item.open_position ?? '—'} />
+                <SlotRow label="Close Position" value={item.close_position ?? '—'} />
+                <SlotRow label="Tickets Sold"   value={item.tickets_sold} />
+                <View style={styles.slotTotalRow}>
+                  <Text style={styles.slotTotalLabel}>Subtotal</Text>
+                  <Text style={styles.slotTotalValue}>${item.subtotal}</Text>
+                </View>
+
+                {item.is_last_ticket && (
+                  <View style={styles.lastTicketBadge}>
+                    <Text style={styles.lastTicketText}>Last Ticket Sold</Text>
+                  </View>
+                )}
+              </View>
+            ))}
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -438,6 +473,15 @@ function KV({ k, v, vColor }) {
     <View style={styles.kvRow}>
       <Text style={styles.kvKey}>{k}</Text>
       <Text style={[styles.kvValue, vColor && { color: vColor }]}>{v ?? '—'}</Text>
+    </View>
+  );
+}
+
+function SlotRow({ label, value }) {
+  return (
+    <View style={styles.kvRow}>
+      <Text style={styles.kvKey}>{label}</Text>
+      <Text style={styles.kvValue}>{value ?? '—'}</Text>
     </View>
   );
 }
@@ -555,6 +599,28 @@ function buildReportHtml(report, t, isRTL) {
     body += `</div>`;
   }
 
+  // Slot information
+  if (shift.slot_information?.length > 0) {
+    body += `<h2>Slot Information</h2>`;
+    for (const item of shift.slot_information) {
+      body += `<div class="card slot-card">`;
+      body += `<div class="slot-header"><span class="slot-name">${esc(item.slot_name)}</span><span class="slot-price">$${esc(item.ticket_price)}</span></div>`;
+      body += kvRow('Slot Created', item.slot_created_at ? fmtTime(item.slot_created_at) : '—');
+      body += kvRow('Book Assigned', item.assigned_at ? fmtTime(item.assigned_at) : '—');
+      body += kvRow('Assigned By', item.assigned_by || '—');
+      body += kvRow('Barcode', item.book_barcode || '—');
+      body += `<hr class="divider" />`;
+      body += kvRow('Open Position', item.open_position ?? '—');
+      body += kvRow('Close Position', item.close_position ?? '—');
+      body += kvRow('Tickets Sold', item.tickets_sold);
+      body += `<div class="slot-total-row"><span class="slot-total-label">Subtotal</span><span class="slot-total-value">$${esc(item.subtotal)}</span></div>`;
+      if (item.is_last_ticket) {
+        body += `<span class="last-ticket-badge">Last Ticket Sold</span>`;
+      }
+      body += `</div>`;
+    }
+  }
+
   body += `<div class="footer">${esc(t('report.export.generatedAt'))}: ${new Date().toLocaleString()}</div>`;
 
   // ── CSS ───────────────────────────────────────────────────────────────────
@@ -597,6 +663,14 @@ hr.divider { border: none; border-top: 1px solid #eee; margin: 10px 0; }
 .book-meta { font-size: 11px; color: #666; margin-top: 2px; }
 .date-label { font-size: 11px; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
 .footer { text-align: center; color: #aaa; font-size: 11px; margin-top: 24px; }
+.slot-card { border-left: 3px solid #1a73e8; }
+.slot-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+.slot-name { font-size: 15px; font-weight: 700; color: #222; }
+.slot-price { font-size: 13px; font-weight: 700; color: #1a73e8; }
+.slot-total-row { display: flex; justify-content: space-between; padding: 6px 0; margin-top: 4px; }
+.slot-total-label { font-size: 13px; font-weight: 700; color: #333; }
+.slot-total-value { font-size: 14px; font-weight: 700; color: #222; }
+.last-ticket-badge { display: inline-block; background: #dcfce7; color: #166534; border-radius: 6px; padding: 3px 10px; font-size: 11px; font-weight: 700; margin-top: 8px; }
 </style>
 </head>
 <body>
@@ -725,4 +799,43 @@ const styles = StyleSheet.create({
   bookCode: { fontSize: 14, fontWeight: '600', color: '#222' },
   bookValue: { fontSize: 14, fontWeight: '600', color: '#222' },
   bookMeta: { fontSize: 12, color: '#666', marginTop: 2 },
+
+  slotCard: {
+    backgroundColor: '#fff',
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 10,
+    borderLeftWidth: 3,
+    borderLeftColor: '#1a73e8',
+  },
+  slotHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  slotName: { fontSize: 16, fontWeight: '700', color: '#222', flex: 1 },
+  slotTicketPrice: { fontSize: 14, fontWeight: '700', color: '#1a73e8' },
+  slotDivider: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: '#ddd',
+    marginVertical: 8,
+  },
+  slotTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 6,
+    marginTop: 4,
+  },
+  slotTotalLabel: { fontSize: 13, fontWeight: '700', color: '#333' },
+  slotTotalValue: { fontSize: 14, fontWeight: '700', color: '#222' },
+  lastTicketBadge: {
+    backgroundColor: '#dcfce7',
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    alignSelf: 'flex-start',
+    marginTop: 8,
+  },
+  lastTicketText: { fontSize: 11, fontWeight: '700', color: '#166534' },
 });
