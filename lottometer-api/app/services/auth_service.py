@@ -177,3 +177,24 @@ def verify_store_pin(store_id: int, user_id: int, pin: str) -> None:
 
     # Success — clear any prior failures
     pin_rate_limiter.reset(user_id, store_id)
+
+
+def change_password(user_id: int, store_id: int, current_password: str, new_password: str, confirm_password: str) -> None:
+    """Update a user's password after verifying the current one.
+
+    Raises ValidationError with specific codes on each failure condition.
+    """
+    from app.errors import ValidationError
+
+    if len(new_password) < 8:
+        raise ValidationError("Password must be at least 8 characters.", code="PASSWORD_TOO_SHORT")
+
+    if new_password != confirm_password:
+        raise ValidationError("New passwords do not match.", code="PASSWORD_MISMATCH")
+
+    user = User.query.filter_by(user_id=user_id, store_id=store_id).first()
+    if user is None or not _check_password(current_password, user.password_hash):
+        raise ValidationError("Current password is incorrect.", code="WRONG_PASSWORD")
+
+    user.password_hash = _hash_password(new_password)
+    db.session.commit()

@@ -27,5 +27,12 @@ class StoreSettings(db.Model):
         db.Boolean, nullable=False, default=False, server_default="false"
     )
 
+    # Report email delivery settings
+    report_email = db.Column(db.String(150), nullable=True)
+    report_format = db.Column(db.String(10), nullable=False, default="html", server_default="html")
+    # report_format: 'html' | 'pdf'
+    report_delay_hours = db.Column(db.Float, nullable=False, default=1.0, server_default="1.0")
+    report_enabled = db.Column(db.Boolean, nullable=False, default=True, server_default="true")
+
     def __repr__(self) -> str:
         return f"<StoreSettings store_id={self.store_id} tz={self.timezone}>"

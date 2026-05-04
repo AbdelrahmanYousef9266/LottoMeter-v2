@@ -118,6 +118,23 @@ def close_business_day(
     day.closed_at      = datetime.now(timezone.utc)
 
     db.session.commit()
+
+    # Send daily report email — never let this break the close
+    try:
+        from app.services.email_service import send_daily_report_email
+        from app.models.store_settings import StoreSettings
+        from app.models.store import Store
+
+        store = Store.query.get(store_id)
+        settings = StoreSettings.query.filter_by(store_id=store_id).first()
+        if store and settings:
+            send_daily_report_email(store, day, shifts, settings)
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(
+            f'[email] Report email failed for store {store_id}: {str(e)}'
+        )
+
     return day
 
 

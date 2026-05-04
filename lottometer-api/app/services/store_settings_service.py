@@ -1,14 +1,18 @@
 """Store settings service — CRUD for per-store configuration."""
 
+import re
+
 from app.extensions import db
 from app.models.store_settings import StoreSettings
 from app.errors import ValidationError
 
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 _UPDATABLE = {
     "timezone", "currency", "business_hours_start", "business_hours_end",
     "max_employees", "auto_close_business_day", "notify_email",
     "notify_on_variance", "notify_on_shift_close",
+    "report_email", "report_format", "report_delay_hours", "report_enabled",
 }
 
 
@@ -78,6 +82,40 @@ def update_settings(store_id: int, data: dict) -> StoreSettings:
                 raise ValidationError(f"{field} must be a boolean.")
             setattr(settings, field, v)
 
+    if "report_email" in data:
+        v = data["report_email"]
+        if v is None:
+            settings.report_email = None
+        else:
+            v = str(v).strip()
+            if v and not _EMAIL_RE.match(v):
+                raise ValidationError("report_email must be a valid email address.")
+            if len(v) > 150:
+                raise ValidationError("report_email must be at most 150 characters.")
+            settings.report_email = v or None
+
+    if "report_format" in data:
+        v = data["report_format"]
+        if v not in ("html", "pdf"):
+            raise ValidationError("report_format must be 'html' or 'pdf'.")
+        settings.report_format = v
+
+    if "report_delay_hours" in data:
+        v = data["report_delay_hours"]
+        try:
+            v = float(v)
+        except (TypeError, ValueError):
+            raise ValidationError("report_delay_hours must be a number.")
+        if v < 0:
+            raise ValidationError("report_delay_hours must be 0 or greater.")
+        settings.report_delay_hours = v
+
+    if "report_enabled" in data:
+        v = data["report_enabled"]
+        if not isinstance(v, bool):
+            raise ValidationError("report_enabled must be a boolean.")
+        settings.report_enabled = v
+
     db.session.commit()
     return settings
 
@@ -95,4 +133,8 @@ def serialize_settings(s: StoreSettings) -> dict:
         "notify_email":            s.notify_email,
         "notify_on_variance":      s.notify_on_variance,
         "notify_on_shift_close":   s.notify_on_shift_close,
+        "report_email":            s.report_email,
+        "report_format":           s.report_format,
+        "report_delay_hours":      s.report_delay_hours,
+        "report_enabled":          s.report_enabled,
     }

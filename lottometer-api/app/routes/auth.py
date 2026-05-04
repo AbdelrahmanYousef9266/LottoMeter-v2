@@ -83,6 +83,28 @@ def me():
     })
 
 
+@auth_bp.route("/change-password", methods=["PUT"])
+@jwt_required()
+def change_password():
+    """Change the authenticated user's password."""
+    body = request.get_json() or {}
+    current_password = body.get("current_password", "")
+    new_password = body.get("new_password", "")
+    confirm_password = body.get("confirm_password", "")
+
+    if not current_password or not new_password or not confirm_password:
+        raise ValidationError("current_password, new_password, and confirm_password are required.")
+
+    auth_service.change_password(
+        user_id=current_user_id(),
+        store_id=current_store_id(),
+        current_password=current_password,
+        new_password=new_password,
+        confirm_password=confirm_password,
+    )
+    return jsonify({"message": "Password updated successfully."}), 200
+
+
 @auth_bp.route("/admin-only", methods=["GET"])
 @admin_required
 def admin_only():

@@ -61,3 +61,12 @@ def update_store_settings():
     body = request.get_json(silent=True) or {}
     settings = update_settings(current_store_id(), body)
     return jsonify({"settings": serialize_settings(settings)}), 200
+
+
+@store_bp.route("/profile", methods=["PUT"])
+@admin_required
+def update_store_profile():
+    """Admin-only: update store profile (name, owner, contact, address)."""
+    body = request.get_json(silent=True) or {}
+    result = store_service.update_profile(current_store_id(), body)
+    return jsonify({"store": result}), 200
