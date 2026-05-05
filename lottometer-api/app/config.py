@@ -37,6 +37,7 @@ class TestingConfig(Config):
     TESTING = True
     SQLALCHEMY_DATABASE_URI = "sqlite:///:memory:"
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
+    RATELIMIT_ENABLED = False
 
 
 class ProductionConfig(Config):
