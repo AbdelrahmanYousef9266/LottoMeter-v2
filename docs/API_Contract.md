@@ -1,6 +1,6 @@
 # API Contract — LottoMeter v2.0
 
-**Version:** 3.0
+**Version:** 4.0
 **Date:** May 2026
 **Base URL:** `/api`
 **Auth:** JWT in `Authorization: Bearer <token>` header (except where noted)
@@ -108,9 +108,74 @@ Adds current JWT's `jti` to the server-side blocklist until its natural expiry.
 }
 ```
 
+### PUT /api/auth/change-password
+JWT required. Any authenticated user may change their own password.
+
+**Request**
+```json
+{
+  "current_password": "oldpass123",
+  "new_password": "newpass456",
+  "confirm_password": "newpass456"
+}
+```
+
+**Response 200**
+```json
+{ "message": "Password changed successfully." }
+```
+
+**Errors:** 400 `WRONG_PASSWORD`, 400 `PASSWORD_MISMATCH`, 400 `PASSWORD_TOO_SHORT` (minimum 8 characters)
+
 ---
 
-## 2. Store Settings
+## 2. Store Profile
+
+### GET /api/store/profile
+Any authenticated user. Returns the store's public profile fields.
+
+**Response 200**
+```json
+{
+  "store": {
+    "store_id": 1,
+    "store_name": "Lucky Mart",
+    "store_code": "LM001",
+    "owner_name": "John Doe",
+    "email": "john@lm001.com",
+    "phone": "555-1234",
+    "address": "123 Main St",
+    "city": "Austin",
+    "state": "TX",
+    "zip_code": "78701"
+  }
+}
+```
+
+### PUT /api/store/profile
+Admin-only. Update store contact/profile fields. `store_code` is never modified by this endpoint.
+
+**Request** (any subset)
+```json
+{
+  "store_name": "Lucky Mart Updated",
+  "owner_name": "Jane Doe",
+  "email": "jane@lm001.com",
+  "phone": "555-9999",
+  "address": "456 Oak Ave",
+  "city": "Dallas",
+  "state": "TX",
+  "zip_code": "75201"
+}
+```
+
+**Response 200** — updated store profile object (same shape as GET)
+
+**Errors:** 400 `INVALID_EMAIL`
+
+---
+
+## 3. Store Settings
 
 ### PUT /api/store/settings/pin
 Admin-only. Change the store's 4-digit PIN.
@@ -157,7 +222,11 @@ Any authenticated user. Retrieve the store's operational settings.
     "auto_close_business_day": false,
     "notify_email": null,
     "notify_on_variance": true,
-    "notify_on_shift_close": false
+    "notify_on_shift_close": false,
+    "report_email": null,
+    "report_format": "html",
+    "report_delay_hours": 1.0,
+    "report_enabled": true
   }
 }
 ```
@@ -175,15 +244,21 @@ Admin-only. Update any subset of the store settings. Fields not supplied are unc
   "notify_on_variance": true,
   "notify_on_shift_close": false,
   "max_employees": 5,
-  "auto_close_business_day": false
+  "auto_close_business_day": false,
+  "report_email": "owner@store.com",
+  "report_format": "html",
+  "report_delay_hours": 0.5,
+  "report_enabled": true
 }
 ```
 
 **Response 200** — updated settings object (same shape as GET)
 
+**Errors:** 400 `INVALID_EMAIL` (report_email), 400 `INVALID_REPORT_FORMAT` (must be `html` or `text`), 400 `INVALID_REPORT_DELAY` (must be 0–24)
+
 ---
 
-## 3. Users
+## 4. Users
 
 Admin-only endpoints. All queries scoped to JWT's `store_id`.
 
@@ -241,7 +316,7 @@ Soft-delete. Sets `deleted_at`.
 
 ---
 
-## 4. Slots
+## 5. Slots
 
 ### GET /api/slots
 **Response 200**
@@ -314,7 +389,7 @@ Admin-only. Soft-delete multiple slots. Entire batch rolls back if any slot is o
 
 ---
 
-## 5. Books
+## 6. Books
 
 ### GET /api/books
 **Query params:** `is_active`, `is_sold`, `returned` (bool filters)
@@ -411,7 +486,7 @@ Any authenticated user. Requires store PIN.
 
 ---
 
-## 6. Shifts
+## 7. Shifts
 
 ### POST /api/shifts
 Opens a new EmployeeShift. Auto-creates today's BusinessDay if needed.
@@ -463,7 +538,16 @@ Live-preview totals for an open shift. Used by the mobile close-shift modal.
 ### PUT /api/shifts/{id}/close
 **Request**
 ```json
-{ "cash_in_hand": "512.50", "gross_sales": "380.00", "cash_out": "20.00" }
+{ "cash_in_hand": "512.50", "gross_sales": "380.00", "cash_out": "20.00", "cancels": "5.00" }
+```
+
+- `cancels` — optional, defaults to `"0.00"`. Voided/cancelled ticket value; subtracted from `expected_cash`.
+
+**Shift close formula:**
+```
+expected_cash = gross_sales + tickets_total - cash_out - cancels
+difference    = cash_in_hand - expected_cash
+shift_status  = 'correct' | 'over' | 'short'
 ```
 
 **Response 200** — full shift + report object
@@ -482,7 +566,7 @@ Admin-only.
 
 ---
 
-## 7. Business Days
+## 8. Business Days
 
 ### GET /api/business-days
 **Response 200** — array of BusinessDay objects
@@ -496,15 +580,30 @@ Returns today's BusinessDay (auto-creates if needed).
 **Response 200** — BusinessDay with its `shifts` array
 
 ### POST /api/business-days/{id}/close
-Admin-only. Closes the day and computes aggregate totals.
+Admin-only. Closes the day and computes aggregate totals. Triggers daily report email (if enabled in StoreSettings).
 
 **Response 200** — updated BusinessDay with `total_sales` and `total_variance`
 
 **Errors:** 422 `OPEN_SHIFTS_REMAIN`, 422 `DAY_ALREADY_CLOSED`
 
+### GET /api/business-days/{id}/ticket-breakdown
+Any authenticated user. Returns tickets sold per price tier across all shifts in this BusinessDay.
+
+**Response 200**
+```json
+{
+  "business_day_id": 1,
+  "total_tickets": 85,
+  "breakdown": [
+    { "ticket_price": "5.00", "tickets_sold": 50, "subtotal": "250.00" },
+    { "ticket_price": "10.00", "tickets_sold": 35, "subtotal": "350.00" }
+  ]
+}
+```
+
 ---
 
-## 8. Scanning
+## 9. Scanning
 
 ### POST /api/scan
 Records a ticket scan during an open EmployeeShift.
@@ -537,7 +636,7 @@ Records a ticket scan during an open EmployeeShift.
 
 ---
 
-## 9. Whole-Book Sale
+## 10. Whole-Book Sale
 
 ### POST /api/shifts/{shift_id}/whole-book-sale
 Any authenticated user. Requires store PIN.
@@ -551,7 +650,7 @@ Any authenticated user. Requires store PIN.
 
 ---
 
-## 10. Reports
+## 11. Reports
 
 ### GET /api/reports/shift/{id}
 Employees may only fetch reports for their own shifts; admins have unrestricted access.
@@ -560,7 +659,7 @@ Employees may only fetch reports for their own shifts; admins have unrestricted 
 
 ---
 
-## 11. Subscription
+## 12. Subscription
 
 ### GET /api/subscription
 Any authenticated user. Returns the subscription status for the caller's store.
@@ -582,7 +681,7 @@ Any authenticated user. Returns the subscription status for the caller's store.
 
 ---
 
-## 12. Public Endpoints (no auth)
+## 13. Public Endpoints (no auth)
 
 Rate-limited. Honeypot field `website` silently accepted and discarded.
 
@@ -633,7 +732,7 @@ Rate: 5 per minute. Saves a `waitlist` signup.
 
 ---
 
-## 13. Stripe Webhook (placeholder)
+## 14. Stripe Webhook (placeholder)
 
 ### POST /api/stripe/webhook
 Stripe event handler. Currently a no-op placeholder while payments are disabled. Returns 200 immediately when `PAYMENTS_ENABLED = False`.
@@ -651,7 +750,7 @@ When payments are enabled, this endpoint will:
 
 ---
 
-## 14. Superadmin Endpoints
+## 15. Superadmin Endpoints
 
 All require `role == 'superadmin'` in the JWT. Cross-store. Not scoped to a single store.
 
@@ -867,20 +966,24 @@ Extend the store's trial period by N days.
 
 ---
 
-## 15. Sync Endpoints (coming soon — Phase 5a)
+## 16. Sync Endpoints (ready but pending — Phase 5b backend)
 
-The following endpoints are planned for Phase 5a (Offline Mode sync). They accept batches of records created offline and apply them server-side idempotently using the client-generated UUIDs.
+Offline mode is complete on the mobile client. The following server-side sync endpoints are pending implementation. The mobile app queues offline records and will call these when they ship.
 
-| Method | Endpoint | Description |
-|---|---|---|
-| POST | /api/sync/scans | Sync a batch of offline scan records |
-| GET | /api/sync/status | Check which queued items have been processed |
+All sync operations will be idempotent: sending the same UUID twice is a no-op.
 
-Request/response shapes are TBD. All sync operations will be idempotent: sending the same UUID twice is a no-op.
+| Method | Endpoint | Description | Status |
+|---|---|---|---|
+| POST | /api/sync/business-days | Sync an offline-created BusinessDay | Pending |
+| POST | /api/sync/shifts | Sync an offline-created EmployeeShift | Pending |
+| POST | /api/sync/scans | Sync a batch of offline scan records | Pending |
+| POST | /api/sync/close-shifts | Sync an offline shift close with financials | Pending |
+
+Request/response shapes TBD. UUIDs on `EmployeeShift`, `BusinessDay`, and `ShiftBooks` are the idempotency keys (see ERD §Offline Sync UUID Fields).
 
 ---
 
-## 16. Barcode Parsing Contract
+## 17. Barcode Parsing Contract
 
 Barcode format: `<static_code><3-digit-position>`
 
@@ -896,7 +999,7 @@ Example: `1234567890149` with `ticket_price=1.00`
 
 ---
 
-## 17. PIN Rate Limiting
+## 18. PIN Rate Limiting
 
 Applies to: `POST /api/books/{id}/return-to-vendor`, `POST /api/shifts/{id}/whole-book-sale`
 
@@ -907,7 +1010,7 @@ Applies to: `POST /api/books/{id}/return-to-vendor`, `POST /api/shifts/{id}/whol
 
 ---
 
-## 18. Endpoint Quick Reference
+## 19. Endpoint Quick Reference
 
 | Method | Endpoint | Auth | Role |
 |---|---|---|---|
@@ -915,6 +1018,9 @@ Applies to: `POST /api/books/{id}/return-to-vendor`, `POST /api/shifts/{id}/whol
 | POST | /api/auth/login | — | — |
 | POST | /api/auth/logout | JWT | any |
 | GET | /api/auth/me | JWT | any |
+| PUT | /api/auth/change-password | JWT | any |
+| GET | /api/store/profile | JWT | any |
+| PUT | /api/store/profile | JWT | admin |
 | PUT | /api/store/settings/pin | JWT | admin |
 | PUT | /api/store/settings/scan-mode | JWT | admin |
 | GET | /api/store/settings | JWT | any |
@@ -949,6 +1055,7 @@ Applies to: `POST /api/books/{id}/return-to-vendor`, `POST /api/shifts/{id}/whol
 | GET | /api/business-days/today | JWT | any |
 | GET | /api/business-days/{id} | JWT | any |
 | POST | /api/business-days/{id}/close | JWT | admin |
+| GET | /api/business-days/{id}/ticket-breakdown | JWT | any |
 | POST | /api/scan | JWT | any |
 | POST | /api/shifts/{id}/whole-book-sale | JWT | any (PIN) |
 | GET | /api/reports/shift/{id} | JWT | any |

@@ -1,14 +1,14 @@
 # Entity Relationship Diagram — LottoMeter v2.0
 
-**Version:** 4.0
+**Version:** 5.0
 **Date:** May 2026
-**Status:** Current — reflects all models through Phase 4h (subscription system)
+**Status:** Current — reflects all models through Phase 5 (offline mode, report settings, cancels field)
 
 ---
 
 ## Overview
 
-LottoMeter v2.0 uses 13 models. Every non-Store operational table carries `store_id` for multi-tenancy. The Subscription, StoreSettings, AuditLog, and ContactSubmission models were added in Phase 4h to support commercial operations and the superadmin panel.
+LottoMeter v2.0 uses 13 models. Every non-Store operational table carries `store_id` for multi-tenancy. The Subscription, StoreSettings, AuditLog, and ContactSubmission models were added in Phase 4h to support commercial operations and the superadmin panel. StoreSettings gained four report fields in Phase 5. EmployeeShift gained the `cancels` field in Phase 5.
 
 ---
 
@@ -137,6 +137,7 @@ erDiagram
         decimal cash_in_hand
         decimal gross_sales
         decimal cash_out
+        decimal cancels
         decimal tickets_total
         decimal expected_cash
         decimal difference
@@ -210,6 +211,10 @@ erDiagram
         string notify_email
         boolean notify_on_variance
         boolean notify_on_shift_close
+        string report_email
+        string report_format
+        float report_delay_hours
+        boolean report_enabled
     }
 
     AuditLog {
@@ -387,8 +392,9 @@ One employee session within a BusinessDay.
 | cash_in_hand | Numeric(10,2) | Nullable | Entered at close |
 | gross_sales | Numeric(10,2) | Nullable | Entered at close |
 | cash_out | Numeric(10,2) | Nullable | Entered at close |
+| cancels | Numeric(10,2) | Nullable | Entered at close; voided/cancelled tickets |
 | tickets_total | Numeric(10,2) | Nullable | Auto-calculated at close |
-| expected_cash | Numeric(10,2) | Nullable | `gross_sales + tickets_total - cash_out` |
+| expected_cash | Numeric(10,2) | Nullable | `gross_sales + tickets_total - cash_out - cancels` |
 | difference | Numeric(10,2) | Nullable | `cash_in_hand - expected_cash` |
 | shift_status | String(20) | Nullable | `correct` \| `over` \| `short` |
 | closed_by_user_id | Integer | FK → User, Nullable | |
@@ -487,6 +493,10 @@ One row per store. Created automatically with defaults when a store is provision
 | notify_email | String(150) | Nullable | Email for system notifications |
 | notify_on_variance | Boolean | Not Null, default True | Alert on short/over shift result |
 | notify_on_shift_close | Boolean | Not Null, default False | Alert on every shift close |
+| report_email | String(150) | Nullable | Destination address for daily report emails |
+| report_format | String(10) | Not Null, default 'html' | `html` \| `text` |
+| report_delay_hours | Float | Not Null, default 1.0 | Hours to delay sending after day close |
+| report_enabled | Boolean | Not Null, default True | Master switch for daily report emails |
 
 ### 12. AuditLog
 
@@ -609,3 +619,11 @@ The mobile offline layer generates UUIDs on the device and stores them in local 
 25. **ContactSubmission table** — single table for all public form types (`contact`, `apply`, `waitlist`) using a discriminator column to avoid three near-identical tables.
 26. **uuid columns on EmployeeShift, BusinessDay, ShiftBooks** — client-generated offline identifiers for the sync queue. Nullable for backward compatibility with records created before offline mode.
 27. **scan_source adds 'offline'** — distinguishes scans created by the offline engine from server-side scans; 'offline' source records are synced to the server via the sync queue.
+
+## Schema Decision Log (v5.0 additions)
+
+28. **EmployeeShift.cancels** — captures voided/cancelled ticket value at shift close. Subtracted from `expected_cash` so cancels don't inflate the difference. Formula: `expected_cash = gross_sales + tickets_total - cash_out - cancels`.
+29. **StoreSettings.report_email** — destination for daily report emails separate from `notify_email`; allows different recipients for operational alerts vs. end-of-day report.
+30. **StoreSettings.report_format** — `html` or `text`; defaults to `html`. Allows stores with email clients that don't render HTML to receive plain-text reports.
+31. **StoreSettings.report_delay_hours** — delay between BusinessDay close and report send; default 1 hour. Gives admin time to correct errors before the report is distributed.
+32. **StoreSettings.report_enabled** — master switch; if False no report is sent regardless of other settings. Email failure never prevents BusinessDay close (wrapped in try/except).

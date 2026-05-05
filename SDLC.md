@@ -45,6 +45,7 @@ The original LottoMeter v1 was a Windows-only desktop app. Store employees are l
 - [x] SRS v5.1 — clarified scan event model + hardware scanner support
 - [x] SRS v5.2 — implementation corrections
 - [x] SRS v6.0 — updated May 2026 (13 models, 47+ endpoints, offline architecture, web dashboard)
+- [x] SRS v7.0 — updated May 2026 (offline mode complete, account settings, report email, pytest suite, 52+ endpoints)
 - [x] Business logic verified with product owner
 - [x] Functional requirements (Store, Auth, Slot, Book, Shift, Scan, Whole-book-sale, Return-to-vendor, Void, Subscription, Superadmin modules)
 - [x] UI & UX requirements (all screens — mobile + web dashboard)
@@ -60,8 +61,10 @@ The original LottoMeter v1 was a Windows-only desktop app. Store employees are l
 
 ### Deliverables
 - [x] ERD v4.0 — 13 models with constraints, relationships, partial indexes
+- [x] ERD v5.0 — StoreSettings report fields, EmployeeShift cancels field
 - [x] ERD Mermaid diagram for GitHub rendering
 - [x] API Contract v3.0 — 47+ endpoints with request/response shapes and error codes
+- [x] API Contract v4.0 — 52+ endpoints; change-password, store profile, ticket-breakdown, sync endpoints documented
 - [x] Flask folder structure finalized
 - [x] React Native folder structure finalized
 - [x] React web dashboard structure finalized
@@ -204,14 +207,16 @@ Cross-store management interface for LottoMeter platform staff. Pages: Dashboard
 | Metric | Value |
 |---|---|
 | SQLAlchemy models | 13 |
-| API endpoints | 47+ |
+| API endpoints | 52+ |
 | Flask blueprints | 12 |
 | Marshmallow schemas | 12 |
 | Services | 14 |
-| Database migrations | 15+ |
-| React web pages | 15 |
-| Lines of Python (approx) | ~8,500 |
-| Lines of JavaScript (approx) | ~12,000 |
+| Database migrations | 16+ |
+| React web pages | 18 |
+| Offline SQLite tables | 9 |
+| Test coverage | 46 tests (pytest) |
+| Lines of Python (approx) | ~9,500 |
+| Lines of JavaScript (approx) | ~15,000 |
 
 ---
 
@@ -248,19 +253,37 @@ feature/*     ← one branch per feature
 
 ## Phase 5 — Upcoming
 
-### Phase 5a — Offline Mode (SQLite-first architecture)
-**Status:** In Progress
+### Phase 5a — Offline Mode (SQLite-first architecture) ✅
 
-- [ ] Local SQLite DB setup (expo-sqlite WAL mode)
-- [ ] DB seeding: sync slots, books, shifts on login
-- [ ] Offline scan engine (mirrors all 8 server rules)
-- [ ] Sync queue (pending scans uploaded on reconnect)
-- [ ] Offline banner + sync status indicator
-- [ ] ScanScreen offline fallbacks (loadShift, loadSlots)
-- [ ] HomeScreen offline fallbacks (loadData)
-- [ ] Sync endpoints on backend (/api/sync/scans)
+**Status:** Complete | **Date:** May 2026
 
-### Phase 5b — Stripe Payment Integration
+- [x] Local SQLite DB setup (expo-sqlite WAL mode, 9 tables)
+- [x] DB seeding: sync slots, books, shifts on login
+- [x] Offline scan engine (mirrors all 8 server rules locally)
+- [x] Offline PIN login with 72-hour session expiry (expo-secure-store)
+- [x] Carry-forward logic runs offline (no network required)
+- [x] Sync queue (pending scans uploaded on reconnect)
+- [x] Offline banner + sync status indicator
+- [x] ScanScreen offline fallbacks (loadShift, loadSlots)
+- [x] HomeScreen offline fallbacks (loadData)
+- [x] Auto-sync engine with conflict detection
+- [x] Cancels field added to shift close
+- [x] Slot Information section in reports (slot created, book assigned, assigned by, positions, subtotal)
+- [x] Book detail modal with assignment history
+- [x] Account Settings page (web dashboard — Profile, Hours & Reports, Security, Subscription tabs)
+- [x] Daily report email infrastructure (email_service.py + triggered on BusinessDay close)
+- [x] Pytest suite — 46/46 tests passing
+- [ ] Sync endpoints on backend (/api/sync/* — Phase 5b backend)
+
+### Phase 5b — Backend Sync Endpoints
+**Status:** Planned
+
+- [ ] POST /api/sync/business-days (idempotent, UUID-keyed)
+- [ ] POST /api/sync/shifts (idempotent, UUID-keyed)
+- [ ] POST /api/sync/scans (batch, idempotent, UUID-keyed)
+- [ ] POST /api/sync/close-shifts (offline close with financial data)
+
+### Phase 5c — Stripe Payment Integration
 **Status:** Planned
 
 - [ ] Stripe customer creation on subscription activation
@@ -269,27 +292,37 @@ feature/*     ← one branch per feature
 - [ ] Subscription enforcement middleware
 - [ ] Billing UI in web dashboard
 
-### Phase 5c — SendGrid Email Integration
-**Status:** Planned
+### Phase 5d — SendGrid Email Integration
+**Status:** Planned — Infrastructure Ready
 
+- [x] email_service.py — send_email, send_daily_report_email, HTML/text builders
+- [x] Daily report triggered on BusinessDay close
+- [x] report_email, report_format, report_delay_hours, report_enabled in StoreSettings
+- [ ] Set EMAIL_ENABLED=true + SENDGRID_API_KEY in production environment
 - [ ] Transactional emails: welcome, trial expiry warning, payment confirmation
-- [ ] Admin notifications: shift variance alerts, shift close summaries
 - [ ] Public form: auto-reply on contact/apply submission
 
-### Phase 5d — Google Play Publishing
+### Phase 5e — Google Play Publishing
 **Status:** Planned
 
 - [ ] EAS production build profile
 - [ ] Play Store listing, screenshots, privacy policy
 - [ ] Production APK submitted for review
 
-### Phase 5e — Web Dashboard Deployment
+### Phase 5f — Web Dashboard Deployment
 **Status:** Planned
 
+- [ ] Deploy dashboard to lottometer.com
 - [ ] Build pipeline for Vite + React dashboard
 - [ ] Deploy to production (Render Static Site or Cloudflare Pages)
 - [ ] Configure VITE_API_URL for production
 - [ ] Custom domain: app.lottometer.com
+
+### Phase 5g — Mobile UX Improvements
+**Status:** Planned
+
+- [ ] iPad optimization (larger screen layouts)
+- [ ] Tap-to-confirm camera scanning (reduce accidental scans)
 
 ---
 
@@ -310,27 +343,30 @@ feature/*     ← one branch per feature
 
 ---
 
-## Phase 7 — Testing ⏳
+## Phase 7 — Testing 🔄
 
-**Status:** Pending
+**Status:** In Progress
 
 ### Test Strategy
-| Type | Tool | Target |
-|---|---|---|
-| Unit tests (API) | pytest | All service layer functions |
-| Integration tests | pytest-flask | All route handlers + DB |
-| Shift validation tests | pytest | expected_cash, difference, shift_status |
-| Last ticket detection tests | pytest | All 6 price tiers |
-| Scan rule tests | pytest | All 8 scan rules |
-| PIN rate-limit tests | pytest | Lockout + reset |
-| Carry-forward tests | pytest | correct-status carry, short/over rescan |
-| Offline scan engine tests | Jest/Vitest | All 8 rules in scanEngine.js |
-| i18n tests | Manual | Language switching, RTL layout flip |
-| End-to-end | Manual | Full shift lifecycle |
+| Type | Tool | Target | Status |
+|---|---|---|---|
+| Integration tests (API) | pytest + pytest-flask | Route handlers + DB | ✅ 46 tests passing |
+| Shift validation tests | pytest | expected_cash, difference, shift_status | ✅ |
+| Scan rule tests | pytest | All 8 scan rules | ✅ |
+| Auth tests | pytest | Login, change-password, JWT | ✅ |
+| Business day tests | pytest | Lifecycle, ticket breakdown | ✅ |
+| Book tests | pytest | List, summary, detail, filters | ✅ |
+| Last ticket detection | pytest | All 6 price tiers | Planned |
+| PIN rate-limit tests | pytest | Lockout + reset | Planned |
+| Carry-forward tests | pytest | correct-status carry, short/over rescan | Planned |
+| Offline scan engine tests | Jest/Vitest | All 8 rules in scanEngine.js | Planned |
+| i18n tests | Manual | Language switching, RTL layout flip | Manual |
+| End-to-end | Manual | Full shift lifecycle | Manual |
 
 ### Deliverables
-- [ ] pytest test suite (80%+ coverage)
-- [ ] Thunder Client collection for all 47+ endpoints
+- [x] pytest test suite — 46 tests, all passing
+- [ ] Expand to 80%+ service layer coverage
+- [ ] Thunder Client collection for all 52+ endpoints
 - [ ] Test results report
 
 ---

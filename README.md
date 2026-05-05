@@ -17,6 +17,8 @@ Stores that sell lottery tickets track ticket books across shifts using barcodes
 - **Shift close** — employee scans final positions, enters cash totals; system calculates expected cash, difference, and status (correct / over / short)
 - **Admin tools** — slot and book management, user management, void, bulk operations
 - **BusinessDay** — daily container auto-created on first shift; admin closes it at end of day
+- **Offline mode** — all 8 scan rules run locally on device; scans sync to server when online
+- **Account settings** — store profile, business hours, report email, password management
 - **Superadmin panel** — LottoMeter staff manage stores, subscriptions, and form submissions
 - **Marketing site** — public landing page, pricing, apply, and contact forms
 
@@ -29,12 +31,16 @@ Stores that sell lottery tickets track ticket books across shifts using barcodes
 │  React Native App     │ ◄─────────────────────────► │  Flask REST API          │
 │  (iOS / Android)      │                              │  api.lottometer.com      │
 │  Expo SDK 54          │                              │  Render (Ohio)           │
-└───────────────────────┘                              └──────────┬───────────────┘
-                                                                  │
-┌───────────────────────┐                              ┌──────────▼───────────────┐
-│  React Web Dashboard  │ ◄─────────────────────────► │  PostgreSQL              │
-│  Vite + React 18      │                              │  Render Postgres         │
-│  (dev: localhost:3001)│                              └──────────────────────────┘
+│  + Local SQLite       │                              └──────────┬───────────────┘
+│    (offline engine)   │                                         │
+└─────────┬─────────────┘                              ┌──────────▼───────────────┐
+          │ sync on reconnect                          │  PostgreSQL              │
+          └────────────────────────────────────────────►  Render Postgres         │
+                                                       └──────────────────────────┘
+┌───────────────────────┐
+│  React Web Dashboard  │ ◄─────────────────────────► Flask API (same)
+│  Vite + React 18      │
+│  (dev: localhost:3001)│
 └───────────────────────┘
 ┌───────────────────────┐
 │  Public Marketing     │   (static pages, public API endpoints)
@@ -49,14 +55,41 @@ Stores that sell lottery tickets track ticket books across shifts using barcodes
 
 ---
 
+## Tech Stack
+
+| Layer | Technology | Notes |
+|---|---|---|
+| Mobile App | React Native (Expo SDK 54) | iOS + Android, New Architecture |
+| Web Dashboard | React 18 + Vite | 18 pages |
+| API | Flask (Python 3.11+), Gunicorn | 52+ endpoints |
+| ORM | SQLAlchemy 2.x | 13 models |
+| Serialization | Marshmallow | 12 schemas |
+| Database (dev) | SQLite | |
+| Database (prod) | PostgreSQL (Render) | |
+| Auth | Flask-JWT-Extended | 8-hour tokens |
+| Camera | expo-camera | Barcode scanning |
+| Token storage | expo-secure-store | PIN + session offline |
+| Local DB (mobile) | expo-sqlite | Offline engine (WAL mode) |
+| Network detection | @react-native-community/netinfo | Online/offline switching |
+| i18n | i18next + react-i18next | English + Arabic (RTL) |
+| Containerization | Docker + docker-compose | |
+| Deployment | Render Web Service + Render Postgres | |
+| Error tracking | Sentry | Flask + React Native |
+| Uptime monitoring | UptimeRobot | 5-min interval |
+| Testing | pytest + pytest-flask | 46 tests passing |
+| Payments | Stripe | Pending (Phase 5b) |
+| Email | SendGrid | Infrastructure ready, integration pending |
+
+---
+
 ## Folder Structure
 
 ```
 LottoMeter-v2/
 ├── docs/
-│   ├── ERD.md                    ← Entity Relationship Diagram v4.0 (13 models)
-│   ├── API_Contract.md           ← Full API endpoint reference v3.0 (47+ endpoints)
-│   ├── SRS_LottoMeter_v2.md      ← Software Requirements Specification v6.0
+│   ├── ERD.md                    ← Entity Relationship Diagram v5.0 (13 models)
+│   ├── API_Contract.md           ← Full API endpoint reference v4.0 (52+ endpoints)
+│   ├── SRS_LottoMeter_v2.md      ← Software Requirements Specification v7.0
 │   └── DEPLOYMENT_RUNBOOK.md     ← Production ops guide
 ├── lottometer-api/               ← Flask REST API
 │   ├── app/
@@ -70,7 +103,7 @@ LottoMeter-v2/
 │   │   ├── auth_helpers.py
 │   │   └── extensions.py
 │   ├── migrations/               ← Alembic migrations
-│   ├── tests/
+│   ├── tests/                    ← pytest test suite (46 tests)
 │   ├── Dockerfile
 │   ├── docker-compose.yml
 │   └── run.py
@@ -82,6 +115,7 @@ LottoMeter-v2/
 │   │   ├── hooks/                ← useFeedback
 │   │   ├── locales/              ← en.json, ar.json
 │   │   ├── navigation/           ← Stack + bottom tabs
+│   │   ├── offline/              ← Offline engine (SQLite, sync queue, scan rules)
 │   │   ├── screens/              ← All app screens
 │   │   ├── theme/                ← Colors, Radius, Shadow
 │   │   ├── utils/                ← bookConstants, scanErrorMessages, etc.
@@ -94,7 +128,8 @@ LottoMeter-v2/
 │   │   ├── components/           ← UI primitives, Layout, Charts
 │   │   ├── context/              ← AuthContext
 │   │   ├── pages/                ← Dashboard, Shifts, Reports, Books, Slots,
-│   │   │                            Users, BusinessDays, Subscription, Login
+│   │   │                            Users, BusinessDays, Subscription, Login,
+│   │   │                            AccountSettings
 │   │   │   ├── public/           ← Home, Pricing, Apply, Contact, GetStarted
 │   │   │   └── superadmin/       ← SuperDashboard, SuperStores, SuperCreateStore,
 │   │   │                            SuperSubmissions, SuperAdminLogin
@@ -139,6 +174,13 @@ flask run
 docker-compose up --build
 ```
 
+**Run tests:**
+```bash
+cd lottometer-api
+pytest tests/ -v
+# 46 tests, all passing
+```
+
 ### Mobile Setup
 
 **Prerequisites:** Node.js 20+, Expo CLI, Android Studio or physical device
@@ -179,6 +221,9 @@ npm run dev
 | `PAYMENTS_ENABLED` | No | `true` to activate Stripe webhook handler (default false) |
 | `STRIPE_SECRET_KEY` | No | Stripe secret key (required when PAYMENTS_ENABLED=true) |
 | `STRIPE_WEBHOOK_SECRET` | No | Stripe webhook signing secret |
+| `EMAIL_ENABLED` | No | `true` to send emails via SendGrid (default false) |
+| `SENDGRID_API_KEY` | No | SendGrid API key (required when EMAIL_ENABLED=true) |
+| `FROM_EMAIL` | No | Sender address for report emails |
 | `SENTRY_DSN` | No | Sentry DSN for error tracking |
 
 ### Dashboard (`lottometer-dashboard/.env`)
@@ -222,6 +267,7 @@ Produces an APK for internal distribution. For Play Store release, use `--profil
 - EmployeeShift: one per employee per day; one open shift per store enforced at DB level
 - Carry-forward from previous shift when `shift_status == 'correct'`; short/over forces full rescan
 - Live close preview: tickets_total, expected_cash, difference computed before commit
+- Cancels field captured at shift close and subtracted from expected cash
 
 ### Barcode Scanning
 - **Camera single** — scan one barcode, return to scan screen
@@ -229,11 +275,26 @@ Produces an APK for internal distribution. For Play Store release, use `--profil
 - **Hardware scanner** — keystroke-wedge mode; text input auto-focused
 - ITF-14 normalization: strips leading zero from 14-digit barcodes
 
-### Offline Mode (Phase 5a — in progress)
-- Local SQLite DB seeded with current slots, books, and shift data
+### Offline Mode
+- Local SQLite DB seeded with current slots, books, and shift data on login
 - All 8 scan validation rules run locally — no network required
+- PIN login with 72-hour session expiry (expo-secure-store)
+- Carry-forward logic runs offline
 - Sync queue uploads offline scans when connection restores
 - Offline banner visible while disconnected; close shift requires network
+
+### Account Settings
+- Store profile management (name, owner, contact info)
+- Business hours and report email configuration
+- Report settings: format, delay hours, enable/disable
+- Password change for logged-in user
+
+### Daily Report Email
+- Automatically triggered when a BusinessDay is closed
+- Branded HTML email with full shift breakdown
+- Plain-text fallback
+- Controlled by `report_enabled` setting; failure never blocks day close
+- SendGrid integration ready — awaiting `EMAIL_ENABLED=true` in production
 
 ### Subscription System
 - Each store auto-provisioned with a trial subscription on creation
@@ -269,7 +330,7 @@ Produces an APK for internal distribution. For Play Store release, use `--profil
 | `ShiftBooks` | Scan records — PK `(shift_id, static_code, scan_type)` |
 | `ShiftExtraSales` | Whole-book sales (not tied to Book rows) |
 | `Subscription` | Store billing state (trial → active → expired) |
-| `StoreSettings` | Timezone, currency, hours, notification prefs |
+| `StoreSettings` | Timezone, currency, hours, notification + report prefs |
 | `AuditLog` | Append-only platform action log |
 | `ContactSubmission` | Public form submissions (contact/apply/waitlist) |
 
@@ -311,23 +372,25 @@ Fixed in code — not configurable:
 
 ## Project Status
 
-| Phase | Status |
+| Feature / Phase | Status |
 |---|---|
 | Planning | ✅ Complete |
-| Requirements (SRS v6.0) | ✅ Complete |
-| System Design (ERD v4.0, API v3.0) | ✅ Complete |
-| Backend (47+ endpoints, 13 models) | ✅ Complete |
-| Mobile App (~95%) | ✅ Complete |
-| Web Dashboard (15 pages) | ✅ Complete (dev) |
+| Requirements (SRS v7.0) | ✅ Complete |
+| System Design (ERD v5.0, API v4.0) | ✅ Complete |
+| Backend (52+ endpoints, 13 models) | ✅ Complete |
+| Mobile App | ✅ Complete |
+| Web Dashboard (18 pages) | ✅ Complete |
 | Public Marketing Site | ✅ Complete |
 | Superadmin Panel | ✅ Complete |
 | Subscription Foundation | ✅ Complete |
-| Offline Mode (Phase 5a) | 🔄 In Progress |
-| Stripe Integration (Phase 5b) | ⏳ Planned |
-| SendGrid Email (Phase 5c) | ⏳ Planned |
-| Play Store Publishing (Phase 5d) | ⏳ Planned |
-| Web Dashboard Deployment (Phase 5e) | ⏳ Planned |
-| Automated Testing | ⏳ Planned |
+| Offline Mode | ✅ Complete |
+| Account Settings | ✅ Complete |
+| Daily Report Email | ✅ Ready (SendGrid pending) |
+| Pytest (46/46 tests) | ✅ Complete |
+| Stripe Integration | ⏳ Pending |
+| SendGrid Email | ⏳ Pending |
+| Google Play Publishing | ⏳ Pending |
+| lottometer.com Deployment | ⏳ Pending |
 
 ---
 
@@ -335,9 +398,9 @@ Fixed in code — not configurable:
 
 | Document | Description |
 |---|---|
-| [docs/ERD.md](docs/ERD.md) | Entity Relationship Diagram v4.0 — 13 models |
-| [docs/API_Contract.md](docs/API_Contract.md) | Full API endpoint reference v3.0 — 47+ endpoints |
-| [docs/SRS_LottoMeter_v2.md](docs/SRS_LottoMeter_v2.md) | Software Requirements Specification v6.0 |
+| [docs/ERD.md](docs/ERD.md) | Entity Relationship Diagram v5.0 — 13 models |
+| [docs/API_Contract.md](docs/API_Contract.md) | Full API endpoint reference v4.0 — 52+ endpoints |
+| [docs/SRS_LottoMeter_v2.md](docs/SRS_LottoMeter_v2.md) | Software Requirements Specification v7.0 |
 | [SDLC.md](SDLC.md) | SDLC phase tracker + decision log |
 | [docs/DEPLOYMENT_RUNBOOK.md](docs/DEPLOYMENT_RUNBOOK.md) | Production operations guide |
 

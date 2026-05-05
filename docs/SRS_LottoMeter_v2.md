@@ -1,8 +1,8 @@
 # Software Requirements Specification — LottoMeter v2.0
 
-**Version:** 6.0
+**Version:** 7.0
 **Date:** May 2026
-**Status:** Current — reflects system as built through Phase 4h
+**Status:** Current — reflects system as built through Phase 5 (offline mode, account settings, report email, pytest)
 
 ---
 
@@ -14,8 +14,8 @@ This document specifies the functional and non-functional requirements for Lotto
 ### 1.2 Scope
 LottoMeter v2.0 consists of:
 - A Flask REST API backend deployed on Render (api.lottometer.com)
-- A React Native mobile app (Expo SDK 54) for store employees and admins
-- A React (Vite) web dashboard for store admins
+- A React Native mobile app (Expo SDK 54) for store employees and admins, with full offline scan capability (expo-sqlite)
+- A React (Vite) web dashboard for store admins (18 pages including Account Settings)
 - A public marketing website (React + Vite)
 - A superadmin panel for LottoMeter platform staff
 
@@ -38,6 +38,7 @@ LottoMeter v2.0 consists of:
 
 ### 2.1 Components
 
+**Online path:**
 ```
 ┌──────────────────────┐        HTTPS        ┌───────────────────────────┐
 │  React Native App    │ ◄──────────────────► │   Flask REST API          │
@@ -61,6 +62,21 @@ LottoMeter v2.0 consists of:
 └──────────────────────┘
 ```
 
+**Offline path (mobile only):**
+```
+┌──────────────────────┐   offline   ┌───────────────────────────┐
+│  React Native App    │ ◄──────────► │  Local SQLite DB          │
+│  (scan engine)       │             │  (expo-sqlite, WAL mode)  │
+│  NetInfo: offline    │             │  9 tables, seeded on login │
+└──────────┬───────────┘             └───────────────────────────┘
+           │ on reconnect
+           ▼
+┌──────────────────────┐        HTTPS        ┌───────────────────────────┐
+│  Sync Queue          │ ────────────────────► │   Flask REST API          │
+│  (offline records)   │                      │   (sync endpoints — TBD)  │
+└──────────────────────┘                      └───────────────────────────┘
+```
+
 ### 2.2 Tech Stack
 
 | Layer | Technology |
@@ -74,9 +90,11 @@ LottoMeter v2.0 consists of:
 | Database (prod) | PostgreSQL (Render) |
 | Auth | JWT (Flask-JWT-Extended), 8-hour expiry |
 | Camera | expo-camera |
-| Token storage | expo-secure-store |
-| Local DB (mobile) | expo-sqlite (offline mode — Phase 5a) |
+| Token storage | expo-secure-store (JWT + offline PIN) |
+| Local DB (mobile) | expo-sqlite (WAL mode, offline engine — complete) |
+| Network detection | @react-native-community/netinfo |
 | i18n | i18next + react-i18next + expo-localization |
+| Testing | pytest + pytest-flask (46 tests) |
 | Containerization | Docker + docker-compose |
 | Deployment | Render Web Service + Render Postgres |
 | Error tracking | Sentry (Flask + React Native) |
@@ -131,7 +149,7 @@ Fixed in `app/constants.py`. Not configurable.
 ## 4. API
 
 ### 4.1 Overview
-- 47+ REST endpoints under `/api`
+- 52+ REST endpoints under `/api`
 - 12 Flask blueprints: auth, store, user, slot, book, employee_shift, business_day, scan, extra_sales, report, subscription, public, superadmin, stripe
 - Standard JWT auth; public endpoints are unauthenticated but rate-limited
 - Uniform error envelope: `{ "error": { "code": "...", "message": "...", "details": {} } }`
@@ -159,13 +177,15 @@ The book is marked sold ONLY when all three hold:
 ### 4.4 Shift Validation Formula
 ```
 tickets_total  = Σ scanned sales + whole-book extras + return partials
-expected_cash  = gross_sales + tickets_total - cash_out
+expected_cash  = gross_sales + tickets_total - cash_out - cancels
 difference     = cash_in_hand - expected_cash
 
 difference = 0   → correct
 difference > 0   → over
 difference < 0   → short
 ```
+
+`cancels` is entered manually at shift close (defaults to 0.00). It represents voided/cancelled ticket value for the shift.
 
 ---
 
@@ -178,6 +198,7 @@ difference < 0   → short
 - FR-AUTH-04: Logout adds JWT `jti` to in-memory blocklist
 - FR-AUTH-05: Role-based access: `employee`, `admin`, `superadmin`
 - FR-AUTH-06: `superadmin` role grants cross-store access to the superadmin panel
+- FR-AUTH-07: Any authenticated user may change their own password via `PUT /api/auth/change-password`; requires current password verification, minimum length 8, and confirmation match
 
 ### 5.2 Store Setup (FR-SETUP)
 - FR-SETUP-01: First `/api/auth/setup` call creates the store, first admin, and store PIN
@@ -218,9 +239,16 @@ difference < 0   → short
 - FR-SCAN-05: Offline scanning supported via local SQLite (Phase 5a); synced to server when online
 
 ### 5.8 Financial Close (FR-CLOSE)
-- FR-CLOSE-01: Closing inputs entered manually: cash_in_hand, gross_sales, cash_out
-- FR-CLOSE-02: System calculates tickets_total, expected_cash, difference, shift_status
+- FR-CLOSE-01: Closing inputs entered manually: cash_in_hand, gross_sales, cash_out, cancels (optional, default 0)
+- FR-CLOSE-02: System calculates tickets_total, expected_cash (= gross_sales + tickets_total - cash_out - cancels), difference, shift_status
 - FR-CLOSE-03: Live preview available via `GET /api/shifts/{id}/summary`
+
+### 5.12 Account Settings (FR-ACCT)
+- FR-ACCT-01: Store profile (store_name, owner_name, email, phone, address, city, state, zip_code) editable by admin via `PUT /api/store/profile`; store_code is immutable
+- FR-ACCT-02: Store operational settings editable via `PUT /api/store/settings` (timezone, currency, business hours, max_employees, notification prefs, report prefs)
+- FR-ACCT-03: Report settings: report_email, report_format (html/text), report_delay_hours, report_enabled
+- FR-ACCT-04: Daily report email auto-triggered when BusinessDay closes; wrapped in try/except so email failure never blocks day close
+- FR-ACCT-05: Web dashboard Account Settings page provides tabbed UI: Profile & Store, Hours & Reports, Security, Subscription
 
 ### 5.9 Subscription System (FR-SUB)
 - FR-SUB-01: Each store has exactly one Subscription row, auto-created on provisioning with `status='trial'`
@@ -300,29 +328,33 @@ difference < 0   → short
 | `camera_continuous` | Camera stays open; 2-second deduplication guard |
 | `hardware_scanner` | Camera hidden; text input auto-focused for keystroke-wedge |
 
-### 7.3 Offline Mode (Phase 5a — planned)
-- Local SQLite DB seeded with slots, books, and shift data on login
+### 7.3 Offline Mode (Complete)
+- Local SQLite DB (expo-sqlite, WAL mode) with 9 tables seeded on login
+- PIN login with 72-hour session expiry stored in expo-secure-store
 - Offline scan engine mirrors all 8 server scan rules locally
+- Carry-forward logic runs offline — open scans brought forward without network
 - Sync queue persists offline scans for upload on reconnect
 - Offline banner displayed when `NetInfo.isConnected === false`
-- Close shift blocked when offline (requires network)
+- Close shift blocked when offline (requires network for financial commit)
+- Up to 2 days of offline operation supported
 
 ---
 
 ## 8. Web Dashboard Requirements
 
-### 8.1 Pages (15 pages)
+### 8.1 Pages (18 pages)
 | Page | Role | Description |
 |---|---|---|
 | Login | admin | Store code + username + password |
-| Dashboard | admin | Stats overview, sales charts |
+| Dashboard | admin | Stats overview, sales charts, tickets sold today |
 | Shifts | admin | Shift list + filter |
 | Reports | admin | Shift report detail |
-| Books | admin | Book management |
+| Books | admin | Book management + book detail modal |
 | Slots | admin | Slot management |
 | Users | admin | User CRUD |
 | BusinessDays | admin | Business day list + close |
 | Subscription | admin | Subscription status display |
+| Account Settings | admin | Profile, Hours & Reports, Security, Subscription tabs |
 | Public: Home | public | Marketing landing page |
 | Public: Pricing | public | Pricing tiers |
 | Public: Apply | public | Store application form |
@@ -352,7 +384,25 @@ difference < 0   → short
 
 ---
 
-## 10. Version History
+## 10. Implementation Stats (May 2026)
+
+| Metric | Value |
+|---|---|
+| SQLAlchemy models | 13 |
+| API endpoints | 52+ |
+| Flask blueprints | 12 |
+| Marshmallow schemas | 12 |
+| Services | 14 |
+| Database migrations | 16+ |
+| React web pages | 18 |
+| Offline SQLite tables | 9 |
+| Test coverage | 46 tests (pytest) |
+| Lines of Python (approx) | ~9,500 |
+| Lines of JavaScript (approx) | ~15,000 |
+
+---
+
+## 11. Version History
 
 | Version | Date | Summary |
 |---|---|---|
@@ -360,4 +410,5 @@ difference < 0   → short
 | v5.0 | April 2026 | Post-design-review update; 22 decisions logged |
 | v5.1 | April 2026 | Scan event model + hardware scanner support |
 | v5.2 | April 2026 | Implementation corrections (Rule 8 narrowing, ShiftBooks PK fix) |
-| v6.0 | May 2026 | Phase 4h additions: subscription system, store settings, superadmin panel, web dashboard, public marketing site; model count 9 → 13; endpoint count 39 → 47+; added offline mode architecture section |
+| v6.0 | May 2026 | Phase 4h additions: subscription system, store settings, superadmin panel, web dashboard, public marketing site; model count 9 → 13; endpoint count 39 → 47+ |
+| v7.0 | May 2026 | Phase 5 additions: offline mode complete (SQLite-first, 9 tables, all 8 rules local, PIN login, auto-sync); cancels field in shift close; slot information in reports; book detail modal with assignment history; daily report email infrastructure; account settings page (web dashboard); pytest suite 46/46 passing; endpoint count 47 → 52+; web pages 15 → 18 |
