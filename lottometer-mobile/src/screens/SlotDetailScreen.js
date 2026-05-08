@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -39,6 +39,9 @@ export default function SlotDetailScreen({ route }) {
   const [manualOpen, setManualOpen] = useState(false);
   const [manualBarcode, setManualBarcode] = useState('');
   const [returnOpen, setReturnOpen] = useState(false);
+  const [lastAssigned, setLastAssigned] = useState(null);
+
+  const lastScanRef = useRef({ barcode: null, timestamp: 0 });
 
   const loadSlot = useCallback(async () => {
     try {
@@ -73,12 +76,15 @@ export default function SlotDetailScreen({ route }) {
 
   async function doAssign(barcode, confirmReassign = false) {
     setBusy(true);
+    const slotName = slot?.slot_name;
     try {
       await assignBook(slotId, {
         barcode,
         confirm_reassign: confirmReassign,
       });
       fireFeedback('success');
+      setLastAssigned(slotName);
+      setTimeout(() => setLastAssigned(null), 1500);
       await loadSlot();
     } catch (err) {
       if (err.code === 'REASSIGN_CONFIRMATION_REQUIRED') {
@@ -108,12 +114,17 @@ export default function SlotDetailScreen({ route }) {
     setManualOpen(true);
   }
 
-  async function submitManual() {
-    const code = normalizeBarcode(manualBarcode);
-    if (!code || code.length < 4) {
-      Alert.alert(t('scan.invalidBarcode'), t('scan.invalidBarcodeHint'));
+  async function submitManual(codeArg) {
+    const code = normalizeBarcode(codeArg ?? manualBarcode);
+    if (!code || code.length < 4) return;
+
+    const now = Date.now();
+    if (lastScanRef.current.barcode === code && now - lastScanRef.current.timestamp < 2000) {
+      setManualBarcode('');
       return;
     }
+    lastScanRef.current = { barcode: code, timestamp: now };
+
     setManualOpen(false);
     setManualBarcode('');
     await doAssign(code);
@@ -254,6 +265,12 @@ export default function SlotDetailScreen({ route }) {
           )}
         </View>
 
+        {lastAssigned && (
+          <View style={styles.successToast}>
+            <Text style={styles.successToastText}>✓ {t('bulkAssign.assignedTo', { slot: lastAssigned })}</Text>
+          </View>
+        )}
+
         <View style={styles.actionsCard}>
           {isAdmin && (
             <>
@@ -334,14 +351,18 @@ export default function SlotDetailScreen({ route }) {
             <TextInput
               style={styles.modalInput}
               value={manualBarcode}
-              onChangeText={(text) => setManualBarcode(normalizeBarcode(text))}
+              onChangeText={(text) => {
+                const normalized = normalizeBarcode(text);
+                setManualBarcode(normalized);
+                if (normalized.length === 13) submitManual(normalized);
+              }}
               placeholder={t('slotDetail.manualEntryPlaceholder')}
               autoFocus
               autoCorrect={false}
               keyboardType="numeric"
               maxLength={14}
               returnKeyType="done"
-              onSubmitEditing={submitManual}
+              onSubmitEditing={() => submitManual()}
             />
 
             <View style={styles.modalActions}>
@@ -353,12 +374,6 @@ export default function SlotDetailScreen({ route }) {
                 }}
               >
                 <Text style={styles.modalCancelText}>{t('common.cancel')}</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalConfirm]}
-                onPress={submitManual}
-              >
-                <Text style={styles.modalConfirmText}>{t('slotDetail.assign')}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -426,6 +441,15 @@ const styles = StyleSheet.create({
   },
   kvKey: { color: '#666', fontSize: 14 },
   kvValue: { color: '#222', fontSize: 14, fontWeight: '600' },
+
+  successToast: {
+    backgroundColor: '#DCFCE7',
+    padding: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  successToastText: { color: '#16A34A', fontWeight: '600', fontSize: 14 },
 
   actionsCard: { marginTop: 4 },
   actionButton: {

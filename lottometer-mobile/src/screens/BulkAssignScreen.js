@@ -33,8 +33,10 @@ export default function BulkAssignScreen() {
   const [barcode, setBarcode] = useState('');
   const [busy, setBusy] = useState(false);
   const [assignedCount, setAssignedCount] = useState(0);
+  const [skippedCount, setSkippedCount] = useState(0);
   const [allDone, setAllDone] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
+  const [lastAssigned, setLastAssigned] = useState(null);
 
   const inputRef = useRef(null);
   const lastScanRef = useRef({ barcode: null, timestamp: 0 });
@@ -69,28 +71,24 @@ export default function BulkAssignScreen() {
     }
   }, [t, useCamera]);
 
-  // barcodeArg: explicit code (from camera or explicit text-input call); falls back to
-  // the `barcode` state when null/undefined (hardware-scanner text-input path).
+  // barcodeArg: explicit code (from camera or auto-submit path); falls back to
+  // the `barcode` state when null/undefined.
   const handleSubmit = useCallback(
     async (barcodeArg, confirmReassign = false) => {
       const normalized = normalizeBarcode(barcodeArg ?? barcode);
-      console.log('[assign] normalized:', normalized, 'length:', normalized.length);
 
-      if (normalized.length !== 13) {
-        Alert.alert('Invalid Barcode', `Expected 13 digits, got ${normalized.length}`);
-        return;
-      }
+      if (normalized.length !== 13) return;
       if (busyRef.current) return;
 
       const now = Date.now();
-      const sinceLastScan = now - lastScanRef.current.timestamp;
-      if (lastScanRef.current.barcode === normalized && sinceLastScan < 2000) {
-        if (!useCamera) setBarcode('');
+      if (lastScanRef.current.barcode === normalized && now - lastScanRef.current.timestamp < 2000) {
+        setBarcode('');
         return;
       }
       lastScanRef.current = { barcode: normalized, timestamp: now };
 
       setBusyBoth(true);
+      const slotName = currentSlot?.slot_name;
       try {
         const result = await assignBook(currentSlot.slot_id, {
           barcode: normalized,
@@ -99,7 +97,9 @@ export default function BulkAssignScreen() {
 
         fireFeedback('success');
         setAssignedCount((c) => c + 1);
-        if (!useCamera) setBarcode('');
+        setLastAssigned(slotName);
+        setTimeout(() => setLastAssigned(null), 1500);
+        setBarcode('');
 
         if (result.next_empty_slot) {
           setCurrentSlot(result.next_empty_slot);
@@ -134,10 +134,8 @@ export default function BulkAssignScreen() {
         } else {
           fireFeedback('error');
           Alert.alert(t('scan.scanFailed'), friendlyScanError(err, t));
-          if (!useCamera) {
-            setBarcode('');
-            setTimeout(() => inputRef.current?.focus(), 100);
-          }
+          setBarcode('');
+          if (!useCamera) setTimeout(() => inputRef.current?.focus(), 100);
         }
       } finally {
         setBusyBoth(false);
@@ -148,14 +146,35 @@ export default function BulkAssignScreen() {
 
   const handleBarCodeScanned = useCallback(
     ({ data }) => {
-      console.log('[assign camera] raw from camera:', data);
       const normalized = normalizeBarcode(data);
-      handleSubmit(normalized);
+      if (normalized.length === 13) handleSubmit(normalized);
     },
     [handleSubmit]
   );
 
-  const isBarcodeValid = /^\d{13}$/.test(normalizeBarcode(barcode));
+  const handleSkip = useCallback(async () => {
+    if (busyRef.current) return;
+    setBusyBoth(true);
+    try {
+      const data = await listSlots();
+      const slots = data.slots || data;
+      const emptySlots = slots.filter(
+        (s) => !s.current_book && !s.deleted_at && s.slot_id !== currentSlot?.slot_id
+      );
+      if (emptySlots.length > 0) {
+        setCurrentSlot(emptySlots[0]);
+        setBarcode('');
+        setSkippedCount((c) => c + 1);
+        if (!useCamera) setTimeout(() => inputRef.current?.focus(), 100);
+      } else {
+        setAllDone(true);
+      }
+    } catch (err) {
+      Alert.alert(t('bulkAssign.loadFailedTitle'), t('bulkAssign.loadFailedBody'));
+    } finally {
+      setBusyBoth(false);
+    }
+  }, [currentSlot, t, useCamera]);
 
   // ── Loading ──────────────────────────────────────────────────────────────────
 
@@ -228,7 +247,8 @@ export default function BulkAssignScreen() {
         <View>
           <Text style={styles.title}>{t('bulkAssign.title')}</Text>
           <Text style={styles.counter}>
-            {t('bulkAssign.assignedCount', { count: assignedCount })}
+            {t('bulkAssign.assigned', { count: assignedCount })}
+            {skippedCount > 0 ? `  ·  ${t('bulkAssign.skipped', { count: skippedCount })}` : ''}
           </Text>
         </View>
       </View>
@@ -240,6 +260,12 @@ export default function BulkAssignScreen() {
           <Text style={styles.priceBadgeText}>${currentSlot.ticket_price}</Text>
         </View>
       </View>
+
+      {lastAssigned && (
+        <View style={styles.successToast}>
+          <Text style={styles.successToastText}>✓ {t('bulkAssign.assignedTo', { slot: lastAssigned })}</Text>
+        </View>
+      )}
 
       {useCamera ? (
         <View style={styles.cameraWrap}>
@@ -281,10 +307,9 @@ export default function BulkAssignScreen() {
             style={styles.input}
             value={barcode}
             onChangeText={(text) => {
-              console.log('[assign input] raw text received:', text);
-              console.log('[assign input] text length:', text?.length);
-              console.log('[assign input] after normalize:', normalizeBarcode(text));
-              setBarcode(normalizeBarcode(text));
+              const normalized = normalizeBarcode(text);
+              setBarcode(normalized);
+              if (normalized.length === 13) handleSubmit(normalized);
             }}
             placeholder={t('bulkAssign.barcodePlaceholder')}
             placeholderTextColor="#aaa"
@@ -296,20 +321,23 @@ export default function BulkAssignScreen() {
             onSubmitEditing={() => handleSubmit(null)}
           />
           <TouchableOpacity
-            style={[
-              styles.submitButton,
-              (!isBarcodeValid || busy) && styles.submitButtonDisabled,
-            ]}
-            onPress={() => handleSubmit(null)}
-            disabled={!isBarcodeValid || busy}
+            style={[styles.skipButton, busy && styles.submitButtonDisabled]}
+            onPress={handleSkip}
+            disabled={busy}
           >
-            {busy ? (
-              <ActivityIndicator color="#fff" />
-            ) : (
-              <Text style={styles.submitButtonText}>{t('bulkAssign.submit')}</Text>
-            )}
+            <Text style={styles.skipButtonText}>{t('bulkAssign.skipSlot')}</Text>
           </TouchableOpacity>
         </View>
+      )}
+
+      {useCamera && (
+        <TouchableOpacity
+          style={[styles.skipButton, styles.skipButtonCamera, busy && styles.submitButtonDisabled]}
+          onPress={handleSkip}
+          disabled={busy}
+        >
+          <Text style={styles.skipButtonText}>{t('bulkAssign.skipSlot')}</Text>
+        </TouchableOpacity>
       )}
 
       <TouchableOpacity style={styles.exitButton} onPress={() => navigation.goBack()}>
@@ -407,6 +435,16 @@ const styles = StyleSheet.create({
     shadowRadius: 4,
     elevation: 2,
   },
+  successToast: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    padding: 10,
+    borderRadius: 8,
+    backgroundColor: '#DCFCE7',
+    alignItems: 'center',
+  },
+  successToastText: { color: '#16A34A', fontWeight: '600', fontSize: 14 },
+
   inputLabel: { fontSize: 13, color: '#5f6368', fontWeight: '600', marginBottom: 8 },
   input: {
     borderWidth: 1,
@@ -415,17 +453,23 @@ const styles = StyleSheet.create({
     padding: 12,
     fontSize: 18,
     backgroundColor: '#fafafa',
-    marginBottom: 12,
+    marginBottom: 8,
     color: '#202124',
   },
-  submitButton: {
-    backgroundColor: '#1a73e8',
+  submitButtonDisabled: { opacity: 0.4 },
+
+  skipButton: {
+    marginHorizontal: 16,
+    marginTop: 10,
     padding: 14,
     borderRadius: 8,
     alignItems: 'center',
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#dadce0',
   },
-  submitButtonDisabled: { opacity: 0.4 },
-  submitButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  skipButtonCamera: { marginTop: 8 },
+  skipButtonText: { color: '#5f6368', fontSize: 15, fontWeight: '600' },
 
   exitButton: { padding: 20, alignItems: 'center', marginTop: 8 },
   exitButtonText: { color: '#5f6368', fontSize: 14 },
