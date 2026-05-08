@@ -10,6 +10,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/native';
@@ -23,10 +24,33 @@ import { useFeedback } from '../hooks/useFeedback';
 import { friendlyScanError } from '../utils/scanErrorMessages';
 import { lastPositionFor, parseBarcode } from '../utils/bookConstants';
 import { normalizeBarcode } from '../utils/barcodeUtils';
-import { Colors, Radius, Shadow } from '../theme';
 import NetInfo from '@react-native-community/netinfo';
 import { getDb } from '../offline/db';
 import { recordOfflineScan, getOfflinePendingCounts } from '../offline';
+
+// ── design tokens ──────────────────────────────────────────────────────────────
+const D = {
+  PRIMARY:    '#0077CC',
+  SUCCESS:    '#16A34A',
+  ERROR:      '#DC2626',
+  WARNING:    '#D97706',
+  BACKGROUND: '#F8FAFC',
+  CARD:       '#FFFFFF',
+  TEXT:       '#0F172A',
+  SUBTLE:     '#64748B',
+  BORDER:     '#E2E8F0',
+};
+const FS = { xs: 11, sm: 13, md: 15, lg: 18, xl: 22, xxl: 28 };
+const FW = { regular: '400', medium: '500', semibold: '600', bold: '700' };
+const SP = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };
+const BR = { sm: 8, md: 12, lg: 16, full: 26 };
+const CARD_SHADOW = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.06,
+  shadowRadius: 4,
+  elevation: 2,
+};
 
 function detectLastTicket(trimmedBarcode, scanType, slots) {
   if (scanType !== 'close') return false;
@@ -65,6 +89,28 @@ export default function ScanScreen() {
   const justScanned = useRef(false);
   const shiftUuidRef = useRef(null);
   const fireFeedback = useFeedback();
+
+  // display-only: track initial pending count for progress bar
+  const totalBooksRef = useRef(0);
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!isInitialized && pendingCount > totalBooksRef.current) {
+      totalBooksRef.current = pendingCount;
+    }
+  }, [pendingCount, isInitialized]);
+
+  useEffect(() => {
+    if (scanMode !== 'hardware_scanner') return;
+    const anim = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, { toValue: 1, duration: 1200, useNativeDriver: false }),
+        Animated.timing(pulseAnim, { toValue: 0, duration: 1200, useNativeDriver: false }),
+      ])
+    );
+    anim.start();
+    return () => anim.stop();
+  }, [scanMode, pulseAnim]);
 
   const loadShift = useCallback(async () => {
     let currentlyOffline = false;
@@ -198,8 +244,6 @@ export default function ScanScreen() {
 
         if (isOffline) {
           // ── OFFLINE PATH ────────────────────────────────────────────────────
-          // shiftUuidRef is populated by loadShift; fall back to server_id lookup
-          // for shifts that were opened online before going offline.
           let shiftUuid = shiftUuidRef.current;
           if (!shiftUuid) {
             const db = await getDb();
@@ -357,118 +401,201 @@ export default function ScanScreen() {
     });
   }
 
+  // ── render helpers ──────────────────────────────────────────────────────────
+
+  const isBarcodeValid = /^\d{13}$/.test(normalizeBarcode(barcode));
+  const pulseBorder = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [D.BORDER, D.PRIMARY],
+  });
+  const totalBooks = totalBooksRef.current;
+  const scannedBooks = totalBooks - pendingCount;
+  const progressPct = totalBooks > 0 ? scannedBooks / totalBooks : 0;
+
+  // ── loading state ───────────────────────────────────────────────────────────
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+      <SafeAreaView style={s.safeArea}>
+        <View style={s.header}>
+          <Text style={s.headerTitle}>{t('scan.title')}</Text>
+        </View>
+        <View style={s.center}>
+          <ActivityIndicator size="large" color={D.PRIMARY} />
         </View>
       </SafeAreaView>
     );
   }
+
+  // ── no open shift ───────────────────────────────────────────────────────────
 
   if (!shift || !openSubId) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.center}>
-          <Text style={styles.title}>{t('scan.title')}</Text>
-          <Text style={styles.subtitle}>{t('scan.noOpenShift')}</Text>
-          <Text style={styles.subtitle}>{t('scan.noOpenShiftHint')}</Text>
+      <SafeAreaView style={s.safeArea}>
+        <View style={s.header}>
+          <Text style={s.headerTitle}>{t('scan.title')}</Text>
+        </View>
+        <View style={s.center}>
+          <Text style={s.noShiftEmoji}>📋</Text>
+          <Text style={s.noShiftTitle}>{t('scan.noOpenShift')}</Text>
+          <Text style={s.noShiftSub}>{t('scan.noOpenShiftHint')}</Text>
         </View>
       </SafeAreaView>
     );
   }
 
-  const isBarcodeValid = /^\d{13}$/.test(normalizeBarcode(barcode));
+  // ── main render ─────────────────────────────────────────────────────────────
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={s.safeArea}>
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.flex}
+        style={s.flex}
       >
-        <ScrollView contentContainerStyle={styles.scroll} keyboardShouldPersistTaps="handled">
-          <Text style={styles.title}>{t('scan.title')}</Text>
-
-          {isOffline && (
-            <View style={styles.offlineBanner}>
-              <Text style={styles.offlineBannerText}>⚠️ Offline Mode — scans saved locally</Text>
+        {/* ── Header ─────────────────────────────────────────────────────── */}
+        <View style={s.header}>
+          <Text style={s.headerTitle}>{t('scan.title')}</Text>
+          {openSubId && (
+            <View style={s.shiftBadge}>
+              <Text style={s.shiftBadgeText}>Shift #{openSubId}</Text>
             </View>
           )}
+        </View>
 
+        {/* ── Offline Banner ──────────────────────────────────────────────── */}
+        {isOffline && (
+          <View style={s.offlineBanner}>
+            <Text style={s.offlineBannerText}>⚠️ Offline Mode — scans saved locally</Text>
+          </View>
+        )}
+
+        <ScrollView
+          contentContainerStyle={s.scroll}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* ── Status Banner ───────────────────────────────────────────── */}
           {!isInitialized ? (
-            <View style={[styles.banner, styles.bannerWarn]}>
-              <Text style={styles.bannerText}>
-                {t('scan.bannerNotInitialized', { count: pendingCount })}
-              </Text>
+            <View style={s.statusWarn}>
+              <Text style={s.statusWarnIcon}>⚠️</Text>
+              <View style={s.statusBody}>
+                <Text style={s.statusWarnTitle}>
+                  {t('scan.bannerNotInitialized', { count: pendingCount })}
+                </Text>
+                <Text style={s.statusSub}>Scan all books to initialize this shift</Text>
+              </View>
             </View>
           ) : (
-            <View style={[styles.banner, styles.bannerOk]}>
-              <Text style={[styles.bannerText, styles.bannerOkText]}>{t('scan.bannerInitialized')}</Text>
+            <View style={s.statusOk}>
+              <Text style={s.statusOkIcon}>✓</Text>
+              <View style={s.statusBody}>
+                <Text style={s.statusOkTitle}>{t('scan.bannerInitialized')}</Text>
+                <Text style={s.statusSub}>Ready for sales and close scans</Text>
+              </View>
             </View>
           )}
 
-          <View style={styles.card}>
-            <Text style={styles.label}>{t('scan.scanType')}</Text>
-            <View style={styles.pickerRow}>
+          {/* ── Progress Bar (not initialized) ──────────────────────────── */}
+          {!isInitialized && totalBooks > 0 && (
+            <View style={s.progressWrap}>
+              <Text style={s.progressLabel}>
+                {scannedBooks} / {totalBooks} books scanned
+              </Text>
+              <View style={s.progressTrack}>
+                <View
+                  style={[
+                    s.progressFill,
+                    { width: `${Math.round(progressPct * 100)}%` },
+                  ]}
+                />
+              </View>
+            </View>
+          )}
+
+          {/* ── Close scan count (initialized) ──────────────────────────── */}
+          {isInitialized && pendingCount > 0 && (
+            <View style={s.closeCountWrap}>
+              <Text style={s.closeCountText}>
+                {pendingCount} close scan{pendingCount !== 1 ? 's' : ''} remaining
+              </Text>
+            </View>
+          )}
+
+          {/* ── Scan Type Selector ──────────────────────────────────────── */}
+          <View style={s.selectorCard}>
+            <View style={s.selectorRow}>
               <TouchableOpacity
                 style={[
-                  styles.pickerOption,
-                  scanType === 'open' && styles.pickerOptionActive,
-                  isInitialized && styles.pickerOptionDisabled,
+                  s.selectorOpt,
+                  scanType === 'open' && s.selectorOptActive,
+                  isInitialized && s.selectorOptDisabled,
                 ]}
                 onPress={() => !isInitialized && setScanType('open')}
                 disabled={isInitialized}
               >
                 <Text
                   style={[
-                    styles.pickerText,
-                    scanType === 'open' && styles.pickerTextActive,
-                    isInitialized && styles.pickerTextDisabled,
+                    s.selectorTxt,
+                    scanType === 'open' && s.selectorTxtActive,
+                    isInitialized && s.selectorTxtDim,
                   ]}
                 >
                   {t('scan.open')}
                 </Text>
               </TouchableOpacity>
+
               <TouchableOpacity
                 style={[
-                  styles.pickerOption,
-                  scanType === 'close' && styles.pickerOptionActive,
-                  !isInitialized && styles.pickerOptionDisabled,
+                  s.selectorOpt,
+                  scanType === 'close' && s.selectorOptActive,
+                  !isInitialized && s.selectorOptDisabled,
                 ]}
                 onPress={() => isInitialized && setScanType('close')}
                 disabled={!isInitialized}
               >
                 <Text
                   style={[
-                    styles.pickerText,
-                    scanType === 'close' && styles.pickerTextActive,
-                    !isInitialized && styles.pickerTextDisabled,
+                    s.selectorTxt,
+                    scanType === 'close' && s.selectorTxtActive,
+                    !isInitialized && s.selectorTxtDim,
                   ]}
                 >
                   {t('scan.close')}
                 </Text>
               </TouchableOpacity>
             </View>
+          </View>
 
-            {scanMode !== 'hardware_scanner' && (
-              <>
-                <TouchableOpacity
-                  style={[styles.cameraButton, busy && styles.disabled]}
-                  onPress={handleOpenCamera}
-                  disabled={busy}
-                >
-                  <Text style={styles.cameraButtonText}>{t('scan.scanWithCamera')}</Text>
-                </TouchableOpacity>
+          {/* ── Camera Button ───────────────────────────────────────────── */}
+          {scanMode !== 'hardware_scanner' && (
+            <TouchableOpacity
+              style={[s.cameraBtn, busy && s.dimmed]}
+              onPress={handleOpenCamera}
+              disabled={busy}
+            >
+              <Text style={s.cameraBtnIcon}>📷</Text>
+              <Text style={s.cameraBtnText}>{t('scan.scanWithCamera')}</Text>
+            </TouchableOpacity>
+          )}
 
-                <Text style={styles.divider}>{t('scan.orEnterManually')}</Text>
-              </>
-            )}
+          {/* ── Divider ─────────────────────────────────────────────────── */}
+          {scanMode !== 'hardware_scanner' && (
+            <View style={s.divRow}>
+              <View style={s.divLine} />
+              <Text style={s.divTxt}>{t('scan.orEnterManually')}</Text>
+              <View style={s.divLine} />
+            </View>
+          )}
 
-            <Text style={styles.label}>{t('scan.barcode')}</Text>
+          {/* ── Barcode Input ────────────────────────────────────────────── */}
+          <Animated.View
+            style={[
+              s.inputWrap,
+              scanMode === 'hardware_scanner' && { borderColor: pulseBorder },
+            ]}
+          >
             <TextInput
               ref={inputRef}
-              style={styles.input}
+              style={s.input}
               value={barcode}
               onChangeText={(text) => {
                 const normalized = normalizeBarcode(text);
@@ -484,7 +611,7 @@ export default function ScanScreen() {
                   ? 'Waiting for scanner...'
                   : t('scan.barcodePlaceholder')
               }
-              placeholderTextColor={Colors.textMuted}
+              placeholderTextColor={D.SUBTLE}
               autoCapitalize="none"
               autoCorrect={false}
               keyboardType="numeric"
@@ -498,217 +625,341 @@ export default function ScanScreen() {
                 }
               }}
             />
+          </Animated.View>
 
-            {scanMode !== 'hardware_scanner' && (
-              <TouchableOpacity
-                style={[styles.scanButton, (!isBarcodeValid || busy) && styles.disabled]}
-                onPress={handleManualScan}
-                disabled={!isBarcodeValid || busy}
-              >
-                {busy ? (
-                  <ActivityIndicator color="#fff" />
-                ) : (
-                  <Text style={styles.scanButtonText}>{t('scan.submitScan')}</Text>
-                )}
-              </TouchableOpacity>
-            )}
-
-            {scanMode === 'hardware_scanner' && (
-              <Text style={styles.scannerHint}>
-                Point scanner at barcode to scan automatically
-              </Text>
-            )}
-          </View>
-
-          {lastScan && (
-            <View
-              style={[
-                styles.card,
-                styles.lastScanCard,
-                lastScan.book?.is_sold && styles.lastTicketCard,
-              ]}
+          {/* ── Submit Button (manual / camera mode) ────────────────────── */}
+          {scanMode !== 'hardware_scanner' && (
+            <TouchableOpacity
+              style={[s.submitBtn, (!isBarcodeValid || busy) && s.dimmed]}
+              onPress={handleManualScan}
+              disabled={!isBarcodeValid || busy}
             >
-              <Text style={styles.lastScanTitle}>
-                {lastScan.book?.is_sold ? t('scan.lastTicketSold') : t('scan.scanRecorded')}
-              </Text>
-              <KV k={t('scan.fieldType')}     v={lastScan.scan?.scan_type} />
-              <KV k={t('scan.fieldPosition')} v={lastScan.scan?.start_at_scan} />
-              <KV k={t('scan.fieldBook')}     v={lastScan.book?.static_code} />
-              <KV k={t('scan.fieldPrice')}    v={lastScan.book?.ticket_price} />
-              <KV k={t('scan.fieldSource')}   v={lastScan.scan?.scan_source} />
-            </View>
-          )}
-
-          {isInitialized && (
-            <TouchableOpacity style={styles.doneButton} onPress={handleDonePress}>
-              <Text style={styles.doneButtonText}>{t('scan.done')}</Text>
+              {busy ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <Text style={s.submitBtnTxt}>{t('scan.submitScan')}</Text>
+              )}
             </TouchableOpacity>
           )}
 
-          <View style={styles.footer}>
-            <Text style={styles.footerText}>
-              {t('scan.scansThisSession', { count: scanCount })}
+          {/* ── Hardware scanner hint ────────────────────────────────────── */}
+          {scanMode === 'hardware_scanner' && (
+            <Text style={s.scannerHint}>
+              Point scanner at barcode to scan automatically
             </Text>
-          </View>
+          )}
+
+          {/* ── Last Scan Card ───────────────────────────────────────────── */}
+          {lastScan && (
+            <View style={s.lastCard}>
+              <View style={s.lastCardMain}>
+                {lastScan.book?.is_sold ? (
+                  <View style={s.ticketCircle}>
+                    <Text style={s.ticketStar}>⭐</Text>
+                  </View>
+                ) : (
+                  <View style={s.successCircle}>
+                    <Text style={s.successCheck}>✓</Text>
+                  </View>
+                )}
+                <View style={s.lastCardInfo}>
+                  <Text style={s.lastCardCode}>{lastScan.book?.static_code}</Text>
+                  <View style={s.lastCardMeta}>
+                    <View
+                      style={[
+                        s.typeBadge,
+                        lastScan.scan?.scan_type === 'open'
+                          ? s.typeBadgeOpen
+                          : s.typeBadgeClose,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          s.typeBadgeTxt,
+                          lastScan.scan?.scan_type === 'open'
+                            ? s.typeBadgeTxtOpen
+                            : s.typeBadgeTxtClose,
+                        ]}
+                      >
+                        {lastScan.scan?.scan_type === 'open'
+                          ? t('scan.open')
+                          : t('scan.close')}
+                      </Text>
+                    </View>
+                    {lastScan.scan?.start_at_scan != null && (
+                      <Text style={s.lastCardPos}>
+                        #{lastScan.scan.start_at_scan}
+                      </Text>
+                    )}
+                  </View>
+                  {lastScan.scan?.slot_name != null && (
+                    <Text style={s.lastCardSlot}>{lastScan.scan.slot_name}</Text>
+                  )}
+                </View>
+              </View>
+              <Text style={s.sessionCount}>
+                {t('scan.scansThisSession', { count: scanCount })}
+              </Text>
+            </View>
+          )}
         </ScrollView>
+
+        {/* ── Done Button (fixed bottom) ──────────────────────────────────── */}
+        {isInitialized && scanType === 'close' && (
+          <View style={s.doneWrap}>
+            <TouchableOpacity style={s.doneBtn} onPress={handleDonePress}>
+              <Text style={s.doneBtnTxt}>{t('scan.done')}</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </KeyboardAvoidingView>
 
+      {/* ── Toast ──────────────────────────────────────────────────────────── */}
       {toastVisible && (
-        <View style={styles.toast}>
-          <Text style={styles.toastText}>{t('scan.shiftOpenedToast')}</Text>
+        <View style={s.toast}>
+          <Text style={s.toastTxt}>{t('scan.shiftOpenedToast')}</Text>
         </View>
       )}
     </SafeAreaView>
   );
 }
 
-function KV({ k, v }) {
-  return (
-    <View style={styles.kvRow}>
-      <Text style={styles.kvKey}>{k}</Text>
-      <Text style={styles.kvValue}>{v ?? '—'}</Text>
-    </View>
-  );
-}
+// ── styles ────────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  flex:      { flex: 1 },
-  scroll:    { padding: 16, paddingBottom: 32 },
-  center:    { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  title:     { fontSize: 28, fontWeight: '700', color: Colors.textPrimary, marginBottom: 12 },
-  subtitle:  { fontSize: 14, color: Colors.textSecondary, textAlign: 'center', marginBottom: 4 },
+const s = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: D.BACKGROUND },
+  flex:     { flex: 1 },
 
-  offlineBanner: {
-    backgroundColor: '#D97706',
-    borderRadius: Radius.sm,
-    padding: 10,
-    marginBottom: 8,
+  // header
+  header: {
+    height: 56,
+    backgroundColor: D.CARD,
+    borderBottomWidth: 1,
+    borderBottomColor: D.BORDER,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SP.lg,
   },
-  offlineBannerText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  headerTitle:    { fontSize: FS.lg, fontWeight: FW.bold, color: D.TEXT },
+  shiftBadge:     { backgroundColor: '#DBEAFE', paddingHorizontal: SP.md, paddingVertical: SP.xs, borderRadius: BR.full },
+  shiftBadgeText: { fontSize: FS.xs, fontWeight: FW.semibold, color: D.PRIMARY },
 
-  banner: { borderRadius: Radius.sm, padding: 12, marginBottom: 12 },
-  bannerWarn:    { backgroundColor: Colors.warningBg },
-  bannerOk:      { backgroundColor: Colors.successBg },
-  bannerText:    { fontSize: 13, color: Colors.textPrimary },
-  bannerOkText:  { color: Colors.success },
+  // offline
+  offlineBanner:     { backgroundColor: D.WARNING, padding: 10, alignItems: 'center' },
+  offlineBannerText: { color: '#fff', fontWeight: FW.semibold, fontSize: FS.sm },
 
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    padding: 16,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadow.sm,
-  },
-  label: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    marginBottom: 6,
-    marginTop: 12,
-    fontWeight: '600',
-  },
-  input: {
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    borderRadius: Radius.md,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: Colors.inputBg,
-    color: Colors.textPrimary,
-  },
+  // scroll
+  scroll: { padding: SP.lg, paddingBottom: 100 },
 
-  pickerRow: { flexDirection: 'row', gap: 8 },
-  pickerOption: {
+  // loading / no-shift
+  center:       { flex: 1, justifyContent: 'center', alignItems: 'center', padding: SP.xl },
+  noShiftEmoji: { fontSize: 48, marginBottom: SP.md },
+  noShiftTitle: { fontSize: FS.lg, fontWeight: FW.semibold, color: D.TEXT, marginBottom: SP.sm, textAlign: 'center' },
+  noShiftSub:   { fontSize: FS.sm, color: D.SUBTLE, textAlign: 'center' },
+
+  // status banners
+  statusWarn: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FEF9EE',
+    borderLeftWidth: 3,
+    borderLeftColor: D.WARNING,
+    paddingVertical: SP.md,
+    paddingHorizontal: SP.lg,
+    borderRadius: BR.sm,
+    marginBottom: SP.sm,
+  },
+  statusOk: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#F0FDF4',
+    borderLeftWidth: 3,
+    borderLeftColor: D.SUCCESS,
+    paddingVertical: SP.md,
+    paddingHorizontal: SP.lg,
+    borderRadius: BR.sm,
+    marginBottom: SP.sm,
+  },
+  statusWarnIcon: { fontSize: FS.md, marginRight: SP.sm, lineHeight: 22 },
+  statusOkIcon:   { fontSize: FS.md, fontWeight: FW.bold, color: D.SUCCESS, marginRight: SP.sm, lineHeight: 22 },
+  statusBody:     { flex: 1 },
+  statusWarnTitle:{ fontSize: FS.sm, fontWeight: FW.semibold, color: D.WARNING, marginBottom: 2 },
+  statusOkTitle:  { fontSize: FS.sm, fontWeight: FW.semibold, color: D.SUCCESS, marginBottom: 2 },
+  statusSub:      { fontSize: FS.xs, color: D.SUBTLE },
+
+  // progress bar
+  progressWrap:  { marginBottom: SP.md },
+  progressLabel: { fontSize: FS.xs, color: D.SUBTLE, marginBottom: SP.xs },
+  progressTrack: { height: 4, backgroundColor: D.BORDER, borderRadius: BR.full, overflow: 'hidden' },
+  progressFill:  { height: 4, backgroundColor: D.PRIMARY, borderRadius: BR.full },
+
+  // close count
+  closeCountWrap: { marginBottom: SP.md },
+  closeCountText: { fontSize: FS.xs, color: D.SUBTLE },
+
+  // scan type selector
+  selectorCard: {
+    backgroundColor: D.CARD,
+    borderRadius: BR.md,
+    padding: SP.sm,
+    marginBottom: SP.md,
+    ...CARD_SHADOW,
+  },
+  selectorRow:        { flexDirection: 'row', gap: SP.sm },
+  selectorOpt: {
     flex: 1,
-    padding: 12,
-    borderRadius: Radius.sm,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: BR.md,
+    borderWidth: 1,
+    borderColor: D.BORDER,
+    backgroundColor: D.BACKGROUND,
+  },
+  selectorOptActive: {
+    backgroundColor: D.PRIMARY,
+    borderColor: D.PRIMARY,
+    shadowColor: D.PRIMARY,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  selectorOptDisabled: { opacity: 0.4 },
+  selectorTxt:         { fontSize: FS.sm, fontWeight: FW.semibold, color: D.SUBTLE },
+  selectorTxtActive:   { color: '#fff' },
+  selectorTxtDim:      { color: D.SUBTLE },
+
+  // camera button
+  cameraBtn: {
+    height: 52,
+    backgroundColor: D.PRIMARY,
+    borderRadius: BR.full,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: SP.sm,
+    shadowColor: D.PRIMARY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  cameraBtnIcon: { fontSize: FS.md, marginRight: SP.sm },
+  cameraBtnText: { fontSize: FS.md, fontWeight: FW.bold, color: '#fff' },
+
+  // divider
+  divRow: { flexDirection: 'row', alignItems: 'center', marginVertical: SP.sm },
+  divLine: { flex: 1, height: 1, backgroundColor: D.BORDER },
+  divTxt:  { fontSize: FS.xs, color: D.SUBTLE, marginHorizontal: SP.sm },
+
+  // barcode input
+  inputWrap: {
+    height: 52,
+    backgroundColor: D.CARD,
     borderWidth: 1.5,
-    borderColor: Colors.border,
+    borderColor: D.BORDER,
+    borderRadius: BR.md,
+    marginBottom: SP.sm,
+    paddingHorizontal: SP.lg,
+    justifyContent: 'center',
+  },
+  input: { fontSize: FS.md, color: D.TEXT, padding: 0 },
+
+  // submit button
+  submitBtn: {
+    height: 52,
+    backgroundColor: D.PRIMARY,
+    borderRadius: BR.full,
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
+    marginBottom: SP.md,
   },
-  pickerOptionActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primaryLight,
-  },
-  pickerOptionDisabled: {
-    backgroundColor: Colors.inputBg,
-    borderColor: Colors.border,
-    opacity: 0.5,
-  },
-  pickerText:         { color: Colors.textSecondary, fontWeight: '600' },
-  pickerTextActive:   { color: Colors.primary },
-  pickerTextDisabled: { color: Colors.textMuted },
+  submitBtnTxt: { fontSize: FS.md, fontWeight: FW.bold, color: '#fff' },
 
-  cameraButton: {
-    backgroundColor: Colors.accent,
-    padding: 16,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  cameraButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  dimmed: { opacity: 0.4 },
 
-  divider: {
-    textAlign: 'center',
-    color: Colors.textMuted,
-    fontSize: 12,
-    marginVertical: 12,
-  },
-
-  scanButton: {
-    backgroundColor: Colors.primary,
-    padding: 16,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  scanButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  disabled: { opacity: 0.6 },
-
+  // scanner hint
   scannerHint: {
-    color: '#46627F',
-    fontSize: 13,
+    fontSize: FS.xs,
+    color: D.SUBTLE,
     textAlign: 'center',
-    marginTop: 8,
+    marginBottom: SP.sm,
     fontStyle: 'italic',
   },
 
-  lastScanCard:  { borderLeftWidth: 4, borderLeftColor: Colors.success },
-  lastTicketCard: { borderLeftColor: Colors.error, backgroundColor: Colors.errorBg },
-  lastScanTitle: { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginBottom: 8 },
-
-  kvRow:  { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
-  kvKey:  { color: Colors.textSecondary, fontSize: 13 },
-  kvValue: { color: Colors.textPrimary, fontSize: 13, fontWeight: '600' },
-
-  doneButton: {
-    backgroundColor: Colors.accent,
-    padding: 16,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    marginBottom: 8,
+  // last scan card
+  lastCard: {
+    backgroundColor: D.CARD,
+    borderRadius: BR.md,
+    padding: SP.lg,
+    marginTop: SP.sm,
+    ...CARD_SHADOW,
   },
-  doneButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  lastCardMain:  { flexDirection: 'row', alignItems: 'flex-start', marginBottom: SP.sm },
+  successCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: D.SUCCESS,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SP.md,
+  },
+  successCheck: { color: '#fff', fontSize: FS.md, fontWeight: FW.bold },
+  ticketCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FEF3C7',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SP.md,
+  },
+  ticketStar:     { fontSize: FS.md },
+  lastCardInfo:   { flex: 1 },
+  lastCardCode:   { fontSize: FS.md, fontWeight: FW.semibold, color: D.TEXT, marginBottom: SP.xs },
+  lastCardMeta:   { flexDirection: 'row', alignItems: 'center', marginBottom: SP.xs },
+  typeBadge:      { paddingHorizontal: SP.sm, paddingVertical: 2, borderRadius: BR.full, marginRight: SP.xs },
+  typeBadgeOpen:  { backgroundColor: '#DBEAFE' },
+  typeBadgeClose: { backgroundColor: '#DCFCE7' },
+  typeBadgeTxt:       { fontSize: FS.xs, fontWeight: FW.semibold },
+  typeBadgeTxtOpen:   { color: D.PRIMARY },
+  typeBadgeTxtClose:  { color: D.SUCCESS },
+  lastCardPos:    { fontSize: FS.sm, color: D.SUBTLE },
+  lastCardSlot:   { fontSize: FS.xs, color: D.SUBTLE },
+  sessionCount:   { fontSize: FS.xs, color: D.SUBTLE, textAlign: 'right' },
 
-  footer:     { alignItems: 'center', marginTop: 8 },
-  footerText: { color: Colors.textMuted, fontSize: 12 },
+  // done button (fixed bottom)
+  doneWrap: {
+    paddingHorizontal: SP.lg,
+    paddingTop: SP.sm,
+    paddingBottom: SP.lg,
+    backgroundColor: D.BACKGROUND,
+  },
+  doneBtn: {
+    height: 52,
+    backgroundColor: D.SUCCESS,
+    borderRadius: BR.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  doneBtnTxt: { fontSize: FS.md, fontWeight: FW.bold, color: '#fff' },
 
+  // toast
   toast: {
     position: 'absolute',
     bottom: 24,
-    left: 16,
-    right: 16,
-    backgroundColor: Colors.primary,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: Radius.md,
+    left: SP.lg,
+    right: SP.lg,
+    backgroundColor: D.PRIMARY,
+    paddingVertical: SP.md,
+    paddingHorizontal: SP.lg,
+    borderRadius: BR.md,
     zIndex: 1000,
     elevation: 4,
-    ...Shadow.card,
+    ...CARD_SHADOW,
   },
-  toastText: { color: '#fff', fontSize: 14, fontWeight: '500', textAlign: 'center' },
+  toastTxt: { color: '#fff', fontSize: FS.sm, fontWeight: FW.medium, textAlign: 'center' },
 });

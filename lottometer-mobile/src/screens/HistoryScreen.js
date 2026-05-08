@@ -9,6 +9,9 @@ import {
   RefreshControl,
   Alert,
   Animated,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useFocusEffect, useNavigation } from '@react-navigation/native';
@@ -18,9 +21,37 @@ import { listBusinessDays } from '../api/businessDays';
 import { listShifts } from '../api/shifts';
 import { useAuth } from '../context/AuthContext';
 import { getDb } from '../offline/db';
-import EmptyState from '../components/EmptyState';
 import { formatDayLabel, formatLocalTime } from '../utils/dateTime';
-import { Colors, Radius, Shadow } from '../theme';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+// ── design tokens ──────────────────────────────────────────────────────────────
+const D = {
+  PRIMARY:    '#0077CC',
+  SUCCESS:    '#16A34A',
+  ERROR:      '#DC2626',
+  WARNING:    '#D97706',
+  BACKGROUND: '#F8FAFC',
+  CARD:       '#FFFFFF',
+  TEXT:       '#0F172A',
+  SUBTLE:     '#64748B',
+  BORDER:     '#E2E8F0',
+};
+const FS = { xs: 11, sm: 13, md: 15, lg: 18, xl: 22, xxl: 28 };
+const FW = { regular: '400', medium: '500', semibold: '600', bold: '700' };
+const SP = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };
+const BR = { sm: 8, md: 12, lg: 16, full: 26 };
+const CARD_SHADOW = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.06,
+  shadowRadius: 4,
+  elevation: 2,
+};
+
+// ── helpers ────────────────────────────────────────────────────────────────────
 
 function fmt$(v) {
   if (v === null || v === undefined) return '$0.00';
@@ -42,7 +73,55 @@ function getDayVariance(day) {
   return closed.reduce((sum, s) => sum + parseFloat(s.difference || 0), 0);
 }
 
-// ─── screen ───────────────────────────────────────────────────────────────────
+function getDayBadge(day) {
+  if (day.status === 'open') {
+    return { label: 'Active', bg: '#DBEAFE', color: D.PRIMARY };
+  }
+  const variance = getDayVariance(day);
+  if (variance === null) return null;
+  const abs = Math.abs(variance).toFixed(2);
+  if (variance === 0)  return { label: `$${abs} · Correct`, bg: '#DCFCE7', color: D.SUCCESS };
+  if (variance > 0)    return { label: `+$${abs} · Over`,   bg: '#FEF9EE', color: D.WARNING };
+  return                      { label: `-$${abs} · Short`,  bg: '#FEE2E2', color: D.ERROR };
+}
+
+function getDayTimeRange(day) {
+  const shifts = day.shifts || [];
+  if (shifts.length === 0) return '—';
+  const opened = shifts.map(s => s.opened_at).filter(Boolean).sort();
+  if (opened.length === 0) return '—';
+  const start = formatLocalTime(opened[0]);
+  if (shifts.some(s => s.status === 'open')) return `${start} – Active`;
+  const closed = shifts.map(s => s.closed_at).filter(Boolean).sort();
+  if (closed.length === 0) return start;
+  return `${start} – ${formatLocalTime(closed[closed.length - 1])}`;
+}
+
+function getShiftVariance(shift) {
+  if (shift.voided) return { color: D.ERROR, label: 'Voided' };
+  if (shift.status === 'open') return { color: D.PRIMARY, label: 'Active' };
+  if (shift.shift_status === 'correct') return { color: D.SUCCESS, label: 'Correct' };
+  if (shift.shift_status === 'over') {
+    const n = Math.abs(parseFloat(shift.difference || 0));
+    return { color: D.WARNING, label: `+$${n.toFixed(2)}` };
+  }
+  if (shift.shift_status === 'short') {
+    const n = Math.abs(parseFloat(shift.difference || 0));
+    return { color: D.ERROR, label: `-$${n.toFixed(2)}` };
+  }
+  return { color: D.SUBTLE, label: '—' };
+}
+
+function formatShiftTime(shift) {
+  const start = formatLocalTime(shift.opened_at);
+  if (shift.status === 'open') return `${start} – Active`;
+  const end = formatLocalTime(shift.closed_at);
+  if (!shift.opened_at || !shift.closed_at) return `${start} – ${end}`;
+  const hrs = Math.round((new Date(shift.closed_at) - new Date(shift.opened_at)) / 3_600_000);
+  return `${start} – ${end}${hrs > 0 ? ` · ${hrs}h` : ''}`;
+}
+
+// ── screen ─────────────────────────────────────────────────────────────────────
 
 export default function HistoryScreen() {
   const { t } = useTranslation();
@@ -183,6 +262,7 @@ export default function HistoryScreen() {
   }
 
   async function handleDayPress(day) {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
     if (expandedDayId === day.id) {
       setExpandedDayId(null);
       return;
@@ -220,115 +300,135 @@ export default function HistoryScreen() {
     );
   }
 
+  // ── loading ─────────────────────────────────────────────────────────────────
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.titleRow}>
-          <Text style={styles.title}>{t('history.title')}</Text>
+      <SafeAreaView style={s.safeArea}>
+        <View style={s.header}>
+          <Text style={s.headerTitle}>{t('history.title')}</Text>
+          <FilterIcon />
         </View>
-        <DaySkeleton />
-        <DaySkeleton />
-        <DaySkeleton />
-        <DaySkeleton />
+        <View style={s.skeletonWrap}>
+          <DaySkeleton />
+          <DaySkeleton />
+          <DaySkeleton />
+        </View>
       </SafeAreaView>
     );
   }
 
+  // ── main ────────────────────────────────────────────────────────────────────
+
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={s.safeArea}>
+      <View style={s.header}>
+        <Text style={s.headerTitle}>{t('history.title')}</Text>
+        <FilterIcon />
+      </View>
+
       <FlatList
         data={businessDays}
         keyExtractor={(d) => d.uuid || String(d.id)}
         renderItem={renderDay}
         extraData={[expandedDayId, cacheVersion]}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={s.listContent}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={Colors.primary}
-            colors={[Colors.primary]}
+            tintColor={D.PRIMARY}
+            colors={[D.PRIMARY]}
           />
-        }
-        ListHeaderComponent={
-          <View style={styles.titleRow}>
-            <Text style={styles.title}>{t('history.title')}</Text>
-          </View>
         }
         ListEmptyComponent={
-          <EmptyState
-            icon="time-outline"
-            title={t('history.emptyDaysTitle')}
-            subtitle={t('history.emptyDaysSubtitle')}
-          />
+          <View style={s.emptyWrap}>
+            <Text style={s.emptyEmoji}>📋</Text>
+            <Text style={s.emptyTitle}>No history yet</Text>
+            <Text style={s.emptySub}>Closed shifts will appear here</Text>
+          </View>
         }
       />
     </SafeAreaView>
   );
 }
 
-// ─── DayCard ─────────────────────────────────────────────────────────────────
+// ── FilterIcon ─────────────────────────────────────────────────────────────────
+
+function FilterIcon() {
+  return (
+    <TouchableOpacity style={s.filterBtn} activeOpacity={0.6} onPress={() => {}}>
+      <View style={s.filterLine18} />
+      <View style={s.filterLine13} />
+      <View style={s.filterLine8} />
+    </TouchableOpacity>
+  );
+}
+
+// ── DayCard ───────────────────────────────────────────────────────────────────
 
 function DayCard({ day, isExpanded, cached, user, t, onPress, onShiftPress }) {
-  const isOpen = day.status === 'open';
-  const shifts = cached?.shifts ?? [];
+  const shifts   = cached?.shifts ?? day.shifts ?? [];
   const shiftsLoading = cached?.loading ?? false;
-
-  const variance = getDayVariance(day);
-  let varianceStyle = styles.varianceNeutral;
-  let varianceLabel = '—';
-  if (variance !== null) {
-    const abs = Math.abs(variance).toFixed(2);
-    if (variance === 0) {
-      varianceStyle = styles.varianceCorrect;
-      varianceLabel = `$${abs} · Correct`;
-    } else if (variance > 0) {
-      varianceStyle = styles.varianceOver;
-      varianceLabel = `+$${abs} · Over`;
-    } else {
-      varianceStyle = styles.varianceShort;
-      varianceLabel = `-$${abs} · Short`;
-    }
-  }
+  const badge    = getDayBadge(day);
+  const year     = day.business_date?.split('-')[0] ?? '';
+  const timeRange = getDayTimeRange({ ...day, shifts });
 
   return (
-    <View style={[styles.dayCard, isOpen ? styles.dayCardOpen : styles.dayCardClosed]}>
-      <TouchableOpacity onPress={onPress} activeOpacity={0.7}>
-        <View style={styles.dayHeader}>
-          <View style={styles.dayInfo}>
-            <Text style={styles.dayDate}>{formatDayLabel(day.business_date)}</Text>
-            {day.total_sales != null && parseFloat(day.total_sales) !== 0 && (
-              <Text style={styles.daySales}>{fmt$(day.total_sales)}</Text>
-            )}
-            <Text style={[styles.dayVariance, varianceStyle]}>{varianceLabel}</Text>
-          </View>
-          <View style={styles.dayRight}>
-            <View style={[styles.dayBadge, isOpen ? styles.badgeOpen : styles.badgeClosed]}>
-              <Text style={[styles.dayBadgeText, isOpen ? styles.badgeOpenText : styles.badgeClosedText]}>
-                {t(isOpen ? 'history.statusOpen' : 'history.statusClosed')}
+    <View style={s.dayCard}>
+
+      {/* ── Header (tappable) ─────────────────────────────────────────── */}
+      <TouchableOpacity style={s.dayHeader} onPress={onPress} activeOpacity={0.7}>
+        <View style={s.dayLeft}>
+          <Text style={s.dayDate}>{formatDayLabel(day.business_date)}</Text>
+          {!!year && <Text style={s.dayYear}>{year}</Text>}
+        </View>
+        <View style={s.dayRight}>
+          {badge && (
+            <View style={[s.dayBadge, { backgroundColor: badge.bg }]}>
+              <Text style={[s.dayBadgeText, { color: badge.color }]}>
+                {badge.label}
               </Text>
             </View>
-            <Text style={[styles.chevron, isExpanded && styles.chevronExpanded]}>{'▼'}</Text>
-          </View>
+          )}
+          <Text style={[s.chevron, isExpanded && s.chevronExpanded]}>›</Text>
         </View>
       </TouchableOpacity>
 
+      {/* ── Summary Row (always visible) ──────────────────────────────── */}
+      <View style={s.summaryRow}>
+        <View style={s.statCell}>
+          <Text style={s.statLabel}>Total Sales</Text>
+          <Text style={s.statValue}>{fmt$(day.total_sales)}</Text>
+        </View>
+        <View style={[s.statCell, s.statCellCenter]}>
+          <Text style={s.statLabel}>Shifts</Text>
+          <Text style={s.statValue}>{shifts.length}</Text>
+        </View>
+        <View style={[s.statCell, s.statCellRight]}>
+          <Text style={[s.statLabel, { textAlign: 'right' }]}>Hours</Text>
+          <Text style={[s.statValueSm, { textAlign: 'right' }]}>{timeRange}</Text>
+        </View>
+      </View>
+
+      {/* ── Shifts Section (expanded only) ────────────────────────────── */}
       {isExpanded && (
-        <View style={styles.shiftsContainer}>
-          <View style={styles.shiftsDivider} />
+        <View style={s.shiftsSection}>
+          <View style={s.shiftsDivider} />
           {shiftsLoading ? (
             <ActivityIndicator
               size="small"
-              color={Colors.primary}
-              style={styles.shiftsLoader}
+              color={D.PRIMARY}
+              style={s.shiftsLoader}
             />
           ) : shifts.length === 0 ? (
-            <Text style={styles.noShiftsText}>{t('history.noShifts')}</Text>
+            <Text style={s.noShiftsText}>{t('history.noShifts')}</Text>
           ) : (
-            shifts.map((shift) => (
+            shifts.map((shift, idx) => (
               <ShiftRow
                 key={shift.uuid || String(shift.id)}
                 shift={shift}
+                isLast={idx === shifts.length - 1}
                 user={user}
                 t={t}
                 onPress={() => onShiftPress(shift.id)}
@@ -341,70 +441,49 @@ function DayCard({ day, isExpanded, cached, user, t, onPress, onShiftPress }) {
   );
 }
 
-// ─── ShiftRow ─────────────────────────────────────────────────────────────────
+// ── ShiftRow ──────────────────────────────────────────────────────────────────
 
-function ShiftRow({ shift, user, t, onPress }) {
-  const isOpen = shift.status === 'open';
-  const isVoided = shift.voided;
-
-  let badgeText, badgeBg, badgeColor;
-
-  if (isVoided) {
-    badgeText = t('history.statusVoided');
-    badgeBg = Colors.errorBg;
-    badgeColor = Colors.error;
-  } else if (isOpen) {
-    badgeText = t('history.statusActive');
-    badgeBg = Colors.primaryLight;
-    badgeColor = Colors.primary;
-  } else if (shift.shift_status === 'correct') {
-    badgeText = t('history.statusCorrect');
-    badgeBg = Colors.successBg;
-    badgeColor = Colors.success;
-  } else if (shift.shift_status === 'over') {
-    badgeText = t('history.statusOver');
-    badgeBg = Colors.warningBg;
-    badgeColor = Colors.warning;
-  } else if (shift.shift_status === 'short') {
-    badgeText = t('history.statusShort');
-    badgeBg = Colors.errorBg;
-    badgeColor = Colors.error;
-  } else {
-    badgeText = '—';
-    badgeBg = Colors.border;
-    badgeColor = Colors.textMuted;
-  }
-
-  const openedBy =
-    shift.employee_id === user?.user_id
-      ? user?.username
-      : `#${shift.employee_id}`;
-
-  const endLabel = isOpen
-    ? t('history.statusActive')
-    : formatLocalTime(shift.closed_at);
+function ShiftRow({ shift, isLast, user, t, onPress }) {
+  const variance  = getShiftVariance(shift);
+  const timeLabel = formatShiftTime(shift);
 
   return (
-    <TouchableOpacity style={styles.shiftRow} onPress={onPress} activeOpacity={0.7}>
-      <View style={styles.shiftLeft}>
-        <Text style={styles.shiftNumber}>
-          {t('history.shiftNumber', { number: shift.shift_number })}
-        </Text>
-        <Text style={styles.shiftTime}>
-          {`${formatLocalTime(shift.opened_at)} → ${endLabel}`}
-        </Text>
-        <Text style={styles.shiftOpenedBy}>{openedBy}</Text>
+    <TouchableOpacity
+      style={[s.shiftRow, !isLast && s.shiftRowBorder]}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      {/* Left: circle + info */}
+      <View style={s.shiftLeft}>
+        <View style={s.shiftCircle}>
+          <Text style={s.shiftCircleText}>{shift.shift_number}</Text>
+        </View>
+        <View style={s.shiftInfo}>
+          <Text style={s.shiftName}>
+            {t('history.shiftNumber', { number: shift.shift_number })}
+          </Text>
+          <Text style={s.shiftTime}>{timeLabel}</Text>
+        </View>
       </View>
-      <View style={[styles.shiftBadge, { backgroundColor: badgeBg }]}>
-        <Text style={[styles.shiftBadgeText, { color: badgeColor }]}>
-          {badgeText}
-        </Text>
+
+      {/* Right: amount + variance + chevron */}
+      <View style={s.shiftRight}>
+        <View style={s.shiftRightInfo}>
+          <Text style={s.shiftSales}>{fmt$(shift.gross_sales)}</Text>
+          <View style={s.varRow}>
+            <View style={[s.varDot, { backgroundColor: variance.color }]} />
+            <Text style={[s.varLabel, { color: variance.color }]}>
+              {variance.label}
+            </Text>
+          </View>
+        </View>
+        <Text style={s.shiftChevron}>›</Text>
       </View>
     </TouchableOpacity>
   );
 }
 
-// ─── skeleton ─────────────────────────────────────────────────────────────────
+// ── DaySkeleton ───────────────────────────────────────────────────────────────
 
 function DaySkeleton() {
   const opacity = useRef(new Animated.Value(0.4)).current;
@@ -421,143 +500,160 @@ function DaySkeleton() {
   }, [opacity]);
 
   return (
-    <Animated.View style={[styles.skeletonCard, { opacity }]}>
-      <View style={styles.skeletonRow}>
-        <View style={styles.skeletonLineLong} />
-        <View style={styles.skeletonBadge} />
+    <Animated.View style={[s.skelCard, { opacity }]}>
+      {/* header placeholder */}
+      <View style={s.skelHeader}>
+        <View style={s.skelLeft}>
+          <View style={s.skelDateBar} />
+          <View style={s.skelYearBar} />
+        </View>
+        <View style={s.skelBadge} />
       </View>
-      <View style={styles.skeletonLineShort} />
+      {/* summary placeholder */}
+      <View style={s.skelSummary}>
+        <View style={s.skelStat} />
+        <View style={s.skelStat} />
+        <View style={s.skelStat} />
+      </View>
     </Animated.View>
   );
 }
 
-// ─── styles ───────────────────────────────────────────────────────────────────
+// ── styles ────────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+const s = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: D.BACKGROUND },
 
-  titleRow: {
-    paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 8,
+  // header
+  header: {
+    height: 56,
+    backgroundColor: D.CARD,
+    borderBottomWidth: 1,
+    borderBottomColor: D.BORDER,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SP.lg,
   },
-  title: { fontSize: 28, fontWeight: '700', color: Colors.textPrimary },
+  headerTitle: { fontSize: FS.lg, fontWeight: FW.bold, color: D.TEXT },
 
-  listContent: { paddingHorizontal: 16, paddingBottom: 32 },
+  // filter icon — three horizontal bars, decreasing width (funnel shape)
+  filterBtn:    { padding: SP.sm, gap: 4 },
+  filterLine18: { width: 18, height: 2, backgroundColor: D.TEXT, borderRadius: 1 },
+  filterLine13: { width: 13, height: 2, backgroundColor: D.TEXT, borderRadius: 1 },
+  filterLine8:  { width: 8,  height: 2, backgroundColor: D.TEXT, borderRadius: 1 },
 
+  // list
+  listContent: { paddingHorizontal: SP.lg, paddingTop: SP.sm, paddingBottom: 32 },
+  skeletonWrap: { padding: SP.lg, gap: SP.md },
+
+  // empty state
+  emptyWrap:  { alignItems: 'center', paddingTop: 80, paddingHorizontal: SP.xl },
+  emptyEmoji: { fontSize: 64, marginBottom: SP.md },
+  emptyTitle: { fontSize: FS.lg, fontWeight: FW.semibold, color: D.TEXT, marginBottom: SP.sm },
+  emptySub:   { fontSize: FS.md, color: D.SUBTLE, textAlign: 'center' },
+
+  // day card
   dayCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    marginBottom: 10,
-    borderLeftWidth: 4,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    backgroundColor: D.CARD,
+    borderRadius: BR.md,
+    marginBottom: SP.md,
     overflow: 'hidden',
-    ...Shadow.sm,
+    ...CARD_SHADOW,
   },
-  dayCardOpen:   { borderLeftColor: Colors.success },
-  dayCardClosed: { borderLeftColor: Colors.border },
 
+  // day card header
   dayHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: 16,
+    padding: SP.lg,
   },
-  dayInfo:  { flex: 1, marginRight: 8 },
-  dayDate:  { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, marginBottom: 3 },
-  daySales: { fontSize: 13, color: Colors.textSecondary, marginBottom: 2 },
+  dayLeft:  { flex: 1, marginRight: SP.sm },
+  dayDate:  { fontSize: FS.md, fontWeight: FW.bold, color: D.TEXT, marginBottom: 2 },
+  dayYear:  { fontSize: FS.sm, color: D.SUBTLE },
+  dayRight: { flexDirection: 'row', alignItems: 'center', gap: SP.sm },
 
-  dayVariance:      { fontSize: 12, fontWeight: '600' },
-  varianceCorrect:  { color: Colors.success },
-  varianceOver:     { color: Colors.warning },
-  varianceShort:    { color: Colors.error },
-  varianceNeutral:  { color: Colors.textMuted },
+  dayBadge:     { paddingHorizontal: SP.md, paddingVertical: 3, borderRadius: BR.full },
+  dayBadgeText: { fontSize: FS.xs, fontWeight: FW.semibold },
 
-  dayRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  chevron:         { fontSize: 22, color: D.SUBTLE, transform: [{ rotate: '90deg' }] },
+  chevronExpanded: { transform: [{ rotate: '-90deg' }] },
 
-  dayBadge: {
-    paddingHorizontal: 9,
-    paddingVertical: 3,
-    borderRadius: Radius.full,
+  // summary row
+  summaryRow: {
+    flexDirection: 'row',
+    paddingHorizontal: SP.lg,
+    paddingBottom: SP.md,
   },
-  badgeOpen:       { backgroundColor: Colors.successBg },
-  badgeClosed:     { backgroundColor: Colors.border },
-  dayBadgeText:    { fontSize: 12, fontWeight: '700' },
-  badgeOpenText:   { color: Colors.success },
-  badgeClosedText: { color: Colors.textSecondary },
+  statCell:       { flex: 1 },
+  statCellCenter: { alignItems: 'center' },
+  statCellRight:  { alignItems: 'flex-end' },
+  statLabel:      { fontSize: FS.xs, color: D.SUBTLE, marginBottom: 2 },
+  statValue:      { fontSize: FS.md, fontWeight: FW.bold, color: D.TEXT },
+  statValueSm:    { fontSize: FS.xs, fontWeight: FW.medium, color: D.TEXT },
 
-  chevron:         { fontSize: 12, color: Colors.textMuted, marginLeft: 2 },
-  chevronExpanded: { transform: [{ rotate: '180deg' }] },
-
-  shiftsContainer: { paddingBottom: 6 },
-  shiftsDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginHorizontal: 16,
-    marginBottom: 4,
-  },
-  shiftsLoader:  { paddingVertical: 14 },
+  // shifts section
+  shiftsSection: {},
+  shiftsDivider: { height: 1, backgroundColor: D.BORDER },
+  shiftsLoader:  { paddingVertical: SP.lg },
   noShiftsText: {
-    fontSize: 13,
-    color: Colors.textMuted,
+    fontSize: FS.sm,
+    color: D.SUBTLE,
     textAlign: 'center',
-    paddingVertical: 12,
+    paddingVertical: SP.md,
   },
 
+  // shift row
   shiftRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    paddingHorizontal: SP.lg,
+    paddingVertical: SP.md,
   },
-  shiftLeft:      { flex: 1, marginRight: 10 },
-  shiftNumber:    { fontSize: 14, fontWeight: '700', color: Colors.textPrimary, marginBottom: 2 },
-  shiftTime:      { fontSize: 12, color: Colors.textSecondary, marginBottom: 2 },
-  shiftOpenedBy:  { fontSize: 11, color: Colors.textMuted },
+  shiftRowBorder: { borderBottomWidth: 1, borderBottomColor: D.BORDER },
 
-  shiftBadge: {
-    paddingHorizontal: 9,
-    paddingVertical: 4,
-    borderRadius: Radius.full,
+  shiftLeft: { flexDirection: 'row', alignItems: 'center', flex: 1, marginRight: SP.sm },
+  shiftCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: D.PRIMARY,
+    justifyContent: 'center',
     alignItems: 'center',
+    marginRight: SP.sm,
   },
-  shiftBadgeText: { fontSize: 11, fontWeight: '700' },
+  shiftCircleText: { fontSize: FS.sm, fontWeight: FW.bold, color: '#fff' },
+  shiftInfo:       { flex: 1 },
+  shiftName:       { fontSize: FS.sm, fontWeight: FW.semibold, color: D.TEXT, marginBottom: 2 },
+  shiftTime:       { fontSize: FS.xs, color: D.SUBTLE },
 
-  skeletonCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.md,
-    marginBottom: 10,
-    marginHorizontal: 16,
-    padding: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.border,
+  shiftRight:     { flexDirection: 'row', alignItems: 'center', gap: SP.sm },
+  shiftRightInfo: { alignItems: 'flex-end' },
+  shiftSales:     { fontSize: FS.sm, fontWeight: FW.semibold, color: D.TEXT, marginBottom: 2 },
+  varRow:         { flexDirection: 'row', alignItems: 'center', gap: SP.xs },
+  varDot:         { width: 6, height: 6, borderRadius: 3 },
+  varLabel:       { fontSize: FS.xs, fontWeight: FW.medium },
+  shiftChevron:   { fontSize: 20, color: D.SUBTLE },
+
+  // skeleton
+  skelCard: {
+    backgroundColor: D.CARD,
+    borderRadius: BR.md,
+    padding: SP.lg,
+    ...CARD_SHADOW,
   },
-  skeletonRow: {
+  skelHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
+    alignItems: 'flex-start',
+    marginBottom: SP.md,
   },
-  skeletonLineLong: {
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: Colors.border,
-    flex: 0.65,
-  },
-  skeletonBadge: {
-    height: 22,
-    width: 54,
-    borderRadius: Radius.full,
-    backgroundColor: Colors.border,
-  },
-  skeletonLineShort: {
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: Colors.inputBg,
-    width: '35%',
-  },
+  skelLeft:    { gap: SP.xs },
+  skelDateBar: { width: 130, height: 14, backgroundColor: D.BORDER, borderRadius: 7 },
+  skelYearBar: { width: 36,  height: 11, backgroundColor: D.BORDER, borderRadius: 5 },
+  skelBadge:   { width: 80,  height: 22, backgroundColor: D.BORDER, borderRadius: BR.full },
+  skelSummary: { flexDirection: 'row', gap: SP.md },
+  skelStat:    { flex: 1, height: 32, backgroundColor: D.BORDER, borderRadius: BR.sm },
 });

@@ -27,10 +27,72 @@ import WholeBookSaleModal from '../components/WholeBookSaleModal';
 import ReturnBookModal from '../components/ReturnBookModal';
 import BooksDashboard from '../components/BooksDashboard';
 import { formatBusinessDate, formatLocalTime } from '../utils/dateTime';
-import { Colors, Radius, Shadow } from '../theme';
 import { debugLocalDb } from '../offline/debugDb';
 
-// ─── screen ─────────────────────────────────────────────────────────────────
+// ── design tokens ──────────────────────────────────────────────────────────────
+const D = {
+  PRIMARY:    '#0077CC',
+  SUCCESS:    '#16A34A',
+  ERROR:      '#DC2626',
+  WARNING:    '#D97706',
+  BACKGROUND: '#F8FAFC',
+  CARD:       '#FFFFFF',
+  TEXT:       '#0F172A',
+  SUBTLE:     '#64748B',
+  BORDER:     '#E2E8F0',
+};
+const FS = { xs: 11, sm: 13, md: 15, lg: 18, xl: 24 };
+const FW = { regular: '400', medium: '500', semibold: '600', bold: '700' };
+const SP = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };
+const BR = { sm: 8, md: 12, lg: 16, full: 26 };
+const CARD_SHADOW = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.06,
+  shadowRadius: 4,
+  elevation: 2,
+};
+
+// ── helpers ────────────────────────────────────────────────────────────────────
+
+function getInitials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+function getShiftDuration(openedAt) {
+  if (!openedAt) return '—';
+  const ms = Date.now() - new Date(openedAt).getTime();
+  const h = Math.floor(ms / 3_600_000);
+  const m = Math.floor((ms % 3_600_000) / 60_000);
+  if (h === 0) return `${m}m`;
+  return `${h}h ${m}m`;
+}
+
+function getShiftStatusInfo(summary) {
+  if (!summary) return { label: 'Active', color: D.PRIMARY };
+  if (summary.books_pending_open != null) {
+    return summary.books_pending_open === 0
+      ? { label: 'Initialized', color: D.SUCCESS }
+      : { label: 'Scanning', color: D.WARNING };
+  }
+  return { label: 'Active', color: D.PRIMARY };
+}
+
+function getBooksCount(summary) {
+  if (!summary) return '—';
+  if (summary.books_pending_open != null && summary.books_pending_open > 0) {
+    return `${summary.books_pending_open}`;
+  }
+  if (summary.books_pending_close != null) {
+    return `${summary.books_pending_close}`;
+  }
+  return '—';
+}
+
+// ── screen ─────────────────────────────────────────────────────────────────────
 
 export default function HomeScreen() {
   const { t } = useTranslation();
@@ -47,7 +109,7 @@ export default function HomeScreen() {
   const [activeShift, setActiveShift]   = useState(null);
   const [summary, setSummary]           = useState(null);
 
-  const [subscription, setSubscription]     = useState(null);
+  const [subscription, setSubscription] = useState(null);
 
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -350,9 +412,10 @@ export default function HomeScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" color={Colors.primary} />
+      <SafeAreaView style={s.safeArea}>
+        <View style={s.center}>
+          <ActivityIndicator size="large" color={D.PRIMARY} />
+          <Text style={s.loadingText}>Loading shift...</Text>
         </View>
       </SafeAreaView>
     );
@@ -375,50 +438,57 @@ export default function HomeScreen() {
     : activeShift ? `Employee #${activeShift.employee_id}` : null;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView style={s.safeArea}>
+
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <View style={s.header}>
+        <Text style={s.headerStore} numberOfLines={1}>
+          {store?.name || store?.store_name || 'LottoMeter'}
+        </Text>
+        <View style={s.avatar}>
+          <Text style={s.avatarText}>{getInitials(user?.username)}</Text>
+        </View>
+      </View>
+
+      {/* ── Offline Banner ──────────────────────────────────────────────── */}
+      {isOffline && (
+        <View style={s.offlineBanner}>
+          <Text style={s.offlineBannerText}>
+            {pendingSyncCount > 0
+              ? `⚠️ Offline — ${pendingSyncCount} scan${pendingSyncCount !== 1 ? 's' : ''} pending sync`
+              : '⚠️ Offline Mode — working from local data'}
+          </Text>
+        </View>
+      )}
+
+      {/* ── Sync Banner ─────────────────────────────────────────────────── */}
+      {!isOffline && pendingSyncCount > 0 && (
+        <TouchableOpacity
+          style={[s.syncBanner, isSyncing && s.dimmed]}
+          onPress={handleSyncNow}
+          disabled={isSyncing}
+        >
+          <Text style={s.syncBannerText}>
+            {isSyncing ? 'Syncing...' : `↑ Sync Now (${pendingSyncCount} pending)`}
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {/* ── Scrollable Content ──────────────────────────────────────────── */}
       <ScrollView
-        contentContainerStyle={styles.scrollContent}
+        contentContainerStyle={s.scroll}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
             onRefresh={handleRefresh}
-            tintColor={Colors.primary}
-            colors={[Colors.primary]}
+            tintColor={D.PRIMARY}
+            colors={[D.PRIMARY]}
           />
         }
       >
-        <Text style={styles.greeting}>
-          {t('home.greeting', { name: user?.username || '' })}
-        </Text>
-
-        {isOffline && (
-          <View style={styles.offlineBanner}>
-            <Text style={styles.offlineBannerText}>
-              {pendingSyncCount > 0
-                ? `Offline — ${pendingSyncCount} scan(s) pending sync`
-                : 'Offline Mode — working from local data'}
-            </Text>
-          </View>
-        )}
-
-        {!isOffline && pendingSyncCount > 0 && (
-          <TouchableOpacity
-            style={[styles.syncButton, isSyncing && styles.disabled]}
-            onPress={handleSyncNow}
-            disabled={isSyncing}
-          >
-            <Text style={styles.syncButtonText}>
-              {isSyncing
-                ? 'Syncing...'
-                : `Sync Now (${pendingSyncCount} pending)`}
-            </Text>
-          </TouchableOpacity>
-        )}
-
         <TrialBannerComponent subscription={subscription} />
 
-        {isAdmin && <BooksDashboard />}
-
+        {/* No active shift */}
         {!hasActiveShift && (
           <NoShiftCard
             businessDay={businessDay}
@@ -428,6 +498,7 @@ export default function HomeScreen() {
           />
         )}
 
+        {/* Active shift */}
         {hasActiveShift && (
           <ActiveShiftCard
             businessDay={businessDay}
@@ -437,24 +508,35 @@ export default function HomeScreen() {
             onClose={() => setCloseModalOpen(true)}
             onSellWholeBook={() => setWbSaleOpen(true)}
             onReturnBook={() => setReturnOpen(true)}
+            onScan={() => navigation.navigate('Scan')}
             t={t}
           />
         )}
 
+        {/* Books dashboard (admin only) */}
+        {isAdmin && (
+          <View style={s.dashCard}>
+            <Text style={s.dashTitle}>Books Overview</Text>
+            <BooksDashboard />
+          </View>
+        )}
+
+        {/* Close business day */}
         {canCloseBizDay && (
           <TouchableOpacity
-            style={[styles.closeBizDayButton, busy && styles.disabled]}
+            style={[s.closeBizBtn, busy && s.dimmed]}
             onPress={handleCloseBizDay}
             disabled={busy}
           >
             {busy ? (
-              <ActivityIndicator color={Colors.error} />
+              <ActivityIndicator color={D.ERROR} />
             ) : (
-              <Text style={styles.closeBizDayText}>{t('home.closeBizDay')}</Text>
+              <Text style={s.closeBizText}>{t('home.closeBizDay')}</Text>
             )}
           </TouchableOpacity>
         )}
 
+        {/* Debug: clear local data */}
         {isAdmin && (
           <TouchableOpacity
             onPress={async () => {
@@ -469,21 +551,16 @@ export default function HomeScreen() {
               Alert.alert('Done', 'Local data cleared');
               await loadData();
             }}
-            style={{
-              padding: 12,
-              margin: 16,
-              backgroundColor: '#EF4444',
-              borderRadius: 8,
-              alignItems: 'center',
-            }}
+            style={s.debugBtn}
           >
-            <Text style={{ color: '#fff', fontWeight: '600' }}>
-              🗑 Clear Local Data (Debug)
-            </Text>
+            <Text style={s.debugBtnText}>🗑 Clear Local Data (Debug)</Text>
           </TouchableOpacity>
         )}
+
+        <View style={{ height: 100 }} />
       </ScrollView>
 
+      {/* ── Modals ──────────────────────────────────────────────────────── */}
       <CloseShiftModal
         visible={closeModalOpen}
         mode="final"
@@ -513,229 +590,310 @@ export default function HomeScreen() {
   );
 }
 
-// ─── STATE 1 — no open shift ─────────────────────────────────────────────────
+// ── NoShiftCard ───────────────────────────────────────────────────────────────
 
 function NoShiftCard({ businessDay, onOpen, busy, t }) {
   return (
-    <View style={styles.card}>
+    <View style={s.noShiftCard}>
       {businessDay && (
-        <Text style={styles.dateText}>
+        <Text style={s.noShiftDate}>
           {formatBusinessDate(businessDay.business_date)}
         </Text>
       )}
-      <Text style={styles.cardTitle}>{t('home.noActiveShift')}</Text>
-      <Text style={styles.cardSubtitle}>{t('home.noActiveShiftHint')}</Text>
+      <Text style={s.noShiftIcon}>🕐</Text>
+      <Text style={s.noShiftTitle}>{t('home.noActiveShift')}</Text>
+      <Text style={s.noShiftSub}>{t('home.noActiveShiftHint')}</Text>
       <TouchableOpacity
-        style={[styles.primaryButton, busy && styles.disabled]}
+        style={[s.openShiftBtn, busy && s.dimmed]}
         onPress={onOpen}
         disabled={busy}
       >
         {busy ? (
           <ActivityIndicator color="#fff" />
         ) : (
-          <Text style={styles.primaryButtonText}>{t('home.openShift')}</Text>
+          <Text style={s.openShiftBtnText}>{t('home.openShift')}</Text>
         )}
       </TouchableOpacity>
     </View>
   );
 }
 
-// ─── STATE 2 — shift is open ─────────────────────────────────────────────────
+// ── ActiveShiftCard ───────────────────────────────────────────────────────────
 
-function ActiveShiftCard({ businessDay, shift, employeeName, summary, onClose, onSellWholeBook, onReturnBook, t }) {
-  const pendingScans = summary?.books_pending_close ?? '—';
+function ActiveShiftCard({
+  businessDay, shift, employeeName, summary,
+  onClose, onSellWholeBook, onReturnBook, onScan, t,
+}) {
+  const duration   = getShiftDuration(shift.opened_at);
+  const booksCount = getBooksCount(summary);
+  const statusInfo = getShiftStatusInfo(summary);
 
   return (
-    <View style={styles.activeCard}>
-      {businessDay && (
-        <Text style={styles.dateText}>
-          {formatBusinessDate(businessDay.business_date)}
-        </Text>
-      )}
+    <View style={s.shiftCard}>
 
-      <View style={styles.shiftTitleRow}>
-        <View style={styles.greenDot} />
-        <Text style={styles.shiftTitle}>
-          {t('home.shiftActive', { number: shift.shift_number })}
-        </Text>
+      {/* 3px PRIMARY top accent */}
+      <View style={s.shiftCardBar} />
+
+      {/* Header row */}
+      <View style={s.shiftCardHeader}>
+        <View style={s.shiftCardLeft}>
+          <Text style={s.shiftCardTitle}>
+            {t('home.shiftActive', { number: shift.shift_number })}
+          </Text>
+          <Text style={s.shiftCardSub}>
+            {'Opened '}
+            {formatLocalTime(shift.opened_at)}
+            {employeeName ? ` by ${employeeName}` : ''}
+          </Text>
+        </View>
+        <View style={s.activeBadge}>
+          <Text style={s.activeBadgeText}>● Active</Text>
+        </View>
       </View>
 
-      <View style={styles.divider} />
-      <KV k={t('home.openedBy')} v={employeeName ?? '—'} />
-      <KV k={t('home.started')} v={formatLocalTime(shift.opened_at)} />
-      <KV
-        k={t('home.pendingScans')}
-        v={pendingScans}
-        highlight={typeof pendingScans === 'number' && pendingScans > 0}
-      />
-
-      <View style={styles.quickActions}>
-        <TouchableOpacity style={styles.quickAction} onPress={onSellWholeBook}>
-          <Text style={styles.quickActionEmoji}>📚</Text>
-          <Text style={styles.quickActionLabel}>{t('home.sellWholeBook')}</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.quickAction} onPress={onReturnBook}>
-          <Text style={styles.quickActionEmoji}>↩️</Text>
-          <Text style={styles.quickActionLabel}>{t('home.returnBook')}</Text>
-        </TouchableOpacity>
+      {/* Stats row */}
+      <View style={s.statsRow}>
+        <View style={s.statCell}>
+          <Text style={s.statValue}>{duration}</Text>
+          <Text style={s.statLabel}>Duration</Text>
+        </View>
+        <View style={s.statDivider} />
+        <View style={s.statCell}>
+          <Text style={s.statValue}>{booksCount}</Text>
+          <Text style={s.statLabel}>Books</Text>
+        </View>
+        <View style={s.statDivider} />
+        <View style={s.statCell}>
+          <Text style={[s.statValueSm, { color: statusInfo.color }]}>
+            {statusInfo.label}
+          </Text>
+          <Text style={s.statLabel}>Status</Text>
+        </View>
       </View>
 
-      <TouchableOpacity style={styles.closeShiftButton} onPress={onClose}>
-        <Text style={styles.closeShiftText}>{t('home.endMainShift')}</Text>
-      </TouchableOpacity>
+      {/* Action buttons */}
+      <View style={s.shiftActions}>
+
+        {/* Primary: scan */}
+        <TouchableOpacity style={s.scanBtn} onPress={onScan}>
+          <Text style={s.scanBtnText}>📷  Scan Books</Text>
+        </TouchableOpacity>
+
+        {/* Secondary row */}
+        <View style={s.secondaryRow}>
+          <TouchableOpacity style={s.secondaryBtn} onPress={onSellWholeBook}>
+            <Text style={s.secondaryBtnText}>{t('home.sellWholeBook')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={s.secondaryBtn} onPress={onReturnBook}>
+            <Text style={s.secondaryBtnText}>{t('home.returnBook')}</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Danger: end shift */}
+        <View style={s.dangerDivider} />
+        <TouchableOpacity style={s.endShiftBtn} onPress={onClose}>
+          <Text style={s.endShiftBtnText}>{t('home.endMainShift')}</Text>
+        </TouchableOpacity>
+
+      </View>
     </View>
   );
 }
 
-// ─── shared ──────────────────────────────────────────────────────────────────
+// ── styles ────────────────────────────────────────────────────────────────────
 
-function KV({ k, v, highlight }) {
-  return (
-    <View style={styles.kvRow}>
-      <Text style={styles.kvKey}>{k}</Text>
-      <Text style={[styles.kvValue, highlight && styles.kvHighlight]}>{v}</Text>
-    </View>
-  );
-}
+const s = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: D.BACKGROUND },
+  center:   { flex: 1, justifyContent: 'center', alignItems: 'center', gap: SP.md },
+  loadingText: { fontSize: FS.sm, color: D.SUBTLE },
+  dimmed: { opacity: 0.5 },
 
-// ─── styles ──────────────────────────────────────────────────────────────────
-
-const styles = StyleSheet.create({
-  container:     { flex: 1, backgroundColor: Colors.background },
-  scrollContent: { padding: 16, paddingBottom: 40 },
-  center:        { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  greeting:      { fontSize: 22, fontWeight: '700', color: Colors.textPrimary, marginBottom: 16 },
-
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    padding: 20,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadow.card,
+  // header
+  header: {
+    height: 56,
+    backgroundColor: D.CARD,
+    borderBottomWidth: 1,
+    borderBottomColor: D.BORDER,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SP.lg,
   },
+  headerStore: { fontSize: FS.md, fontWeight: FW.bold, color: D.TEXT, flex: 1, marginRight: SP.sm },
+  avatar: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: D.PRIMARY,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: { fontSize: FS.sm, fontWeight: FW.bold, color: '#fff' },
 
-  dateText: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    fontWeight: '600',
-    marginBottom: 10,
+  // offline
+  offlineBanner:     { backgroundColor: D.WARNING, padding: 10, alignItems: 'center' },
+  offlineBannerText: { color: '#fff', fontWeight: FW.semibold, fontSize: FS.sm, textAlign: 'center' },
+
+  // sync
+  syncBanner: {
+    backgroundColor: '#EFF6FF',
+    borderWidth: 1,
+    borderColor: D.PRIMARY,
+    borderRadius: BR.md,
+    paddingVertical: 10,
+    paddingHorizontal: SP.lg,
+    marginHorizontal: SP.lg,
+    marginTop: SP.sm,
+    alignItems: 'center',
+  },
+  syncBannerText: { fontSize: FS.sm, fontWeight: FW.semibold, color: D.PRIMARY },
+
+  // scroll
+  scroll: { paddingTop: SP.md },
+
+  // ── NoShiftCard ────────────────────────────────────────────────────────────
+  noShiftCard: {
+    backgroundColor: D.CARD,
+    borderRadius: BR.lg,
+    padding: 32,
+    paddingHorizontal: SP.xl,
+    margin: SP.lg,
+    alignItems: 'center',
+    ...CARD_SHADOW,
+  },
+  noShiftDate: {
+    fontSize: FS.xs,
+    color: D.SUBTLE,
+    fontWeight: FW.semibold,
+    marginBottom: SP.md,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
-  cardTitle:    { fontSize: 18, fontWeight: '700', color: Colors.textPrimary, marginBottom: 6 },
-  cardSubtitle: { fontSize: 14, color: Colors.textSecondary, marginBottom: 20 },
-
-  primaryButton: {
-    backgroundColor: Colors.primary,
-    padding: 16,
-    borderRadius: Radius.md,
+  noShiftIcon:  { fontSize: 64, marginBottom: SP.md },
+  noShiftTitle: { fontSize: FS.lg, fontWeight: FW.bold, color: D.TEXT, marginBottom: SP.sm, textAlign: 'center' },
+  noShiftSub:   { fontSize: FS.md, color: D.SUBTLE, textAlign: 'center', marginBottom: SP.xl },
+  openShiftBtn: {
+    height: 52,
+    backgroundColor: D.PRIMARY,
+    borderRadius: BR.full,
+    justifyContent: 'center',
     alignItems: 'center',
+    alignSelf: 'stretch',
+    shadowColor: D.PRIMARY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  primaryButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-  disabled: { opacity: 0.55 },
+  openShiftBtnText: { fontSize: FS.md, fontWeight: FW.bold, color: '#fff' },
 
-  activeCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    padding: 20,
-    marginBottom: 14,
-    borderLeftWidth: 4,
-    borderLeftColor: Colors.success,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadow.card,
+  // ── ActiveShiftCard ────────────────────────────────────────────────────────
+  shiftCard: {
+    backgroundColor: D.CARD,
+    borderRadius: BR.lg,
+    marginHorizontal: SP.lg,
+    marginBottom: SP.md,
+    overflow: 'hidden',
+    ...CARD_SHADOW,
   },
-
-  shiftTitleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 14,
-  },
-  greenDot: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.success,
-    marginRight: 8,
-  },
-  shiftTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: Colors.border,
-    marginBottom: 10,
-  },
-
-  kvRow: {
+  shiftCardBar: { height: 3, backgroundColor: D.PRIMARY },
+  shiftCardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 7,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: Colors.border,
+    alignItems: 'flex-start',
+    padding: SP.lg,
   },
-  kvKey:       { color: Colors.textSecondary, fontSize: 14 },
-  kvValue:     { color: Colors.textPrimary, fontSize: 14, fontWeight: '600' },
-  kvHighlight: { color: Colors.warning },
+  shiftCardLeft:    { flex: 1, marginRight: SP.sm },
+  shiftCardTitle:   { fontSize: FS.lg, fontWeight: FW.bold, color: D.TEXT, marginBottom: 3 },
+  shiftCardSub:     { fontSize: FS.sm, color: D.SUBTLE },
+  activeBadge:      { backgroundColor: '#DCFCE7', paddingHorizontal: SP.sm, paddingVertical: 3, borderRadius: BR.full },
+  activeBadgeText:  { fontSize: FS.xs, fontWeight: FW.semibold, color: D.SUCCESS },
 
-  quickActions: {
+  // stats
+  statsRow: {
     flexDirection: 'row',
-    gap: 10,
-    marginTop: 18,
-    marginBottom: 16,
+    backgroundColor: D.BACKGROUND,
+    paddingVertical: SP.md,
+    paddingHorizontal: SP.lg,
   },
-  quickAction: {
+  statCell:     { flex: 1, alignItems: 'center' },
+  statValue:    { fontSize: FS.md, fontWeight: FW.bold, color: D.TEXT, marginBottom: 2 },
+  statValueSm:  { fontSize: FS.sm, fontWeight: FW.bold, marginBottom: 2 },
+  statLabel:    { fontSize: FS.xs, color: D.SUBTLE },
+  statDivider:  { width: 1, backgroundColor: D.BORDER, marginVertical: SP.xs },
+
+  // actions
+  shiftActions:  { padding: SP.lg, gap: SP.sm },
+  scanBtn: {
+    height: 52,
+    backgroundColor: D.PRIMARY,
+    borderRadius: BR.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: D.PRIMARY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  scanBtnText:      { fontSize: FS.md, fontWeight: FW.bold, color: '#fff' },
+  secondaryRow:     { flexDirection: 'row', gap: SP.sm },
+  secondaryBtn: {
     flex: 1,
-    backgroundColor: Colors.background,
-    paddingVertical: 14,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  quickActionEmoji: { fontSize: 22, marginBottom: 4 },
-  quickActionLabel: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
-
-  closeShiftButton: {
-    backgroundColor: Colors.error,
-    padding: 16,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-  },
-  closeShiftText: { color: '#fff', fontSize: 16, fontWeight: '600' },
-
-  closeBizDayButton: {
-    backgroundColor: Colors.surface,
-    padding: 14,
-    borderRadius: Radius.md,
-    alignItems: 'center',
+    height: 44,
+    backgroundColor: D.CARD,
     borderWidth: 1.5,
-    borderColor: Colors.error,
-    marginTop: 4,
-  },
-  closeBizDayText: { color: Colors.error, fontSize: 15, fontWeight: '600' },
-
-  offlineBanner: {
-    backgroundColor: '#D97706',
-    borderRadius: Radius.sm,
-    padding: 10,
-    marginBottom: 12,
+    borderColor: D.BORDER,
+    borderRadius: BR.md,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  offlineBannerText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-
-  syncButton: {
-    backgroundColor: '#2F80ED',
-    borderRadius: Radius.sm,
-    padding: 12,
-    marginBottom: 12,
+  secondaryBtnText: { fontSize: FS.sm, fontWeight: FW.semibold, color: D.TEXT },
+  dangerDivider:    { height: 1, backgroundColor: D.BORDER },
+  endShiftBtn: {
+    height: 44,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: BR.md,
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  syncButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
+  endShiftBtnText: { fontSize: FS.sm, fontWeight: FW.semibold, color: D.ERROR },
+
+  // ── Books dashboard card ───────────────────────────────────────────────────
+  dashCard: {
+    backgroundColor: D.CARD,
+    borderRadius: BR.lg,
+    marginHorizontal: SP.lg,
+    marginBottom: SP.md,
+    padding: SP.lg,
+    ...CARD_SHADOW,
+  },
+  dashTitle: { fontSize: FS.md, fontWeight: FW.semibold, color: D.TEXT, marginBottom: SP.sm },
+
+  // ── Close biz day ──────────────────────────────────────────────────────────
+  closeBizBtn: {
+    height: 44,
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1.5,
+    borderColor: '#FECACA',
+    borderRadius: BR.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: SP.lg,
+    marginBottom: SP.sm,
+  },
+  closeBizText: { fontSize: FS.sm, fontWeight: FW.semibold, color: D.ERROR },
+
+  // ── Debug button ───────────────────────────────────────────────────────────
+  debugBtn: {
+    padding: SP.md,
+    marginHorizontal: SP.lg,
+    marginBottom: SP.sm,
+    backgroundColor: '#EF4444',
+    borderRadius: BR.sm,
+    alignItems: 'center',
+  },
+  debugBtnText: { color: '#fff', fontWeight: FW.semibold, fontSize: FS.sm },
 });

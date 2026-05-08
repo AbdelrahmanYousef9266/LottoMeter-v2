@@ -21,7 +21,30 @@ import { useAuth } from '../context/AuthContext';
 import { setStoredLanguage } from '../i18n';
 import { syncRTL } from '../utils/rtl';
 import { getSoundEnabled, setSoundEnabled, getVibrationEnabled, setVibrationEnabled } from '../hooks/useFeedback';
-import { Colors, Radius, Shadow } from '../theme';
+
+// ── design tokens ──────────────────────────────────────────────────────────────
+const D = {
+  PRIMARY:    '#0077CC',
+  SUCCESS:    '#16A34A',
+  ERROR:      '#DC2626',
+  WARNING:    '#D97706',
+  BACKGROUND: '#F8FAFC',
+  CARD:       '#FFFFFF',
+  TEXT:       '#0F172A',
+  SUBTLE:     '#64748B',
+  BORDER:     '#E2E8F0',
+};
+const FS = { xs: 11, sm: 13, md: 15, lg: 18, xl: 22, xxl: 28 };
+const FW = { regular: '400', medium: '500', semibold: '600', bold: '700' };
+const SP = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };
+const BR = { sm: 8, md: 12, lg: 16, full: 26 };
+const CARD_SHADOW = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.06,
+  shadowRadius: 4,
+  elevation: 2,
+};
 
 const LANGUAGES = [
   { label: 'English',  value: 'en', flag: '🇺🇸', description: 'English (United States)' },
@@ -45,6 +68,13 @@ const SCAN_MODES = [
     description: 'Camera stays open for rapid scanning',
   },
 ];
+
+function getInitials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
 
 export default function SettingsScreen() {
   const { t, i18n } = useTranslation();
@@ -163,453 +193,550 @@ export default function SettingsScreen() {
     }
   }
 
+  const currentLang = LANGUAGES.find(l => l.value === i18n.language);
+  const currentMode = SCAN_MODES.find(m => m.value === scanMode);
+  const initials    = getInitials(user?.username || '');
+
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>{t('settings.title')}</Text>
+    <SafeAreaView style={s.root}>
 
-        {/* 1. Account */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>{t('settings.account')}</Text>
-          <Text style={styles.text}>{t('settings.user')}: {user?.username || `#${user?.user_id}`}</Text>
-          <Text style={styles.text}>{t('settings.role')}: {user?.role}</Text>
-          <Text style={styles.text}>{t('settings.store')}: #{user?.store_id}</Text>
-        </View>
+      {/* ── Header ─────────────────────────────────────────────────────────── */}
+      <View style={s.header}>
+        <Text style={s.headerTitle}>{t('settings.title')}</Text>
+      </View>
 
-        {/* 2. Manage Users (admin only) */}
-        {isAdmin && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>{t('users.manageUsers')}</Text>
-            <Text style={styles.helperText}>{t('users.manageUsersHint')}</Text>
-            <TouchableOpacity
-              style={styles.actionButton}
-              onPress={() => navigation.navigate('Users')}
-            >
-              <Text style={styles.actionButtonText}>{t('users.title')}</Text>
-            </TouchableOpacity>
+      <ScrollView showsVerticalScrollIndicator={false}>
+
+        {/* ── User Profile Card ───────────────────────────────────────────── */}
+        <View style={s.profileCard}>
+          <View style={s.avatarCircle}>
+            <Text style={s.avatarText}>{initials}</Text>
           </View>
-        )}
-
-        {/* 3. Store PIN (admin only) */}
-        {isAdmin && (
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>{t('settings.storePin')}</Text>
-            <Text style={styles.helperText}>{t('settings.storePinHint')}</Text>
-
-            {!pinFormOpen ? (
-              <TouchableOpacity
-                style={styles.actionButton}
-                onPress={() => setPinFormOpen(true)}
-              >
-                <Text style={styles.actionButtonText}>{t('settings.changePin')}</Text>
-              </TouchableOpacity>
+          <View style={s.profileInfo}>
+            <Text style={s.profileName} numberOfLines={1}>
+              {user?.username || `#${user?.user_id}`}
+            </Text>
+            {isAdmin ? (
+              <View style={s.roleAdminPill}>
+                <Text style={s.roleAdminText}>Admin</Text>
+              </View>
             ) : (
-              <>
-                <Text style={styles.label}>{t('settings.currentPin')}</Text>
-                <TextInput
-                  style={styles.input}
-                  value={currentPin}
-                  onChangeText={(text) => setCurrentPin(text.replace(/\D/g, '').slice(0, 4))}
-                  placeholder="••••"
-                  placeholderTextColor={Colors.textMuted}
-                  keyboardType="number-pad"
-                  secureTextEntry
-                  maxLength={4}
-                />
-
-                <Text style={styles.label}>{t('settings.newPin')}</Text>
-                <TextInput
-                  style={styles.input}
-                  value={newPin}
-                  onChangeText={(text) => setNewPin(text.replace(/\D/g, '').slice(0, 4))}
-                  placeholder="••••"
-                  placeholderTextColor={Colors.textMuted}
-                  keyboardType="number-pad"
-                  secureTextEntry
-                  maxLength={4}
-                />
-
-                <Text style={styles.label}>{t('settings.confirmPin')}</Text>
-                <TextInput
-                  style={styles.input}
-                  value={confirmPin}
-                  onChangeText={(text) => setConfirmPin(text.replace(/\D/g, '').slice(0, 4))}
-                  placeholder="••••"
-                  placeholderTextColor={Colors.textMuted}
-                  keyboardType="number-pad"
-                  secureTextEntry
-                  maxLength={4}
-                />
-
-                <View style={styles.pinActions}>
-                  <TouchableOpacity
-                    style={[styles.pinButton, styles.cancelButton]}
-                    onPress={() => { resetPinForm(); setPinFormOpen(false); }}
-                    disabled={pinSaving}
-                  >
-                    <Text style={styles.cancelText}>{t('common.cancel')}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.pinButton, styles.saveButton, pinSaving && styles.disabled]}
-                    onPress={handleSavePin}
-                    disabled={pinSaving}
-                  >
-                    {pinSaving
-                      ? <ActivityIndicator color="#fff" />
-                      : <Text style={styles.saveText}>{t('settings.save')}</Text>
-                    }
-                  </TouchableOpacity>
-                </View>
-              </>
+              <View style={s.roleEmployeePill}>
+                <Text style={s.roleEmployeeText}>Employee</Text>
+              </View>
+            )}
+            <Text style={s.profileStore} numberOfLines={1}>
+              {store?.store_name || `Store #${user?.store_id}`}
+            </Text>
+            {!!store?.store_code && (
+              <Text style={s.profileCode}>{store.store_code}</Text>
             )}
           </View>
-        )}
-
-        {/* 4. Scan Feedback */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>{t('settings.scan_feedback')}</Text>
-          <Text style={styles.helperText}>{t('settings.scan_feedback_subtitle')}</Text>
-
-          <View style={[styles.feedbackRow, { marginTop: 16 }]}>
-            <View style={styles.feedbackTextWrap}>
-              <Text style={styles.toggleLabel}>{t('settings.scan_feedback_sound')}</Text>
-            </View>
-            <Switch
-              value={soundEnabled}
-              onValueChange={handleSoundToggle}
-              trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor="#fff"
-            />
-          </View>
-
-          <View style={[styles.feedbackRow, { marginTop: 12 }]}>
-            <View style={styles.feedbackTextWrap}>
-              <Text style={styles.toggleLabel}>{t('settings.scan_feedback_vibration')}</Text>
-            </View>
-            <Switch
-              value={vibrationEnabled}
-              onValueChange={handleVibrationToggle}
-              trackColor={{ false: Colors.border, true: Colors.primary }}
-              thumbColor="#fff"
-            />
-          </View>
         </View>
 
-        {/* 5. Scan Mode */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>{t('settings.scanMode')}</Text>
-          <Text style={styles.helperText}>{t('settings.scanModeHint')}</Text>
+        {/* ── PREFERENCES ─────────────────────────────────────────────────── */}
+        <Text style={s.sectionLabel}>PREFERENCES</Text>
+        <View style={s.sectionCard}>
 
+          {/* Scan Mode */}
           <TouchableOpacity
-            style={styles.dropdownTrigger}
+            style={s.settingRow}
             onPress={() => setScanModePickerOpen(true)}
             disabled={scanModeSaving}
             activeOpacity={0.7}
           >
-            <View style={styles.dropdownTriggerContent}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.dropdownValue}>
-                  {SCAN_MODES.find(m => m.value === scanMode)?.label || 'Select…'}
-                </Text>
-                <Text style={styles.dropdownDesc}>
-                  {SCAN_MODES.find(m => m.value === scanMode)?.description || ''}
-                </Text>
+            <View style={s.rowLeft}>
+              <View style={[s.iconCircle, { backgroundColor: '#DBEAFE' }]}>
+                <Text style={s.iconText}>📷</Text>
               </View>
-              {scanModeSaving
-                ? <ActivityIndicator size="small" color={Colors.primary} />
-                : <Text style={styles.dropdownChevron}>▾</Text>
-              }
+              <Text style={s.rowLabel}>{t('settings.scanMode')}</Text>
+            </View>
+            <View style={s.rowRight}>
+              {scanModeSaving ? (
+                <ActivityIndicator size="small" color={D.PRIMARY} />
+              ) : (
+                <Text style={s.rowValue} numberOfLines={1}>
+                  {currentMode?.label || 'Select…'}
+                </Text>
+              )}
+              {!scanModeSaving && <Text style={s.chevron}>›</Text>}
             </View>
           </TouchableOpacity>
 
-          <Modal
-            visible={scanModePickerOpen}
-            transparent
-            animationType="fade"
-            onRequestClose={() => setScanModePickerOpen(false)}
-          >
-            <TouchableOpacity
-              style={styles.modalOverlay}
-              activeOpacity={1}
-              onPress={() => setScanModePickerOpen(false)}
-            >
-              <View style={styles.modalSheet}>
-                <Text style={styles.modalTitle}>Select Scan Mode</Text>
-                {SCAN_MODES.map((mode) => {
-                  const isSelected = scanMode === mode.value;
-                  return (
-                    <TouchableOpacity
-                      key={mode.value}
-                      style={[styles.modalOption, isSelected && styles.modalOptionActive]}
-                      onPress={() => handleScanModeChange(mode.value)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.modalOptionContent}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={[styles.modalOptionLabel, isSelected && styles.modalOptionLabelActive]}>
-                            {mode.label}
-                          </Text>
-                          <Text style={styles.modalOptionDesc}>{mode.description}</Text>
-                        </View>
-                        {isSelected && <Text style={styles.modalCheckmark}>✓</Text>}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-                <TouchableOpacity
-                  style={styles.modalCancel}
-                  onPress={() => setScanModePickerOpen(false)}
-                >
-                  <Text style={styles.modalCancelText}>Cancel</Text>
-                </TouchableOpacity>
-              </View>
-            </TouchableOpacity>
-          </Modal>
-        </View>
+          <View style={s.rowDivider} />
 
-        {/* 6. Language */}
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>{t('settings.language')}</Text>
-          <Text style={styles.helperText}>{t('settings.languageHint')}</Text>
-
+          {/* Language */}
           <TouchableOpacity
-            style={styles.dropdownTrigger}
+            style={s.settingRow}
             onPress={() => setLangPickerOpen(true)}
             disabled={busy}
             activeOpacity={0.7}
           >
-            <View style={styles.dropdownTriggerContent}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.dropdownValue}>
-                  {(() => {
-                    const cur = LANGUAGES.find(l => l.value === i18n.language);
-                    return cur ? `${cur.flag}  ${cur.label}` : 'Select…';
-                  })()}
-                </Text>
-                <Text style={styles.dropdownDesc}>
-                  {LANGUAGES.find(l => l.value === i18n.language)?.description || ''}
-                </Text>
+            <View style={s.rowLeft}>
+              <View style={[s.iconCircle, { backgroundColor: '#EDE9FE' }]}>
+                <Text style={s.iconText}>🌐</Text>
               </View>
-              {busy
-                ? <ActivityIndicator size="small" color={Colors.primary} />
-                : <Text style={styles.dropdownChevron}>▾</Text>
-              }
+              <Text style={s.rowLabel}>{t('settings.language')}</Text>
+            </View>
+            <View style={s.rowRight}>
+              {busy ? (
+                <ActivityIndicator size="small" color={D.PRIMARY} />
+              ) : (
+                <Text style={s.rowValue}>
+                  {currentLang ? `${currentLang.flag} ${currentLang.label}` : 'Select…'}
+                </Text>
+              )}
+              {!busy && <Text style={s.chevron}>›</Text>}
             </View>
           </TouchableOpacity>
 
-          <Modal
-            visible={langPickerOpen}
-            transparent
-            animationType="fade"
-            onRequestClose={() => setLangPickerOpen(false)}
-          >
-            <TouchableOpacity
-              style={styles.modalOverlay}
-              activeOpacity={1}
-              onPress={() => setLangPickerOpen(false)}
-            >
-              <View style={styles.modalSheet}>
-                <Text style={styles.modalTitle}>{t('settings.language')}</Text>
-                {LANGUAGES.map((lang) => {
-                  const isSelected = i18n.language === lang.value;
-                  return (
-                    <TouchableOpacity
-                      key={lang.value}
-                      style={[styles.modalOption, isSelected && styles.modalOptionActive]}
-                      onPress={() => handleLanguageChange(lang.value)}
-                      activeOpacity={0.7}
-                    >
-                      <View style={styles.modalOptionContent}>
-                        <Text style={styles.langFlag}>{lang.flag}</Text>
-                        <View style={{ flex: 1, marginLeft: 12 }}>
-                          <Text style={[styles.modalOptionLabel, isSelected && styles.modalOptionLabelActive]}>
-                            {lang.label}
-                          </Text>
-                          <Text style={styles.modalOptionDesc}>{lang.description}</Text>
-                        </View>
-                        {isSelected && <Text style={styles.modalCheckmark}>✓</Text>}
-                      </View>
-                    </TouchableOpacity>
-                  );
-                })}
-                <TouchableOpacity
-                  style={styles.modalCancel}
-                  onPress={() => setLangPickerOpen(false)}
-                >
-                  <Text style={styles.modalCancelText}>{t('common.cancel')}</Text>
-                </TouchableOpacity>
+          <View style={s.rowDivider} />
+
+          {/* Sound Feedback */}
+          <View style={s.settingRow}>
+            <View style={s.rowLeft}>
+              <View style={[s.iconCircle, { backgroundColor: '#F0FDF4' }]}>
+                <Text style={s.iconText}>🔊</Text>
               </View>
-            </TouchableOpacity>
-          </Modal>
+              <Text style={s.rowLabel}>{t('settings.scan_feedback_sound')}</Text>
+            </View>
+            <Switch
+              value={soundEnabled}
+              onValueChange={handleSoundToggle}
+              trackColor={{ false: D.BORDER, true: D.PRIMARY }}
+              thumbColor="#fff"
+            />
+          </View>
+
+          <View style={s.rowDivider} />
+
+          {/* Vibration Feedback */}
+          <View style={s.settingRow}>
+            <View style={s.rowLeft}>
+              <View style={[s.iconCircle, { backgroundColor: '#FFF7ED' }]}>
+                <Text style={s.iconText}>📳</Text>
+              </View>
+              <Text style={s.rowLabel}>{t('settings.scan_feedback_vibration')}</Text>
+            </View>
+            <Switch
+              value={vibrationEnabled}
+              onValueChange={handleVibrationToggle}
+              trackColor={{ false: D.BORDER, true: D.PRIMARY }}
+              thumbColor="#fff"
+            />
+          </View>
         </View>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={confirmLogout}>
-          <Text style={styles.logoutText}>{t('auth.logout')}</Text>
-        </TouchableOpacity>
+        {/* ── ACCOUNT ─────────────────────────────────────────────────────── */}
+        <Text style={s.sectionLabel}>ACCOUNT</Text>
+        <View style={s.sectionCard}>
+
+          {/* Manage Users — admin only */}
+          {isAdmin && (
+            <>
+              <TouchableOpacity
+                style={s.settingRow}
+                onPress={() => navigation.navigate('Users')}
+                activeOpacity={0.7}
+              >
+                <View style={s.rowLeft}>
+                  <View style={[s.iconCircle, { backgroundColor: '#F0FDF4' }]}>
+                    <Text style={s.iconText}>👥</Text>
+                  </View>
+                  <Text style={s.rowLabel}>{t('users.title')}</Text>
+                </View>
+                <View style={s.rowRight}>
+                  <Text style={s.chevron}>›</Text>
+                </View>
+              </TouchableOpacity>
+              <View style={s.rowDivider} />
+            </>
+          )}
+
+          {/* Change PIN — admin only */}
+          {isAdmin && (
+            <>
+              <TouchableOpacity
+                style={s.settingRow}
+                onPress={() => setPinFormOpen(true)}
+                activeOpacity={0.7}
+              >
+                <View style={s.rowLeft}>
+                  <View style={[s.iconCircle, { backgroundColor: '#FFFBEB' }]}>
+                    <Text style={s.iconText}>🔑</Text>
+                  </View>
+                  <Text style={s.rowLabel}>{t('settings.storePin')}</Text>
+                </View>
+                <View style={s.rowRight}>
+                  <Text style={s.rowValue}>{t('settings.changePin')}</Text>
+                  <Text style={s.chevron}>›</Text>
+                </View>
+              </TouchableOpacity>
+              <View style={s.rowDivider} />
+            </>
+          )}
+
+          {/* About */}
+          <TouchableOpacity
+            style={s.settingRow}
+            onPress={() =>
+              Alert.alert('LottoMeter v2.0', 'Built for convenience stores\n\n© 2026 LottoMeter')
+            }
+            activeOpacity={0.7}
+          >
+            <View style={s.rowLeft}>
+              <View style={[s.iconCircle, { backgroundColor: '#F1F5F9' }]}>
+                <Text style={s.iconText}>ℹ️</Text>
+              </View>
+              <Text style={s.rowLabel}>About LottoMeter</Text>
+            </View>
+            <View style={s.rowRight}>
+              <Text style={s.rowValue}>v2.0</Text>
+              <Text style={s.chevron}>›</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        {/* ── DANGER ZONE ─────────────────────────────────────────────────── */}
+        <Text style={s.sectionLabel}>DANGER ZONE</Text>
+        <View style={s.sectionCard}>
+          <TouchableOpacity
+            style={s.settingRow}
+            onPress={confirmLogout}
+            activeOpacity={0.7}
+          >
+            <View style={s.rowLeft}>
+              <View style={[s.iconCircle, { backgroundColor: '#FEE2E2' }]}>
+                <Text style={s.iconText}>🚪</Text>
+              </View>
+              <Text style={[s.rowLabel, { color: D.ERROR }]}>{t('auth.logout')}</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
+        <View style={{ height: 32 }} />
       </ScrollView>
+
+      {/* ── Scan Mode Bottom Sheet ──────────────────────────────────────────── */}
+      <Modal
+        visible={scanModePickerOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setScanModePickerOpen(false)}
+      >
+        <TouchableOpacity
+          style={s.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setScanModePickerOpen(false)}
+        >
+          <View style={s.bottomSheet}>
+            <View style={s.sheetHeader}>
+              <Text style={s.sheetTitle}>{t('settings.scanMode')}</Text>
+            </View>
+            {SCAN_MODES.map((mode, i) => {
+              const isSelected = scanMode === mode.value;
+              return (
+                <TouchableOpacity
+                  key={mode.value}
+                  style={[s.sheetOption, i < SCAN_MODES.length - 1 && s.sheetOptionBorder]}
+                  onPress={() => handleScanModeChange(mode.value)}
+                  activeOpacity={0.7}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[s.sheetOptionLabel, isSelected && s.sheetOptionSelected]}>
+                      {mode.label}
+                    </Text>
+                    <Text style={s.sheetOptionDesc}>{mode.description}</Text>
+                  </View>
+                  {isSelected && <Text style={s.sheetCheck}>✓</Text>}
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              style={s.sheetCancel}
+              onPress={() => setScanModePickerOpen(false)}
+            >
+              <Text style={s.sheetCancelText}>{t('common.cancel')}</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── Language Bottom Sheet ───────────────────────────────────────────── */}
+      <Modal
+        visible={langPickerOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setLangPickerOpen(false)}
+      >
+        <TouchableOpacity
+          style={s.modalOverlay}
+          activeOpacity={1}
+          onPress={() => setLangPickerOpen(false)}
+        >
+          <View style={s.bottomSheet}>
+            <View style={s.sheetHeader}>
+              <Text style={s.sheetTitle}>{t('settings.language')}</Text>
+            </View>
+            {LANGUAGES.map((lang, i) => {
+              const isSelected = i18n.language === lang.value;
+              return (
+                <TouchableOpacity
+                  key={lang.value}
+                  style={[s.sheetOption, i < LANGUAGES.length - 1 && s.sheetOptionBorder]}
+                  onPress={() => handleLanguageChange(lang.value)}
+                  activeOpacity={0.7}
+                >
+                  <Text style={s.langFlag}>{lang.flag}</Text>
+                  <View style={{ flex: 1, marginLeft: SP.md }}>
+                    <Text style={[s.sheetOptionLabel, isSelected && s.sheetOptionSelected]}>
+                      {lang.label}
+                    </Text>
+                    <Text style={s.sheetOptionDesc}>{lang.description}</Text>
+                  </View>
+                  {isSelected && <Text style={s.sheetCheck}>✓</Text>}
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              style={s.sheetCancel}
+              onPress={() => setLangPickerOpen(false)}
+            >
+              <Text style={s.sheetCancelText}>{t('common.cancel')}</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* ── PIN Change Bottom Sheet ─────────────────────────────────────────── */}
+      <Modal
+        visible={pinFormOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => { resetPinForm(); setPinFormOpen(false); }}
+      >
+        <View style={s.modalOverlay}>
+          <View style={s.bottomSheet}>
+            <View style={s.sheetHeader}>
+              <Text style={s.sheetTitle}>{t('settings.changePin')}</Text>
+            </View>
+            <View style={s.pinBody}>
+              <Text style={s.pinLabel}>{t('settings.currentPin')}</Text>
+              <TextInput
+                style={s.pinInput}
+                value={currentPin}
+                onChangeText={(text) => setCurrentPin(text.replace(/\D/g, '').slice(0, 4))}
+                placeholder="••••"
+                placeholderTextColor={D.SUBTLE}
+                keyboardType="number-pad"
+                secureTextEntry
+                maxLength={4}
+              />
+              <Text style={s.pinLabel}>{t('settings.newPin')}</Text>
+              <TextInput
+                style={s.pinInput}
+                value={newPin}
+                onChangeText={(text) => setNewPin(text.replace(/\D/g, '').slice(0, 4))}
+                placeholder="••••"
+                placeholderTextColor={D.SUBTLE}
+                keyboardType="number-pad"
+                secureTextEntry
+                maxLength={4}
+              />
+              <Text style={s.pinLabel}>{t('settings.confirmPin')}</Text>
+              <TextInput
+                style={s.pinInput}
+                value={confirmPin}
+                onChangeText={(text) => setConfirmPin(text.replace(/\D/g, '').slice(0, 4))}
+                placeholder="••••"
+                placeholderTextColor={D.SUBTLE}
+                keyboardType="number-pad"
+                secureTextEntry
+                maxLength={4}
+              />
+              <View style={s.pinActions}>
+                <TouchableOpacity
+                  style={[s.pinBtn, s.pinBtnCancel]}
+                  onPress={() => { resetPinForm(); setPinFormOpen(false); }}
+                  disabled={pinSaving}
+                >
+                  <Text style={s.pinBtnCancelText}>{t('common.cancel')}</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.pinBtn, s.pinBtnSave, pinSaving && s.dimmed]}
+                  onPress={handleSavePin}
+                  disabled={pinSaving}
+                >
+                  {pinSaving ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={s.pinBtnSaveText}>{t('settings.save')}</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
 
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: D.BACKGROUND },
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  scroll:    { padding: 16, paddingBottom: 32 },
-  title:     { fontSize: 28, fontWeight: '700', color: Colors.textPrimary, marginBottom: 16 },
-
-  card: {
-    backgroundColor: Colors.surface,
-    borderRadius: Radius.lg,
-    padding: 18,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    ...Shadow.sm,
+  // ── header ────────────────────────────────────────────────────────────────────
+  header: {
+    height: 56,
+    backgroundColor: D.CARD,
+    borderBottomWidth: 1,
+    borderBottomColor: D.BORDER,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  cardTitle:  { fontSize: 16, fontWeight: '700', color: Colors.textPrimary, marginBottom: 12 },
-  text:       { fontSize: 14, color: Colors.textSecondary, marginBottom: 6 },
-  helperText: { fontSize: 12, color: Colors.textMuted, marginBottom: 12 },
+  headerTitle: { fontSize: FS.lg, fontWeight: FW.bold, color: D.TEXT },
 
-  langFlag: { fontSize: 24 },
-
-  dropdownTrigger: {
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    borderRadius: Radius.md,
-    padding: 14,
-    backgroundColor: Colors.inputBg,
+  // ── profile card ──────────────────────────────────────────────────────────────
+  profileCard: {
+    backgroundColor: D.CARD,
+    borderRadius: BR.lg,
+    margin: SP.lg,
+    padding: SP.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    ...CARD_SHADOW,
   },
-  dropdownTriggerContent: {
+  avatarCircle: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: D.PRIMARY,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarText: { fontSize: FS.xl, fontWeight: FW.bold, color: '#fff' },
+  profileInfo: { flex: 1, marginLeft: SP.md },
+  profileName:  { fontSize: FS.lg, fontWeight: FW.bold, color: D.TEXT, marginBottom: SP.xs },
+  profileStore: { fontSize: FS.sm, color: D.SUBTLE, marginTop: SP.xs },
+  profileCode:  { fontSize: FS.xs, color: D.SUBTLE },
+
+  roleAdminPill: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: SP.sm,
+    paddingVertical: 2,
+    borderRadius: BR.full,
+    alignSelf: 'flex-start',
+    marginBottom: SP.xs,
+  },
+  roleAdminText:    { fontSize: FS.xs, fontWeight: FW.semibold, color: D.PRIMARY },
+  roleEmployeePill: {
+    backgroundColor: D.BORDER,
+    paddingHorizontal: SP.sm,
+    paddingVertical: 2,
+    borderRadius: BR.full,
+    alignSelf: 'flex-start',
+    marginBottom: SP.xs,
+  },
+  roleEmployeeText: { fontSize: FS.xs, fontWeight: FW.semibold, color: D.SUBTLE },
+
+  // ── section labels ────────────────────────────────────────────────────────────
+  sectionLabel: {
+    paddingHorizontal: SP.lg,
+    paddingTop: SP.lg,
+    paddingBottom: SP.sm,
+    fontSize: FS.xs,
+    fontWeight: FW.semibold,
+    color: D.SUBTLE,
+    letterSpacing: 1,
+  },
+
+  // ── section card ──────────────────────────────────────────────────────────────
+  sectionCard: {
+    backgroundColor: D.CARD,
+    borderRadius: BR.lg,
+    marginHorizontal: SP.lg,
+    marginBottom: SP.md,
+    overflow: 'hidden',
+    ...CARD_SHADOW,
+  },
+
+  // ── setting rows ──────────────────────────────────────────────────────────────
+  settingRow: {
+    minHeight: 56,
+    paddingHorizontal: SP.lg,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  dropdownValue: {
-    fontSize: 15,
-    color: Colors.textPrimary,
-    fontWeight: '600',
+  rowLeft:    { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  rowRight:   { flexDirection: 'row', alignItems: 'center', flexShrink: 0 },
+  rowDivider: { height: 1, backgroundColor: D.BORDER, marginLeft: 64 },
+  iconCircle: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  dropdownDesc: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  dropdownChevron: {
-    fontSize: 20,
-    color: Colors.textMuted,
-    marginLeft: 8,
-  },
+  iconText:  { fontSize: FS.lg },
+  rowLabel:  { fontSize: FS.md, fontWeight: FW.semibold, color: D.TEXT, marginLeft: SP.md },
+  rowValue:  { fontSize: FS.sm, color: D.SUBTLE, marginRight: SP.xs, maxWidth: 140 },
+  chevron:   { fontSize: FS.xl, color: D.SUBTLE },
 
+  // ── bottom sheet modals ───────────────────────────────────────────────────────
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.45)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
-  modalSheet: {
-    backgroundColor: Colors.surface,
-    borderTopLeftRadius: Radius.lg,
-    borderTopRightRadius: Radius.lg,
-    padding: 20,
-    paddingBottom: 32,
+  bottomSheet: {
+    backgroundColor: D.CARD,
+    borderTopLeftRadius: BR.lg,
+    borderTopRightRadius: BR.lg,
+    overflow: 'hidden',
   },
-  modalTitle: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.textMuted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.6,
-    marginBottom: 12,
+  sheetHeader: {
+    padding: SP.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: D.BORDER,
   },
-  modalOption: {
-    paddingVertical: 14,
-    paddingHorizontal: 12,
-    borderRadius: Radius.sm,
-    marginBottom: 4,
-  },
-  modalOptionActive: {
-    backgroundColor: Colors.primaryLight,
-  },
-  modalOptionContent: {
-    flexDirection: 'row',
+  sheetTitle:        { fontSize: FS.md, fontWeight: FW.bold, color: D.TEXT },
+  sheetOption:       { padding: SP.lg, flexDirection: 'row', alignItems: 'center' },
+  sheetOptionBorder: { borderBottomWidth: 1, borderBottomColor: D.BORDER },
+  sheetOptionLabel:  { fontSize: FS.md, fontWeight: FW.semibold, color: D.TEXT },
+  sheetOptionSelected: { color: D.PRIMARY },
+  sheetOptionDesc:   { fontSize: FS.sm, color: D.SUBTLE, marginTop: 2 },
+  sheetCheck:        { fontSize: FS.lg, color: D.PRIMARY, fontWeight: FW.bold, marginLeft: SP.sm },
+  sheetCancel: {
+    margin: SP.sm,
+    marginBottom: SP.lg,
+    height: 52,
+    backgroundColor: D.BACKGROUND,
+    borderRadius: BR.full,
+    justifyContent: 'center',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
-  modalOptionLabel: {
-    fontSize: 15,
-    color: Colors.textPrimary,
-    fontWeight: '600',
-  },
-  modalOptionLabelActive: {
-    color: Colors.primary,
-  },
-  modalOptionDesc: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    marginTop: 2,
-  },
-  modalCheckmark: {
-    fontSize: 18,
-    color: Colors.primary,
-    fontWeight: '700',
-    marginLeft: 8,
-  },
-  modalCancel: {
-    marginTop: 8,
-    padding: 14,
-    borderRadius: Radius.md,
-    backgroundColor: Colors.inputBg,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  modalCancelText: {
-    fontSize: 15,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
+  sheetCancelText: { fontSize: FS.md, fontWeight: FW.semibold, color: D.TEXT },
+  langFlag:        { fontSize: 24 },
 
-  actionButton: {
-    backgroundColor: Colors.primary,
-    padding: 14,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-  },
-  actionButtonText: { color: '#fff', fontWeight: '600', fontSize: 14 },
-
-  label: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    marginBottom: 6,
-    marginTop: 12,
-    fontWeight: '600',
-  },
-  input: {
+  // ── pin modal body ────────────────────────────────────────────────────────────
+  pinBody:   { padding: SP.lg, paddingBottom: SP.xl },
+  pinLabel:  { fontSize: FS.sm, fontWeight: FW.semibold, color: D.SUBTLE, marginBottom: SP.xs, marginTop: SP.md },
+  pinInput:  {
     borderWidth: 1.5,
-    borderColor: Colors.border,
-    borderRadius: Radius.md,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: Colors.inputBg,
-    color: Colors.textPrimary,
+    borderColor: D.BORDER,
+    borderRadius: BR.md,
+    padding: SP.md,
+    fontSize: FS.lg,
+    color: D.TEXT,
+    backgroundColor: D.BACKGROUND,
   },
-  pinActions:   { flexDirection: 'row', gap: 12, marginTop: 16 },
-  pinButton:    { flex: 1, padding: 14, borderRadius: Radius.md, alignItems: 'center' },
-  cancelButton: { backgroundColor: Colors.inputBg, borderWidth: 1, borderColor: Colors.border },
-  cancelText:   { color: Colors.textSecondary, fontWeight: '600' },
-  saveButton:   { backgroundColor: Colors.accent },
-  saveText:     { color: '#fff', fontWeight: '600' },
-  disabled:     { opacity: 0.6 },
-
-  feedbackRow:     { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  feedbackTextWrap: { flex: 1, marginRight: 12 },
-  toggleLabel:     { fontSize: 15, color: Colors.textPrimary },
-
-  logoutButton: {
-    backgroundColor: Colors.error,
-    padding: 16,
-    borderRadius: Radius.md,
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  logoutText: { color: '#fff', fontSize: 16, fontWeight: '600' },
+  pinActions:      { flexDirection: 'row', gap: SP.sm, marginTop: SP.lg },
+  pinBtn:          { flex: 1, height: 48, borderRadius: BR.md, justifyContent: 'center', alignItems: 'center' },
+  pinBtnCancel:    { backgroundColor: D.BACKGROUND, borderWidth: 1, borderColor: D.BORDER },
+  pinBtnCancelText: { fontSize: FS.md, fontWeight: FW.semibold, color: D.TEXT },
+  pinBtnSave:      { backgroundColor: D.PRIMARY },
+  pinBtnSaveText:  { fontSize: FS.md, fontWeight: FW.bold, color: '#fff' },
+  dimmed:          { opacity: 0.6 },
 });

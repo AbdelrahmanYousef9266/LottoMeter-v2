@@ -18,9 +18,90 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
 import { getShiftReport } from '../api/reports';
-import { formatLocalDateTime, formatBusinessDate } from '../utils/dateTime';
+import { formatLocalDateTime, formatLocalTime, formatBusinessDate } from '../utils/dateTime';
 import { useAuth } from '../context/AuthContext';
 import { getDb } from '../offline/db';
+
+// ── design tokens ──────────────────────────────────────────────────────────────
+const D = {
+  PRIMARY:    '#0077CC',
+  SUCCESS:    '#16A34A',
+  ERROR:      '#DC2626',
+  WARNING:    '#D97706',
+  BACKGROUND: '#F8FAFC',
+  CARD:       '#FFFFFF',
+  TEXT:       '#0F172A',
+  SUBTLE:     '#64748B',
+  BORDER:     '#E2E8F0',
+};
+const FS = { xs: 11, sm: 13, md: 15, lg: 18, xl: 22, xxl: 28 };
+const FW = { regular: '400', medium: '500', semibold: '600', bold: '700' };
+const SP = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };
+const BR = { sm: 8, md: 12, lg: 16, full: 26 };
+const CARD_SHADOW = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.06,
+  shadowRadius: 4,
+  elevation: 2,
+};
+
+// ── display helpers ────────────────────────────────────────────────────────────
+
+function fmt$(v) {
+  if (v === null || v === undefined) return '—';
+  const n = parseFloat(v);
+  if (Number.isNaN(n)) return '—';
+  return `$${n.toFixed(2)}`;
+}
+
+function diffColor(status) {
+  if (status === 'correct') return D.SUCCESS;
+  if (status === 'over')    return D.WARNING;
+  if (status === 'short')   return D.ERROR;
+  return D.TEXT;
+}
+
+function getTopBarColor(shift) {
+  if (shift.shift_status === 'correct') return D.SUCCESS;
+  if (shift.shift_status === 'short')   return D.ERROR;
+  if (shift.shift_status === 'over')    return D.WARNING;
+  return D.PRIMARY;
+}
+
+function getDiffBg(status) {
+  if (status === 'correct') return '#F0FDF4';
+  if (status === 'short')   return '#FEF2F2';
+  if (status === 'over')    return '#FFFBEB';
+  return D.BACKGROUND;
+}
+
+function formatDiffAmount(difference, status) {
+  const n = parseFloat(difference ?? 0);
+  if (Number.isNaN(n)) return '—';
+  const abs = `$${Math.abs(n).toFixed(2)}`;
+  if (status === 'over')  return `+${abs}`;
+  if (status === 'short') return `-${abs}`;
+  return abs;
+}
+
+function getInitials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+function shiftDuration(openedAt, closedAt) {
+  if (!openedAt) return '—';
+  const end = closedAt ? new Date(closedAt) : new Date();
+  const ms  = end - new Date(openedAt);
+  const h   = Math.floor(ms / 3_600_000);
+  const m   = Math.floor((ms % 3_600_000) / 60_000);
+  return `${h}h ${m}m`;
+}
+
+// ── screen ─────────────────────────────────────────────────────────────────────
 
 export default function ReportDetailScreen({ route }) {
   const { t, i18n } = useTranslation();
@@ -28,11 +109,11 @@ export default function ReportDetailScreen({ route }) {
   const navigation = useNavigation();
   const { isOffline, store } = useAuth();
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]     = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [exporting, setExporting] = useState(false);
-  const [printing, setPrinting] = useState(false);
-  const [report, setReport] = useState(null);
+  const [printing, setPrinting]   = useState(false);
+  const [report, setReport]       = useState(null);
 
   const loadReport = useCallback(async () => {
     try {
@@ -68,7 +149,7 @@ export default function ReportDetailScreen({ route }) {
           [localShift.uuid]
         );
 
-        const openScans = scans.filter(s => s.scan_type === 'open');
+        const openScans  = scans.filter(s => s.scan_type === 'open');
         const closeScans = scans.filter(s => s.scan_type === 'close');
 
         const books = openScans.map(openScan => {
@@ -79,14 +160,14 @@ export default function ReportDetailScreen({ route }) {
                 : closeScan.start_at_scan - openScan.start_at_scan)
             : 0;
           return {
-            static_code: openScan.static_code,
-            slot_name: openScan.slot_name || `#${openScan.slot_id}`,
-            ticket_price: openScan.ticket_price,
-            open_position: openScan.start_at_scan,
+            static_code:    openScan.static_code,
+            slot_name:      openScan.slot_name || `#${openScan.slot_id}`,
+            ticket_price:   openScan.ticket_price,
+            open_position:  openScan.start_at_scan,
             close_position: closeScan?.start_at_scan,
-            tickets_sold: ticketsSold,
-            value: (ticketsSold * parseFloat(openScan.ticket_price)).toFixed(2),
-            fully_sold: !!closeScan?.is_last_ticket,
+            tickets_sold:   ticketsSold,
+            value:          (ticketsSold * parseFloat(openScan.ticket_price)).toFixed(2),
+            fully_sold:     !!closeScan?.is_last_ticket,
           };
         });
 
@@ -94,34 +175,34 @@ export default function ReportDetailScreen({ route }) {
           shift: {
             id: localShift.server_id || localShift.id,
             uuid: localShift.uuid,
-            shift_number: localShift.shift_number,
-            status: localShift.status,
-            opened_at: localShift.opened_at,
-            closed_at: localShift.closed_at,
-            cash_in_hand: localShift.cash_in_hand,
-            gross_sales: localShift.gross_sales,
-            cash_out: localShift.cash_out,
-            cancels: localShift.cancels,
+            shift_number:  localShift.shift_number,
+            status:        localShift.status,
+            opened_at:     localShift.opened_at,
+            closed_at:     localShift.closed_at,
+            cash_in_hand:  localShift.cash_in_hand,
+            gross_sales:   localShift.gross_sales,
+            cash_out:      localShift.cash_out,
+            cancels:       localShift.cancels,
             tickets_total: localShift.tickets_total,
             expected_cash: localShift.expected_cash,
-            difference: localShift.difference,
-            shift_status: localShift.shift_status,
-            employee_id: localShift.employee_id,
+            difference:    localShift.difference,
+            shift_status:  localShift.shift_status,
+            employee_id:   localShift.employee_id,
             books,
             whole_book_sales: extraSales.map(s => ({
               scanned_barcode: s.scanned_barcode,
-              ticket_price: s.ticket_price,
-              ticket_count: s.ticket_count,
-              value: s.value,
+              ticket_price:    s.ticket_price,
+              ticket_count:    s.ticket_count,
+              value:           s.value,
             })),
-            returned_books: [],
+            returned_books:   [],
             ticket_breakdown: [],
           },
           business_day: localDay ? {
-            id: localDay.server_id,
-            uuid: localDay.uuid,
+            id:            localDay.server_id,
+            uuid:          localDay.uuid,
             business_date: localDay.business_date,
-            status: localDay.status,
+            status:        localDay.status,
           } : null,
           offline: true,
         });
@@ -146,6 +227,12 @@ export default function ReportDetailScreen({ route }) {
     setRefreshing(true);
     await loadReport();
     setRefreshing(false);
+  }
+
+  async function handleRetry() {
+    setLoading(true);
+    await loadReport();
+    setLoading(false);
   }
 
   async function handlePrint() {
@@ -210,9 +297,9 @@ export default function ReportDetailScreen({ route }) {
         const destUri = FileSystem.documentDirectory + filename;
         await FileSystem.moveAsync({ from: tmpUri, to: destUri });
         await Sharing.shareAsync(destUri, {
-          mimeType: 'application/pdf',
+          mimeType:    'application/pdf',
           dialogTitle: t('report.export.shareTitle'),
-          UTI: 'com.adobe.pdf',
+          UTI:         'com.adobe.pdf',
         });
       }
     } catch (err) {
@@ -222,287 +309,475 @@ export default function ReportDetailScreen({ route }) {
     }
   }
 
+  // ── loading ─────────────────────────────────────────────────────────────────
+
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.center}>
-          <ActivityIndicator size="large" />
+      <SafeAreaView style={s.safeArea}>
+        <View style={s.header}>
+          <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()}>
+            <Text style={s.backArrow}>←</Text>
+            <Text style={s.backLabel}>Shift Report</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={s.center}>
+          <ActivityIndicator size="large" color={D.PRIMARY} />
+          <Text style={s.loadingText}>Loading report...</Text>
         </View>
       </SafeAreaView>
     );
   }
+
+  // ── error / not found ───────────────────────────────────────────────────────
 
   if (!report || !report.shift) {
     return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.center}>
-          <Text>{t('report.reportNotFound')}</Text>
+      <SafeAreaView style={s.safeArea}>
+        <View style={s.header}>
+          <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()}>
+            <Text style={s.backArrow}>←</Text>
+            <Text style={s.backLabel}>Shift Report</Text>
+          </TouchableOpacity>
+        </View>
+        <View style={s.center}>
+          <Text style={s.errorEmoji}>⚠️</Text>
+          <Text style={s.errorText}>{t('report.reportNotFound')}</Text>
+          <TouchableOpacity style={s.retryBtn} onPress={handleRetry}>
+            <Text style={s.retryBtnText}>Retry</Text>
+          </TouchableOpacity>
         </View>
       </SafeAreaView>
     );
   }
 
-  const shift = report.shift;
+  // ── main render ─────────────────────────────────────────────────────────────
+
+  const shift       = report.shift;
   const businessDay = report.business_day;
+  const empName     = shift.opened_by?.username || (shift.employee_id ? `Employee #${shift.employee_id}` : '—');
+  const topBarColor = getTopBarColor(shift);
+  const diffBg      = getDiffBg(shift.shift_status);
+  const diffClr     = diffColor(shift.shift_status);
+  const diffAmt     = formatDiffAmount(shift.difference, shift.shift_status);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Text style={styles.backText}>{t('report.back')}</Text>
+    <SafeAreaView style={s.safeArea}>
+
+      {/* ── Header ──────────────────────────────────────────────────────── */}
+      <View style={s.header}>
+        <TouchableOpacity style={s.backBtn} onPress={() => navigation.goBack()}>
+          <Text style={s.backArrow}>←</Text>
+          <Text style={s.backLabel}>Shift Report</Text>
         </TouchableOpacity>
-        <View style={styles.headerActions}>
-          <TouchableOpacity
-            style={[styles.printButton, printing && styles.actionButtonDisabled]}
-            onPress={handlePrint}
-            disabled={printing}
-          >
-            {printing
-              ? <ActivityIndicator size="small" color="#1a73e8" />
-              : <Text style={styles.printButtonText}>{t('report.export.printButton')}</Text>
-            }
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.exportButton, exporting && styles.actionButtonDisabled]}
-            onPress={handleExport}
-            disabled={exporting}
-          >
-            {exporting
-              ? <ActivityIndicator size="small" color="#fff" />
-              : <Text style={styles.exportButtonText}>{t('report.export.button')}</Text>
-            }
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={[s.shareBtn, exporting && s.dimmed]}
+          onPress={handleExport}
+          disabled={exporting}
+        >
+          {exporting
+            ? <ActivityIndicator size="small" color={D.PRIMARY} />
+            : <Text style={s.shareBtnText}>↑</Text>
+          }
+        </TouchableOpacity>
       </View>
 
       <ScrollView
-        contentContainerStyle={styles.scroll}
+        contentContainerStyle={s.scroll}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={D.PRIMARY}
+            colors={[D.PRIMARY]}
+          />
         }
       >
-        <View style={styles.card}>
-          <View style={styles.headerRow}>
-            <View>
-              {businessDay && (
-                <Text style={styles.dateText}>{formatBusinessDate(businessDay.business_date)}</Text>
-              )}
-              <Text style={styles.title}>
+
+        {/* ── Shift Summary Card ──────────────────────────────────────── */}
+        <View style={s.summaryCard}>
+          <View style={[s.summaryBar, { backgroundColor: topBarColor }]} />
+
+          {/* Card header */}
+          <View style={s.summaryHeader}>
+            <View style={s.summaryLeft}>
+              <Text style={s.summaryShiftNum}>
                 {t('report.subshiftTitle', { number: shift.shift_number })}
               </Text>
+              {businessDay && (
+                <Text style={s.summaryDate}>
+                  {formatBusinessDate(businessDay.business_date)}
+                </Text>
+              )}
+              {shift.opened_at && (
+                <Text style={s.summaryTime}>
+                  {formatLocalTime(shift.opened_at)}
+                  {' — '}
+                  {shift.closed_at ? formatLocalTime(shift.closed_at) : 'Active'}
+                </Text>
+              )}
             </View>
-            <StatusBadge status={shift.shift_status} voided={shift.voided} t={t} />
+            <StatusBadge shift={shift} t={t} />
           </View>
-          <KV k={t('report.started')} v={formatLocalDateTime(shift.opened_at)} />
-          <KV k={t('report.ended')} v={formatLocalDateTime(shift.closed_at)} />
-          <KV k={t('report.openedBy')} v={shift.opened_by?.username} />
-          <KV k={t('report.closedBy')} v={shift.closed_by?.username} />
-        </View>
 
-        <SectionTitle text={t('report.totals')} />
-        <View style={styles.card}>
-          <KV k={t('report.ticketsTotal')} v={fmt$(shift.tickets_total)} />
-          <KV k={t('report.grossSales')} v={fmt$(shift.gross_sales)} />
-          <KV k={t('report.cashInHand')} v={fmt$(shift.cash_in_hand)} />
-          {shift.cancels != null && (
-            <KV k={t('report.cancels')} v={fmt$(shift.cancels)} />
-          )}
-          <KV k={t('report.expectedCash')} v={fmt$(shift.expected_cash)} />
-          <KV
-            k={t('report.difference')}
-            v={fmt$(shift.difference)}
-            vColor={diffColor(shift.shift_status)}
-          />
-        </View>
+          <View style={s.cardDivider} />
 
-        {shift.ticket_breakdown?.length > 0 && (
-          <>
-            <SectionTitle text={t('report.ticketBreakdown')} />
-            <View style={styles.card}>
-              {shift.ticket_breakdown.map((row, i) => (
-                <View key={i} style={styles.kvRow}>
-                  <Text style={styles.kvKey}>
-                    ${row.ticket_price} · {row.source}
-                  </Text>
-                  <Text style={styles.kvValue}>
-                    {row.tickets_sold} → {fmt$(row.subtotal)}
-                  </Text>
-                </View>
-              ))}
+          {/* Financials 2×3 grid */}
+          <View style={s.financialGrid}>
+            <View style={s.gridRow}>
+              <FinStat label={t('report.ticketsTotal')} value={fmt$(shift.tickets_total)} />
+              <View style={s.gridDividerV} />
+              <FinStat label={t('report.grossSales')} value={fmt$(shift.gross_sales)} />
             </View>
-          </>
-        )}
+            <View style={s.gridDividerH} />
+            <View style={s.gridRow}>
+              <FinStat label="Cash Out" value={fmt$(shift.cash_out)} />
+              <View style={s.gridDividerV} />
+              <FinStat label={t('report.cancels')} value={fmt$(shift.cancels)} />
+            </View>
+            <View style={s.gridDividerH} />
+            <View style={s.gridRow}>
+              <FinStat label={t('report.expectedCash')} value={fmt$(shift.expected_cash)} />
+              <View style={s.gridDividerV} />
+              <FinStat label={t('report.cashInHand')} value={fmt$(shift.cash_in_hand)} />
+            </View>
+          </View>
 
+          {/* Difference row */}
+          <View style={[s.diffRow, { backgroundColor: diffBg }]}>
+            <Text style={s.diffLabel}>{t('report.difference')}</Text>
+            <Text style={[s.diffValue, { color: diffClr }]}>{diffAmt}</Text>
+          </View>
+        </View>
+
+        {/* ── Employee Info Card ───────────────────────────────────────── */}
+        <View style={s.employeeCard}>
+          <View style={s.empAvatar}>
+            <Text style={s.empAvatarText}>{getInitials(shift.opened_by?.username)}</Text>
+          </View>
+          <View style={s.empInfo}>
+            <Text style={s.empName}>{empName}</Text>
+            <Text style={s.empTimes}>
+              {t('report.started')}: {formatLocalTime(shift.opened_at)}
+              {shift.closed_at ? `  ·  ${t('report.ended')}: ${formatLocalTime(shift.closed_at)}` : ''}
+            </Text>
+            {shift.opened_at && (
+              <Text style={s.empDuration}>
+                Duration: {shiftDuration(shift.opened_at, shift.closed_at)}
+              </Text>
+            )}
+          </View>
+        </View>
+
+        {/* ── Books Section ────────────────────────────────────────────── */}
         {shift.books?.length > 0 && (
           <>
-            <SectionTitle text={t('report.books')} />
-            <View style={styles.card}>
-              {shift.books.map((b, i) => (
-                <View key={i} style={styles.bookRow}>
-                  <View style={styles.bookHeader}>
-                    <Text style={styles.bookCode}>{b.static_code}</Text>
-                    <Text style={styles.bookValue}>{fmt$(b.value)}</Text>
-                  </View>
-                  <Text style={styles.bookMeta}>
-                    {b.slot_name} · ${b.ticket_price} · {b.open_position} → {b.close_position} · {t('report.subshiftFooter', { count: b.tickets_sold })}
-                    {b.fully_sold && ' · ' + t('report.soldOut')}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-
-        {shift.whole_book_sales?.length > 0 && (
-          <>
-            <SectionTitle text={t('report.wholeBookSales')} />
-            <View style={styles.card}>
-              {shift.whole_book_sales.map((s) => (
-                <View key={s.extra_sale_id} style={styles.bookRow}>
-                  <View style={styles.bookHeader}>
-                    <Text style={styles.bookCode}>{s.scanned_barcode}</Text>
-                    <Text style={styles.bookValue}>{fmt$(s.value)}</Text>
-                  </View>
-                  <Text style={styles.bookMeta}>
-                    ${s.ticket_price} · {s.ticket_count} · {s.created_by?.username}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-
-        {shift.returned_books?.length > 0 && (
-          <>
-            <SectionTitle text={t('report.returnedBooks')} />
-            <View style={styles.card}>
-              {shift.returned_books.map((r) => (
-                <View key={r.book_id} style={styles.bookRow}>
-                  <View style={styles.bookHeader}>
-                    <Text style={styles.bookCode}>{r.static_code}</Text>
-                    <Text style={styles.bookValue}>{fmt$(r.value)}</Text>
-                  </View>
-                  <Text style={styles.bookMeta}>
-                    {r.slot_name} · ${r.ticket_price} · {r.open_position} → {r.returned_at_position} · {t('report.soldBeforeReturn', { count: r.tickets_sold })}
-                  </Text>
-                </View>
-              ))}
-            </View>
-          </>
-        )}
-
-        {shift.slot_information?.length > 0 && (
-          <>
-            <SectionTitle text="Slot Information" />
-            {shift.slot_information.map((item, index) => (
-              <View key={index} style={styles.slotCard}>
-                <View style={styles.slotHeader}>
-                  <Text style={styles.slotName}>{item.slot_name}</Text>
-                  <Text style={styles.slotTicketPrice}>${item.ticket_price}</Text>
-                </View>
-
-                <SlotRow label="Slot Created"   value={item.slot_created_at ? formatLocalDateTime(item.slot_created_at) : '—'} />
-                <SlotRow label="Book Assigned"  value={item.assigned_at ? formatLocalDateTime(item.assigned_at) : '—'} />
-                <SlotRow label="Assigned By"    value={item.assigned_by} />
-                <SlotRow label="Barcode"        value={item.book_barcode} />
-
-                <View style={styles.slotDivider} />
-
-                <SlotRow label="Open Position"  value={item.open_position ?? '—'} />
-                <SlotRow label="Close Position" value={item.close_position ?? '—'} />
-                <SlotRow label="Tickets Sold"   value={item.tickets_sold} />
-                <View style={styles.slotTotalRow}>
-                  <Text style={styles.slotTotalLabel}>Subtotal</Text>
-                  <Text style={styles.slotTotalValue}>${item.subtotal}</Text>
-                </View>
-
-                {item.is_last_ticket && (
-                  <View style={styles.lastTicketBadge}>
-                    <Text style={styles.lastTicketText}>Last Ticket Sold</Text>
-                  </View>
-                )}
-              </View>
+            <SectionHeader
+              title={t('report.books')}
+              count={`${shift.books.length} books`}
+            />
+            {shift.books.map((b, i) => (
+              <BookCard key={i} book={b} />
             ))}
           </>
         )}
+
+        {/* ── Totals Section ───────────────────────────────────────────── */}
+        <SectionHeader title={t('report.totals')} />
+        <View style={s.totalsCard}>
+          <TotalsRow label={t('report.ticketsTotal')} value={fmt$(shift.tickets_total)} />
+          <TotalsRow label={t('report.grossSales')}   value={fmt$(shift.gross_sales)} />
+          <TotalsRow label={t('report.cashInHand')}   value={fmt$(shift.cash_in_hand)} />
+          {shift.cancels != null && (
+            <TotalsRow label={t('report.cancels')} value={fmt$(shift.cancels)} />
+          )}
+          <TotalsRow label={t('report.expectedCash')} value={fmt$(shift.expected_cash)} />
+          <TotalsRow
+            label={t('report.difference')}
+            value={diffAmt}
+            valueColor={diffClr}
+            isLast
+          />
+        </View>
+
+        {/* ── Ticket Breakdown ─────────────────────────────────────────── */}
+        {shift.ticket_breakdown?.length > 0 && (
+          <>
+            <SectionHeader title={t('report.ticketBreakdown')} />
+            <View style={s.totalsCard}>
+              {shift.ticket_breakdown.map((row, i) => (
+                <TotalsRow
+                  key={i}
+                  label={`$${row.ticket_price} · ${row.source}`}
+                  value={`${row.tickets_sold} → ${fmt$(row.subtotal)}`}
+                  isLast={i === shift.ticket_breakdown.length - 1}
+                />
+              ))}
+            </View>
+          </>
+        )}
+
+        {/* ── Slot Information ─────────────────────────────────────────── */}
+        {shift.slot_information?.length > 0 && (
+          <>
+            <SectionHeader
+              title="Slot Information"
+              count={`${shift.slot_information.length}`}
+            />
+            {shift.slot_information.map((item, i) => (
+              <SlotCard key={i} item={item} />
+            ))}
+          </>
+        )}
+
+        {/* ── Whole Book Sales ─────────────────────────────────────────── */}
+        {shift.whole_book_sales?.length > 0 && (
+          <>
+            <SectionHeader
+              title={t('report.wholeBookSales')}
+              count={`${shift.whole_book_sales.length}`}
+            />
+            {shift.whole_book_sales.map((sale, i) => (
+              <WholeSaleCard key={sale.extra_sale_id ?? i} sale={sale} />
+            ))}
+          </>
+        )}
+
+        {/* ── Returned Books ───────────────────────────────────────────── */}
+        {shift.returned_books?.length > 0 && (
+          <>
+            <SectionHeader
+              title={t('report.returnedBooks')}
+              count={`${shift.returned_books.length}`}
+            />
+            <View style={s.totalsCard}>
+              {shift.returned_books.map((r, i) => (
+                <ReturnedBookRow
+                  key={r.book_id ?? i}
+                  book={r}
+                  isLast={i === shift.returned_books.length - 1}
+                  t={t}
+                />
+              ))}
+            </View>
+          </>
+        )}
+
+        <View style={{ height: 88 }} />
       </ScrollView>
+
+      {/* ── Fixed Export Button ──────────────────────────────────────────── */}
+      <View style={s.exportWrap}>
+        <TouchableOpacity
+          style={[s.exportBtn, exporting && s.dimmed]}
+          onPress={handleExport}
+          disabled={exporting}
+        >
+          {exporting ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={s.exportBtnText}>📤  {t('report.export.button')}</Text>
+          )}
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 }
 
-// ---------------------------------------------------------------------------
-// Sub-components
-// ---------------------------------------------------------------------------
+// ── StatusBadge ───────────────────────────────────────────────────────────────
 
-function StatusBadge({ status, voided, t }) {
-  let color = '#888';
-  let bg = '#f0f0f0';
-  let text = '—';
-
-  if (voided) {
-    text = t('history.statusVoided');
-    color = '#7c2d12';
-    bg = '#fee2e2';
-  } else if (status === 'correct') {
-    text = t('history.statusCorrect');
-    color = '#166534';
-    bg = '#dcfce7';
-  } else if (status === 'over') {
-    text = t('history.statusOver');
-    color = '#b45309';
-    bg = '#fef3c7';
-  } else if (status === 'short') {
-    text = t('history.statusShort');
-    color = '#dc2626';
-    bg = '#fef2f2';
+function StatusBadge({ shift, t }) {
+  if (shift.voided) {
+    return <Pill label="Voided" bg="#FEE2E2" color="#7C2D12" />;
   }
+  if (shift.shift_status === 'correct') {
+    return <Pill label={`✓ ${t('history.statusCorrect')}`} bg="#DCFCE7" color={D.SUCCESS} />;
+  }
+  if (shift.shift_status === 'short') {
+    return <Pill label={`✗ ${t('history.statusShort')}`} bg="#FEE2E2" color={D.ERROR} />;
+  }
+  if (shift.shift_status === 'over') {
+    return <Pill label={`↑ ${t('history.statusOver')}`} bg="#FEF3C7" color={D.WARNING} />;
+  }
+  if (shift.status === 'open') {
+    return <Pill label="● Active" bg="#DBEAFE" color={D.PRIMARY} />;
+  }
+  return null;
+}
 
+function Pill({ label, bg, color }) {
   return (
-    <View style={[styles.badge, { backgroundColor: bg }]}>
-      <Text style={[styles.badgeText, { color }]}>{text}</Text>
+    <View style={[s.pill, { backgroundColor: bg }]}>
+      <Text style={[s.pillText, { color }]}>{label}</Text>
     </View>
   );
 }
 
-function SectionTitle({ text }) {
-  return <Text style={styles.sectionTitle}>{text}</Text>;
-}
+// ── SectionHeader ─────────────────────────────────────────────────────────────
 
-function KV({ k, v, vColor }) {
+function SectionHeader({ title, count }) {
   return (
-    <View style={styles.kvRow}>
-      <Text style={styles.kvKey}>{k}</Text>
-      <Text style={[styles.kvValue, vColor && { color: vColor }]}>{v ?? '—'}</Text>
+    <View style={s.sectionHeader}>
+      <Text style={s.sectionTitle}>{title}</Text>
+      {!!count && (
+        <View style={s.sectionCountPill}>
+          <Text style={s.sectionCountText}>{count}</Text>
+        </View>
+      )}
     </View>
   );
 }
 
-function SlotRow({ label, value }) {
+// ── FinStat (grid cell) ───────────────────────────────────────────────────────
+
+function FinStat({ label, value }) {
   return (
-    <View style={styles.kvRow}>
-      <Text style={styles.kvKey}>{label}</Text>
-      <Text style={styles.kvValue}>{value ?? '—'}</Text>
+    <View style={s.finStat}>
+      <Text style={s.finStatValue}>{value}</Text>
+      <Text style={s.finStatLabel}>{label}</Text>
     </View>
   );
 }
 
-function fmt$(v) {
-  if (v === null || v === undefined) return '—';
-  const n = parseFloat(v);
-  if (Number.isNaN(n)) return '—';
-  return `$${n.toFixed(2)}`;
+// ── BookCard ──────────────────────────────────────────────────────────────────
+
+function BookCard({ book: b }) {
+  const isActive  = b.close_position == null;
+  const isSold    = b.fully_sold;
+
+  return (
+    <View style={s.bookCard}>
+      <View style={s.bookCardRow}>
+        {/* Left */}
+        <View style={s.bookCardLeft}>
+          <Text style={s.bookSlotName}>{b.slot_name}</Text>
+          <Text style={s.bookCode}>{b.static_code}</Text>
+          <View style={s.pricePill}>
+            <Text style={s.pricePillText}>${b.ticket_price}</Text>
+          </View>
+        </View>
+
+        {/* Right */}
+        <View style={s.bookCardRight}>
+          {isActive ? (
+            <View style={s.bookBadgeActive}>
+              <Text style={s.bookBadgeActiveText}>Active</Text>
+            </View>
+          ) : (
+            <View style={s.bookBadgeSold}>
+              <Text style={s.bookBadgeSoldText}>
+                {isSold ? 'Sold' : 'Closed'}
+              </Text>
+            </View>
+          )}
+          {isSold ? (
+            <Text style={s.bookSoldLabel}>📦 Book Sold</Text>
+          ) : b.tickets_sold > 0 ? (
+            <Text style={s.bookTicketsLabel}>{b.tickets_sold} Tickets Sold</Text>
+          ) : null}
+        </View>
+      </View>
+    </View>
+  );
 }
 
-function diffColor(status) {
-  if (status === 'correct') return '#16a34a';
-  if (status === 'over') return '#b45309';
-  if (status === 'short') return '#dc2626';
-  return '#222';
+// ── TotalsRow ─────────────────────────────────────────────────────────────────
+
+function TotalsRow({ label, value, valueColor, isLast }) {
+  return (
+    <View style={[s.totalsRow, !isLast && s.totalsRowBorder]}>
+      <Text style={s.totalsKey}>{label}</Text>
+      <Text style={[s.totalsVal, valueColor && { color: valueColor }]}>
+        {value ?? '—'}
+      </Text>
+    </View>
+  );
 }
 
-// ---------------------------------------------------------------------------
-// PDF HTML builder
-// ---------------------------------------------------------------------------
+// ── SlotCard ──────────────────────────────────────────────────────────────────
+
+function SlotCard({ item }) {
+  return (
+    <View style={s.slotCard}>
+      <View style={s.slotCardHeader}>
+        <Text style={s.slotCardName}>{item.slot_name}</Text>
+        <Text style={s.slotCardPrice}>${item.ticket_price}</Text>
+      </View>
+
+      <SlotKV label="Slot Created"  value={item.slot_created_at ? formatLocalDateTime(item.slot_created_at) : '—'} />
+      <SlotKV label="Book Assigned" value={item.assigned_at     ? formatLocalDateTime(item.assigned_at)     : '—'} />
+      <SlotKV label="Assigned By"   value={item.assigned_by} />
+      <SlotKV label="Barcode"       value={item.book_barcode} />
+
+      <View style={s.slotSectionDiv} />
+
+      <SlotKV label="Open Position"  value={item.open_position  ?? '—'} />
+      <SlotKV label="Close Position" value={item.close_position ?? '—'} />
+      <SlotKV label="Tickets Sold"   value={item.tickets_sold} />
+
+      <View style={s.slotSubtotalRow}>
+        <Text style={s.slotSubtotalLabel}>Subtotal</Text>
+        <Text style={s.slotSubtotalValue}>${item.subtotal}</Text>
+      </View>
+
+      {item.is_last_ticket && (
+        <View style={s.lastTicketBadge}>
+          <Text style={s.lastTicketText}>🎯 Last Ticket Sold</Text>
+        </View>
+      )}
+    </View>
+  );
+}
+
+function SlotKV({ label, value }) {
+  return (
+    <View style={s.slotKV}>
+      <Text style={s.slotKVKey}>{label}</Text>
+      <Text style={s.slotKVVal}>{value ?? '—'}</Text>
+    </View>
+  );
+}
+
+// ── WholeSaleCard ─────────────────────────────────────────────────────────────
+
+function WholeSaleCard({ sale }) {
+  return (
+    <View style={s.bookCard}>
+      <View style={s.bookCardRow}>
+        <View style={s.bookCardLeft}>
+          <Text style={s.bookSlotName}>{sale.scanned_barcode}</Text>
+          <Text style={s.bookCode}>
+            ${sale.ticket_price} · {sale.ticket_count} tickets
+          </Text>
+          {sale.created_by?.username && (
+            <Text style={s.bookCode}>{sale.created_by.username}</Text>
+          )}
+        </View>
+        <Text style={s.wbSaleValue}>{fmt$(sale.value)}</Text>
+      </View>
+    </View>
+  );
+}
+
+// ── ReturnedBookRow ───────────────────────────────────────────────────────────
+
+function ReturnedBookRow({ book: r, isLast, t }) {
+  return (
+    <View style={[s.totalsRow, !isLast && s.totalsRowBorder]}>
+      <View>
+        <Text style={s.totalsKey}>{r.static_code}</Text>
+        <Text style={[s.totalsKey, { fontSize: FS.xs }]}>
+          {r.slot_name} · ${r.ticket_price} · {r.open_position} → {r.returned_at_position}
+        </Text>
+        <Text style={[s.totalsKey, { fontSize: FS.xs }]}>
+          {t('report.soldBeforeReturn', { count: r.tickets_sold })}
+        </Text>
+      </View>
+      <Text style={s.totalsVal}>{fmt$(r.value)}</Text>
+    </View>
+  );
+}
+
+// ── PDF builder (unchanged) ────────────────────────────────────────────────────
 
 function buildReportHtml(report, t, isRTL) {
   const shift = report.shift;
@@ -649,163 +924,225 @@ ${body}
 </html>`;
 }
 
-// ---------------------------------------------------------------------------
-// Styles
-// ---------------------------------------------------------------------------
+// ── styles ────────────────────────────────────────────────────────────────────
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f4f5f7' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+const s = StyleSheet.create({
+  safeArea: { flex: 1, backgroundColor: D.BACKGROUND },
+  center:   { flex: 1, justifyContent: 'center', alignItems: 'center', gap: SP.md },
+  dimmed:   { opacity: 0.5 },
 
-  header: {
-    padding: 16,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  backText: { color: '#1a73e8', fontSize: 16, fontWeight: '600' },
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  printButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 8,
+  loadingText: { fontSize: FS.sm, color: D.SUBTLE },
+  errorEmoji:  { fontSize: 48, marginBottom: SP.sm },
+  errorText:   { fontSize: FS.md, color: D.TEXT, textAlign: 'center', marginBottom: SP.lg },
+  retryBtn: {
+    paddingHorizontal: SP.xl,
+    paddingVertical: SP.sm,
+    borderRadius: BR.full,
     borderWidth: 1.5,
-    borderColor: '#1a73e8',
-    minWidth: 44,
+    borderColor: D.PRIMARY,
+  },
+  retryBtnText: { fontSize: FS.sm, fontWeight: FW.semibold, color: D.PRIMARY },
+
+  // header
+  header: {
+    height: 56,
+    backgroundColor: D.CARD,
+    borderBottomWidth: 1,
+    borderBottomColor: D.BORDER,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SP.lg,
+  },
+  backBtn:   { flexDirection: 'row', alignItems: 'center', gap: SP.sm },
+  backArrow: { fontSize: FS.xl, color: D.PRIMARY, lineHeight: 26 },
+  backLabel: { fontSize: FS.md, fontWeight: FW.bold, color: D.TEXT },
+  shareBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: '#EFF6FF',
+    justifyContent: 'center',
     alignItems: 'center',
   },
-  printButtonText: { color: '#1a73e8', fontSize: 13, fontWeight: '600' },
-  exportButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 8,
-    backgroundColor: '#1a73e8',
-    minWidth: 44,
-    alignItems: 'center',
+  shareBtnText: { fontSize: FS.lg, fontWeight: FW.bold, color: D.PRIMARY, lineHeight: 22 },
+
+  // scroll
+  scroll: { padding: SP.lg, paddingBottom: 20 },
+
+  // ── summary card ────────────────────────────────────────────────────────────
+  summaryCard: {
+    backgroundColor: D.CARD,
+    borderRadius: BR.lg,
+    marginBottom: SP.md,
+    overflow: 'hidden',
+    ...CARD_SHADOW,
   },
-  exportButtonText: { color: '#fff', fontSize: 13, fontWeight: '600' },
-  actionButtonDisabled: { opacity: 0.5 },
-
-  scroll: { padding: 16, paddingBottom: 32 },
-
-  card: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 10,
+  summaryBar:    { height: 4 },
+  summaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    padding: SP.lg,
   },
-  voidedCard: { opacity: 0.7 },
+  summaryLeft:     { flex: 1, marginRight: SP.sm },
+  summaryShiftNum: { fontSize: FS.xl, fontWeight: FW.bold, color: D.TEXT, marginBottom: 3 },
+  summaryDate:     { fontSize: FS.sm, color: D.SUBTLE, marginBottom: 2 },
+  summaryTime:     { fontSize: FS.sm, color: D.SUBTLE },
 
-  headerRow: {
+  pill:     { paddingHorizontal: SP.md, paddingVertical: 4, borderRadius: BR.full },
+  pillText: { fontSize: FS.sm, fontWeight: FW.semibold },
+
+  cardDivider: { height: 1, backgroundColor: D.BORDER },
+
+  // financials grid
+  financialGrid: { padding: SP.lg },
+  gridRow: { flexDirection: 'row' },
+  gridDividerV: { width: 1, backgroundColor: D.BORDER, marginVertical: SP.xs },
+  gridDividerH: { height: 1, backgroundColor: D.BORDER, marginVertical: SP.md },
+  finStat:      { flex: 1, alignItems: 'center', paddingHorizontal: SP.sm },
+  finStatValue: { fontSize: FS.lg, fontWeight: FW.bold, color: D.TEXT, marginBottom: 2, textAlign: 'center' },
+  finStatLabel: { fontSize: FS.xs, color: D.SUBTLE, textAlign: 'center' },
+
+  // difference row
+  diffRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 10,
+    paddingVertical: SP.md,
+    paddingHorizontal: SP.lg,
   },
-  dateText: { fontSize: 12, color: '#888', fontWeight: '500', marginBottom: 2, textTransform: 'uppercase', letterSpacing: 0.4 },
-  title: { fontSize: 20, fontWeight: '700', color: '#222' },
-  subTitle: { fontSize: 16, fontWeight: '700', color: '#222' },
+  diffLabel: { fontSize: FS.md, fontWeight: FW.semibold, color: D.TEXT },
+  diffValue: { fontSize: FS.lg, fontWeight: FW.bold },
 
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#555',
-    marginTop: 12,
-    marginBottom: 6,
-    marginHorizontal: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  // ── employee card ────────────────────────────────────────────────────────────
+  employeeCard: {
+    backgroundColor: D.CARD,
+    borderRadius: BR.md,
+    marginBottom: SP.md,
+    padding: SP.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    ...CARD_SHADOW,
   },
-  sectionLabel: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#555',
-    marginBottom: 6,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+  empAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: D.PRIMARY,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: SP.md,
   },
+  empAvatarText: { fontSize: FS.sm, fontWeight: FW.bold, color: '#fff' },
+  empInfo:       { flex: 1 },
+  empName:       { fontSize: FS.md, fontWeight: FW.semibold, color: D.TEXT, marginBottom: 2 },
+  empTimes:      { fontSize: FS.sm, color: D.SUBTLE, marginBottom: 1 },
+  empDuration:   { fontSize: FS.sm, color: D.SUBTLE },
 
-  divider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: '#ddd',
-    marginVertical: 10,
-  },
-
-  badge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-  },
-  badgeText: { fontSize: 12, fontWeight: '700' },
-  voidedBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 999,
-    backgroundColor: '#fee2e2',
-  },
-  voidedText: { fontSize: 12, fontWeight: '700', color: '#7c2d12' },
-
-  kvRow: {
+  // ── section header ────────────────────────────────────────────────────────────
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 4,
+    alignItems: 'center',
+    marginHorizontal: SP.xs,
+    marginBottom: SP.sm,
+    marginTop: SP.xs,
   },
-  kvKey: { color: '#666', fontSize: 13 },
-  kvValue: { color: '#222', fontSize: 13, fontWeight: '600' },
+  sectionTitle:     { fontSize: FS.md, fontWeight: FW.bold, color: D.TEXT },
+  sectionCountPill: { backgroundColor: D.BORDER, paddingHorizontal: SP.sm, paddingVertical: 2, borderRadius: BR.full },
+  sectionCountText: { fontSize: FS.xs, color: D.SUBTLE, fontWeight: FW.medium },
 
-  bookRow: {
-    paddingVertical: 6,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#eee',
+  // ── book card ────────────────────────────────────────────────────────────────
+  bookCard: {
+    backgroundColor: D.CARD,
+    borderRadius: BR.md,
+    marginBottom: SP.sm,
+    padding: SP.lg,
+    ...CARD_SHADOW,
   },
-  bookHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  bookCode: { fontSize: 14, fontWeight: '600', color: '#222' },
-  bookValue: { fontSize: 14, fontWeight: '600', color: '#222' },
-  bookMeta: { fontSize: 12, color: '#666', marginTop: 2 },
+  bookCardRow:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' },
+  bookCardLeft:  { flex: 1, marginRight: SP.sm },
+  bookCardRight: { alignItems: 'flex-end', gap: SP.xs },
+  bookSlotName:  { fontSize: FS.md, fontWeight: FW.semibold, color: D.TEXT, marginBottom: 2 },
+  bookCode:      { fontSize: FS.sm, color: D.SUBTLE, marginBottom: SP.xs },
+  pricePill:     { backgroundColor: '#DBEAFE', paddingHorizontal: SP.sm, paddingVertical: 2, borderRadius: BR.full, alignSelf: 'flex-start' },
+  pricePillText: { fontSize: FS.xs, fontWeight: FW.semibold, color: D.PRIMARY },
 
+  bookBadgeActive:     { backgroundColor: '#DCFCE7', paddingHorizontal: SP.sm, paddingVertical: 3, borderRadius: BR.full },
+  bookBadgeActiveText: { fontSize: FS.xs, fontWeight: FW.semibold, color: D.SUCCESS },
+  bookBadgeSold:       { backgroundColor: D.BORDER, paddingHorizontal: SP.sm, paddingVertical: 3, borderRadius: BR.full },
+  bookBadgeSoldText:   { fontSize: FS.xs, fontWeight: FW.semibold, color: D.SUBTLE },
+  bookSoldLabel:       { fontSize: FS.sm, color: D.SUBTLE },
+  bookTicketsLabel:    { fontSize: FS.sm, fontWeight: FW.bold, color: D.ERROR },
+  wbSaleValue:         { fontSize: FS.md, fontWeight: FW.bold, color: D.TEXT },
+
+  // ── totals card ───────────────────────────────────────────────────────────────
+  totalsCard: {
+    backgroundColor: D.CARD,
+    borderRadius: BR.md,
+    marginBottom: SP.md,
+    ...CARD_SHADOW,
+    overflow: 'hidden',
+  },
+  totalsRow:       { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: SP.md, paddingHorizontal: SP.lg },
+  totalsRowBorder: { borderBottomWidth: 1, borderBottomColor: D.BORDER },
+  totalsKey:       { fontSize: FS.sm, color: D.SUBTLE },
+  totalsVal:       { fontSize: FS.sm, fontWeight: FW.semibold, color: D.TEXT },
+
+  // ── slot card ─────────────────────────────────────────────────────────────────
   slotCard: {
-    backgroundColor: '#fff',
-    borderRadius: 12,
-    padding: 16,
-    marginBottom: 10,
-    borderLeftWidth: 3,
-    borderLeftColor: '#1a73e8',
+    backgroundColor: D.CARD,
+    borderRadius: BR.md,
+    marginBottom: SP.sm,
+    padding: SP.lg,
+    ...CARD_SHADOW,
   },
-  slotHeader: {
+  slotCardHeader:   { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: SP.sm },
+  slotCardName:     { fontSize: FS.md, fontWeight: FW.bold, color: D.TEXT, flex: 1 },
+  slotCardPrice:    { fontSize: FS.sm, fontWeight: FW.semibold, color: D.PRIMARY },
+  slotSectionDiv:   { height: 1, backgroundColor: D.BORDER, marginVertical: SP.sm },
+  slotKV:           { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 4 },
+  slotKVKey:        { fontSize: FS.sm, color: D.SUBTLE },
+  slotKVVal:        { fontSize: FS.sm, fontWeight: FW.semibold, color: D.TEXT },
+  slotSubtotalRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 10,
+    backgroundColor: D.BACKGROUND,
+    borderRadius: BR.sm,
+    padding: SP.sm,
+    marginTop: SP.sm,
   },
-  slotName: { fontSize: 16, fontWeight: '700', color: '#222', flex: 1 },
-  slotTicketPrice: { fontSize: 14, fontWeight: '700', color: '#1a73e8' },
-  slotDivider: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: '#ddd',
-    marginVertical: 8,
-  },
-  slotTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 6,
-    marginTop: 4,
-  },
-  slotTotalLabel: { fontSize: 13, fontWeight: '700', color: '#333' },
-  slotTotalValue: { fontSize: 14, fontWeight: '700', color: '#222' },
+  slotSubtotalLabel: { fontSize: FS.sm, fontWeight: FW.bold, color: D.TEXT },
+  slotSubtotalValue: { fontSize: FS.sm, fontWeight: FW.bold, color: D.TEXT },
   lastTicketBadge: {
-    backgroundColor: '#dcfce7',
-    borderRadius: 6,
+    backgroundColor: '#FEF3C7',
+    borderRadius: BR.sm,
     paddingHorizontal: 10,
-    paddingVertical: 4,
+    paddingVertical: SP.xs,
     alignSelf: 'flex-start',
-    marginTop: 8,
+    marginTop: SP.sm,
   },
-  lastTicketText: { fontSize: 11, fontWeight: '700', color: '#166534' },
+  lastTicketText: { fontSize: FS.xs, fontWeight: FW.semibold, color: D.WARNING },
+
+  // ── export button (fixed bottom) ──────────────────────────────────────────────
+  exportWrap: {
+    paddingHorizontal: SP.lg,
+    paddingTop: SP.sm,
+    paddingBottom: SP.lg,
+    backgroundColor: D.BACKGROUND,
+  },
+  exportBtn: {
+    height: 52,
+    backgroundColor: D.PRIMARY,
+    borderRadius: BR.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: D.PRIMARY,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  exportBtnText: { fontSize: FS.md, fontWeight: FW.bold, color: '#fff' },
 });
