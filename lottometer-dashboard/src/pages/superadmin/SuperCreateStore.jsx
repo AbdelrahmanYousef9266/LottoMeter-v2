@@ -59,6 +59,7 @@ export default function SuperCreateStore() {
         store_code:     form.store_code.trim(),
         admin_username: form.admin_username.trim(),
         admin_password: form.admin_password,
+        scan_mode:      'hardware_scanner',
       }
       if (form.owner_name.trim()) payload.owner_name = form.owner_name.trim()
       if (form.email.trim())      payload.email      = form.email.trim()

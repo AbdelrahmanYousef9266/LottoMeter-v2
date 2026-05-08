@@ -21,6 +21,7 @@ import { useAuth } from '../context/AuthContext';
 import { getSlot, assignBook, unassignBook, deleteSlot } from '../api/slots';
 import ReturnBookModal from '../components/ReturnBookModal';
 import { useFeedback } from '../hooks/useFeedback';
+import { normalizeBarcode } from '../utils/barcodeUtils';
 
 export default function SlotDetailScreen({ route }) {
   const { t } = useTranslation();
@@ -108,7 +109,7 @@ export default function SlotDetailScreen({ route }) {
   }
 
   async function submitManual() {
-    const code = manualBarcode.trim();
+    const code = normalizeBarcode(manualBarcode);
     if (!code || code.length < 4) {
       Alert.alert(t('scan.invalidBarcode'), t('scan.invalidBarcodeHint'));
       return;
@@ -333,12 +334,12 @@ export default function SlotDetailScreen({ route }) {
             <TextInput
               style={styles.modalInput}
               value={manualBarcode}
-              onChangeText={setManualBarcode}
+              onChangeText={(text) => setManualBarcode(normalizeBarcode(text))}
               placeholder={t('slotDetail.manualEntryPlaceholder')}
               autoFocus
-              autoCapitalize="none"
               autoCorrect={false}
-              keyboardType="default"
+              keyboardType="numeric"
+              maxLength={14}
               returnKeyType="done"
               onSubmitEditing={submitManual}
             />

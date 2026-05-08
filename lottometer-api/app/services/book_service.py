@@ -21,22 +21,41 @@ from app.errors import (
 def parse_barcode(barcode: str) -> tuple[str, int]:
     """Split a barcode into (static_code, position).
 
-    static_code = barcode minus the last 3 digits.
+    Handles ITF-14 barcodes by stripping the leading packaging indicator digit.
+    static_code = first 10 digits of the 13-digit barcode.
     position    = last 3 digits as integer.
     """
-    if len(barcode) < 4:
-        raise ValidationError(
-            "Barcode is too short — must be at least 4 characters.",
-            code="INVALID_BARCODE",
-        )
-    static_code = barcode[:-3]
-    pos_str = barcode[-3:]
-    if not pos_str.isdigit():
-        raise ValidationError(
-            "Barcode position (last 3 digits) must be numeric.",
-            code="INVALID_BARCODE",
-        )
-    return static_code, int(pos_str)
+    normalized = barcode.strip()
+
+    # ITF-14: strip last digit (check digit) from 14-digit barcodes
+    # The actual EAN-13 barcode is the first 13 digits
+    if len(normalized) == 14:
+        normalized = normalized[:13]
+
+    if len(normalized) == 13:
+        static_code = normalized[:10]
+        pos_str = normalized[10:]
+        if not pos_str.isdigit():
+            raise ValidationError(
+                "Barcode position (last 3 digits) must be numeric.",
+                code="INVALID_BARCODE",
+            )
+        return static_code, int(pos_str)
+
+    if len(normalized) >= 4:
+        static_code = normalized[:-3]
+        pos_str = normalized[-3:]
+        if not pos_str.isdigit():
+            raise ValidationError(
+                "Barcode position (last 3 digits) must be numeric.",
+                code="INVALID_BARCODE",
+            )
+        return static_code, int(pos_str)
+
+    raise ValidationError(
+        "Barcode is too short — must be at least 4 characters.",
+        code="INVALID_BARCODE",
+    )
 
 
 # ---------- Lookups ----------

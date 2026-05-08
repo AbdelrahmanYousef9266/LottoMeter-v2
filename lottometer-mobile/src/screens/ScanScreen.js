@@ -22,6 +22,7 @@ import { useAuth } from '../context/AuthContext';
 import { useFeedback } from '../hooks/useFeedback';
 import { friendlyScanError } from '../utils/scanErrorMessages';
 import { lastPositionFor, parseBarcode } from '../utils/bookConstants';
+import { normalizeBarcode } from '../utils/barcodeUtils';
 import { Colors, Radius, Shadow } from '../theme';
 import NetInfo from '@react-native-community/netinfo';
 import { getDb } from '../offline/db';
@@ -179,6 +180,16 @@ export default function ScanScreen() {
     }
   }, [justOpened]);
 
+  // Keep input focused in hardware_scanner mode so wedge input is never lost
+  useEffect(() => {
+    if (scanMode === 'hardware_scanner') {
+      const interval = setInterval(() => {
+        inputRef.current?.focus();
+      }, 500);
+      return () => clearInterval(interval);
+    }
+  }, [scanMode]);
+
   const proceedWithScan = useCallback(
     async (code, force_sold = null) => {
       setBusy(true);
@@ -263,7 +274,7 @@ export default function ScanScreen() {
 
   const submitScan = useCallback(
     async (rawBarcode) => {
-      const code = (rawBarcode || '').trim();
+      const code = normalizeBarcode(rawBarcode);
       if (!/^\d{13}$/.test(code)) return;
 
       const now = Date.now();
@@ -317,9 +328,9 @@ export default function ScanScreen() {
   );
 
   function handleManualScan() {
-    const trimmedBarcode = barcode.trim();
-    if (!/^\d{13}$/.test(trimmedBarcode)) return;
-    submitScan(trimmedBarcode);
+    const normalized = normalizeBarcode(barcode);
+    if (!/^\d{13}$/.test(normalized)) return;
+    submitScan(normalized);
   }
 
   function handleDonePress() {
@@ -368,7 +379,7 @@ export default function ScanScreen() {
     );
   }
 
-  const isBarcodeValid = /^\d{13}$/.test(barcode.trim());
+  const isBarcodeValid = /^\d{13}$/.test(normalizeBarcode(barcode));
 
   return (
     <SafeAreaView style={styles.container}>
@@ -459,28 +470,54 @@ export default function ScanScreen() {
               ref={inputRef}
               style={styles.input}
               value={barcode}
-              onChangeText={setBarcode}
-              placeholder={t('scan.barcodePlaceholder')}
+              onChangeText={(text) => {
+                const normalized = normalizeBarcode(text);
+                setBarcode(normalized);
+                if (scanMode === 'hardware_scanner' && normalized.length === 13) {
+                  submitScan(normalized);
+                  setBarcode('');
+                  setTimeout(() => inputRef.current?.focus(), 50);
+                }
+              }}
+              placeholder={
+                scanMode === 'hardware_scanner'
+                  ? 'Waiting for scanner...'
+                  : t('scan.barcodePlaceholder')
+              }
               placeholderTextColor={Colors.textMuted}
               autoCapitalize="none"
               autoCorrect={false}
-              keyboardType="default"
+              keyboardType="numeric"
+              maxLength={scanMode === 'hardware_scanner' ? 14 : 20}
               returnKeyType="done"
               onSubmitEditing={handleManualScan}
               autoFocus={scanMode === 'hardware_scanner'}
+              onBlur={() => {
+                if (scanMode === 'hardware_scanner') {
+                  setTimeout(() => inputRef.current?.focus(), 100);
+                }
+              }}
             />
 
-            <TouchableOpacity
-              style={[styles.scanButton, (!isBarcodeValid || busy) && styles.disabled]}
-              onPress={handleManualScan}
-              disabled={!isBarcodeValid || busy}
-            >
-              {busy ? (
-                <ActivityIndicator color="#fff" />
-              ) : (
-                <Text style={styles.scanButtonText}>{t('scan.submitScan')}</Text>
-              )}
-            </TouchableOpacity>
+            {scanMode !== 'hardware_scanner' && (
+              <TouchableOpacity
+                style={[styles.scanButton, (!isBarcodeValid || busy) && styles.disabled]}
+                onPress={handleManualScan}
+                disabled={!isBarcodeValid || busy}
+              >
+                {busy ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.scanButtonText}>{t('scan.submitScan')}</Text>
+                )}
+              </TouchableOpacity>
+            )}
+
+            {scanMode === 'hardware_scanner' && (
+              <Text style={styles.scannerHint}>
+                Point scanner at barcode to scan automatically
+              </Text>
+            )}
           </View>
 
           {lastScan && (
@@ -631,6 +668,14 @@ const styles = StyleSheet.create({
   },
   scanButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
   disabled: { opacity: 0.6 },
+
+  scannerHint: {
+    color: '#46627F',
+    fontSize: 13,
+    textAlign: 'center',
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
 
   lastScanCard:  { borderLeftWidth: 4, borderLeftColor: Colors.success },
   lastTicketCard: { borderLeftColor: Colors.error, backgroundColor: Colors.errorBg },

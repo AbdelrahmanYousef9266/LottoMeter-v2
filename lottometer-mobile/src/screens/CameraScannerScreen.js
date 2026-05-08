@@ -13,6 +13,7 @@ import { useTranslation } from 'react-i18next';
 
 import { listSlots } from '../api/slots';
 import { LENGTH_BY_PRICE, lastPositionFor, parseBarcode } from '../utils/bookConstants';
+import { normalizeBarcode } from '../utils/barcodeUtils';
 
 const ERROR_OVERLAY_MS = 1500;
 
@@ -92,12 +93,8 @@ export default function CameraScannerScreen({ navigation, route }) {
   }, []);
 
   const handleBarCodeScanned = useCallback(
-    ({ data, type }) => {
-      // Normalize ITF-14 reads of 13-digit ITF lottery barcodes.
-      let normalized = data;
-      if (type === 'itf14' && data.length === 14) {
-        normalized = data.slice(0, 13);
-      }
+    ({ data }) => {
+      const normalized = normalizeBarcode(data);
 
       // Layer 1 + 2: client-side validation against the active books list.
       // We only do this if `validate` is true and the books map has loaded.

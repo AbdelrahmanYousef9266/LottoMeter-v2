@@ -5,11 +5,12 @@ import { v4 as uuidv4 } from 'uuid';
 // Parse barcode — mirrors server parse_barcode exactly.
 // Lottery tickets: 13 digits; static_code = first 10, position = last 3.
 export const parseBarcode = (barcode) => {
-  let normalized = barcode.trim();
+  let normalized = barcode.trim().replace(/\D/g, '');
 
-  // ITF-14: strip leading 0 from 14-digit barcodes
-  if (normalized.length === 14 && normalized.startsWith('0')) {
-    normalized = normalized.substring(1);
+  // ITF-14: strip last digit (check digit) from 14-digit barcodes
+  // The actual EAN-13 barcode is the first 13 digits
+  if (normalized.length === 14) {
+    normalized = normalized.substring(0, 13);
   }
 
   if (normalized.length === 13) {

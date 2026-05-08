@@ -18,6 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { returnBookToVendor } from '../api/wholeBookSale';
 import api from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { normalizeBarcode } from '../utils/barcodeUtils';
 
 export default function ReturnBookModal({
   visible,
@@ -43,14 +44,14 @@ export default function ReturnBookModal({
 
   function handleScanCamera() {
     navigation.navigate('CameraScanner', {
-      onScanned: (data) => setBarcode(data),
+      onScanned: (data) => setBarcode(normalizeBarcode(data)),
     });
   }
 
-  async function resolveBookId(scannedBarcode) {
+  async function resolveBookId(normalizedBarcode) {
     if (bookId) return bookId;
 
-    const staticCode = scannedBarcode.slice(0, -3);
+    const staticCode = normalizedBarcode.slice(0, -3);
     if (staticCode.length < 1) {
       throw {
         code: 'INVALID_BARCODE',
@@ -71,7 +72,8 @@ export default function ReturnBookModal({
   }
 
   async function handleSubmit() {
-    if (!barcode.trim()) {
+    const normalizedBarcode = normalizeBarcode(barcode);
+    if (!normalizedBarcode) {
       Alert.alert(t('returnBook.missingBarcode'), t('returnBook.missingBarcodeHint'));
       return;
     }
@@ -82,9 +84,9 @@ export default function ReturnBookModal({
 
     setBusy(true);
     try {
-      const resolvedBookId = await resolveBookId(barcode.trim());
+      const resolvedBookId = await resolveBookId(normalizedBarcode);
       const result = await returnBookToVendor(resolvedBookId, {
-        barcode: barcode.trim(),
+        barcode: normalizedBarcode,
         pin,
       });
       onSuccess(result);
@@ -137,10 +139,11 @@ export default function ReturnBookModal({
               <TextInput
                 style={[styles.input, styles.barcodeInput]}
                 value={barcode}
-                onChangeText={setBarcode}
+                onChangeText={(text) => setBarcode(normalizeBarcode(text))}
                 placeholder={t('returnBook.barcodePlaceholder')}
-                autoCapitalize="none"
                 autoCorrect={false}
+                keyboardType="numeric"
+                maxLength={14}
                 autoFocus={scanMode === 'hardware_scanner'}
               />
               {scanMode !== 'hardware_scanner' && (

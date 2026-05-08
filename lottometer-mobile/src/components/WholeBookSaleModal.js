@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 
 import { recordWholeBookSale } from '../api/wholeBookSale';
 import { useAuth } from '../context/AuthContext';
+import { normalizeBarcode } from '../utils/barcodeUtils';
 
 const VALID_PRICES = ['1.00', '2.00', '3.00', '5.00', '10.00', '20.00'];
 
@@ -48,12 +49,13 @@ export default function WholeBookSaleModal({ visible, subshiftId, onCancel, onSu
 
   function handleScanCamera() {
     navigation.navigate('CameraScanner', {
-      onScanned: (data) => setBarcode(data),
+      onScanned: (data) => setBarcode(normalizeBarcode(data)),
     });
   }
 
   async function handleSubmit() {
-    if (!barcode.trim()) {
+    const normalizedBarcode = normalizeBarcode(barcode);
+    if (!normalizedBarcode) {
       Alert.alert(t('wholeBook.missingBarcode'), t('wholeBook.missingBarcodeHint'));
       return;
     }
@@ -69,7 +71,7 @@ export default function WholeBookSaleModal({ visible, subshiftId, onCancel, onSu
     setBusy(true);
     try {
       const result = await recordWholeBookSale(subshiftId, {
-        barcode: barcode.trim(),
+        barcode: normalizedBarcode,
         ticket_price: price,
         pin,
       });
@@ -117,10 +119,11 @@ export default function WholeBookSaleModal({ visible, subshiftId, onCancel, onSu
                 <TextInput
                   style={[styles.input, styles.barcodeInput]}
                   value={barcode}
-                  onChangeText={setBarcode}
+                  onChangeText={(text) => setBarcode(normalizeBarcode(text))}
                   placeholder={t('wholeBook.barcodePlaceholder')}
-                  autoCapitalize="none"
                   autoCorrect={false}
+                  keyboardType="numeric"
+                  maxLength={14}
                   autoFocus={scanMode === 'hardware_scanner'}
                 />
                 {scanMode !== 'hardware_scanner' && (

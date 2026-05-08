@@ -21,8 +21,8 @@ class Store(db.Model):
     scan_mode = db.Column(
         db.String(30),
         nullable=False,
-        default="camera_single",
-        server_default="camera_single",
+        default="hardware_scanner",
+        server_default="hardware_scanner",
     )
     suspended = db.Column(
         db.Boolean,

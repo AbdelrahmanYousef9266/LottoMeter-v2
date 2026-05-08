@@ -8,6 +8,7 @@ import {
   Alert,
   ActivityIndicator,
   Switch,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScrollView } from 'react-native';
@@ -23,8 +24,26 @@ import { getSoundEnabled, setSoundEnabled, getVibrationEnabled, setVibrationEnab
 import { Colors, Radius, Shadow } from '../theme';
 
 const LANGUAGES = [
-  { code: 'en', label: 'English', native: 'English' },
-  { code: 'ar', label: 'Arabic', native: 'العربية' },
+  { label: 'English',  value: 'en', flag: '🇺🇸', description: 'English (United States)' },
+  { label: 'العربية', value: 'ar', flag: '🇯🇴', description: 'Arabic (Right to Left)'   },
+];
+
+const SCAN_MODES = [
+  {
+    label: 'Hardware Scanner',
+    value: 'hardware_scanner',
+    description: 'For Zebra, Honeywell, or Bluetooth scanners',
+  },
+  {
+    label: 'Camera — Single',
+    value: 'camera_single',
+    description: 'Tap to scan one barcode at a time',
+  },
+  {
+    label: 'Camera — Continuous',
+    value: 'camera_continuous',
+    description: 'Camera stays open for rapid scanning',
+  },
 ];
 
 export default function SettingsScreen() {
@@ -58,6 +77,8 @@ export default function SettingsScreen() {
   const [confirmPin, setConfirmPin] = useState('');
   const [pinSaving, setPinSaving] = useState(false);
   const [scanModeSaving, setScanModeSaving] = useState(false);
+  const [scanModePickerOpen, setScanModePickerOpen] = useState(false);
+  const [langPickerOpen, setLangPickerOpen] = useState(false);
 
   function confirmLogout() {
     Alert.alert(
@@ -80,13 +101,12 @@ export default function SettingsScreen() {
 
   async function handleLanguageChange(lang) {
     if (lang === i18n.language || busy) return;
+    setLangPickerOpen(false);
     setBusy(true);
     try {
+      await i18n.changeLanguage(lang);
       await setStoredLanguage(lang);
-      const reloadNeeded = syncRTL(lang);
-      if (reloadNeeded) {
-        Alert.alert(t('settings.restartTitle'), t('settings.restartMessage'), [{ text: t('common.ok') }]);
-      }
+      syncRTL(lang);
     } catch (err) {
       Alert.alert(t('common.error'), err.message || t('common.tryAgain'));
     } finally {
@@ -130,6 +150,7 @@ export default function SettingsScreen() {
 
   async function handleScanModeChange(newMode) {
     if (newMode === scanMode || scanModeSaving) return;
+    setScanModePickerOpen(false);
     setScanModeSaving(true);
     try {
       const result = await changeScanMode(newMode);
@@ -279,52 +300,147 @@ export default function SettingsScreen() {
           <Text style={styles.cardTitle}>{t('settings.scanMode')}</Text>
           <Text style={styles.helperText}>{t('settings.scanModeHint')}</Text>
 
-          <ScanModeOption
-            code="camera_single"
-            label={t('settings.scanModeSingle')}
-            description={t('settings.scanModeSingleDesc')}
-            active={scanMode === 'camera_single'}
-            onPress={() => handleScanModeChange('camera_single')}
+          <TouchableOpacity
+            style={styles.dropdownTrigger}
+            onPress={() => setScanModePickerOpen(true)}
             disabled={scanModeSaving}
-          />
-          <ScanModeOption
-            code="camera_continuous"
-            label={t('settings.scanModeContinuous')}
-            description={t('settings.scanModeContinuousDesc')}
-            active={scanMode === 'camera_continuous'}
-            onPress={() => handleScanModeChange('camera_continuous')}
-            disabled={scanModeSaving}
-          />
-          <ScanModeOption
-            code="hardware_scanner"
-            label={t('settings.scanModeHardware')}
-            description={t('settings.scanModeHardwareDesc')}
-            active={scanMode === 'hardware_scanner'}
-            onPress={() => handleScanModeChange('hardware_scanner')}
-            disabled={scanModeSaving}
-          />
+            activeOpacity={0.7}
+          >
+            <View style={styles.dropdownTriggerContent}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.dropdownValue}>
+                  {SCAN_MODES.find(m => m.value === scanMode)?.label || 'Select…'}
+                </Text>
+                <Text style={styles.dropdownDesc}>
+                  {SCAN_MODES.find(m => m.value === scanMode)?.description || ''}
+                </Text>
+              </View>
+              {scanModeSaving
+                ? <ActivityIndicator size="small" color={Colors.primary} />
+                : <Text style={styles.dropdownChevron}>▾</Text>
+              }
+            </View>
+          </TouchableOpacity>
+
+          <Modal
+            visible={scanModePickerOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setScanModePickerOpen(false)}
+          >
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setScanModePickerOpen(false)}
+            >
+              <View style={styles.modalSheet}>
+                <Text style={styles.modalTitle}>Select Scan Mode</Text>
+                {SCAN_MODES.map((mode) => {
+                  const isSelected = scanMode === mode.value;
+                  return (
+                    <TouchableOpacity
+                      key={mode.value}
+                      style={[styles.modalOption, isSelected && styles.modalOptionActive]}
+                      onPress={() => handleScanModeChange(mode.value)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.modalOptionContent}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.modalOptionLabel, isSelected && styles.modalOptionLabelActive]}>
+                            {mode.label}
+                          </Text>
+                          <Text style={styles.modalOptionDesc}>{mode.description}</Text>
+                        </View>
+                        {isSelected && <Text style={styles.modalCheckmark}>✓</Text>}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+                <TouchableOpacity
+                  style={styles.modalCancel}
+                  onPress={() => setScanModePickerOpen(false)}
+                >
+                  <Text style={styles.modalCancelText}>Cancel</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </Modal>
         </View>
 
         {/* 6. Language */}
         <View style={styles.card}>
           <Text style={styles.cardTitle}>{t('settings.language')}</Text>
           <Text style={styles.helperText}>{t('settings.languageHint')}</Text>
-          {LANGUAGES.map((lang) => {
-            const isActive = i18n.language === lang.code;
-            return (
-              <TouchableOpacity
-                key={lang.code}
-                style={[styles.langOption, isActive && styles.langOptionActive]}
-                onPress={() => handleLanguageChange(lang.code)}
-                disabled={busy}
-              >
-                <Text style={[styles.langText, isActive && styles.langTextActive]}>
-                  {lang.native}
+
+          <TouchableOpacity
+            style={styles.dropdownTrigger}
+            onPress={() => setLangPickerOpen(true)}
+            disabled={busy}
+            activeOpacity={0.7}
+          >
+            <View style={styles.dropdownTriggerContent}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.dropdownValue}>
+                  {(() => {
+                    const cur = LANGUAGES.find(l => l.value === i18n.language);
+                    return cur ? `${cur.flag}  ${cur.label}` : 'Select…';
+                  })()}
                 </Text>
-                {isActive && <Text style={styles.checkmark}>✓</Text>}
-              </TouchableOpacity>
-            );
-          })}
+                <Text style={styles.dropdownDesc}>
+                  {LANGUAGES.find(l => l.value === i18n.language)?.description || ''}
+                </Text>
+              </View>
+              {busy
+                ? <ActivityIndicator size="small" color={Colors.primary} />
+                : <Text style={styles.dropdownChevron}>▾</Text>
+              }
+            </View>
+          </TouchableOpacity>
+
+          <Modal
+            visible={langPickerOpen}
+            transparent
+            animationType="fade"
+            onRequestClose={() => setLangPickerOpen(false)}
+          >
+            <TouchableOpacity
+              style={styles.modalOverlay}
+              activeOpacity={1}
+              onPress={() => setLangPickerOpen(false)}
+            >
+              <View style={styles.modalSheet}>
+                <Text style={styles.modalTitle}>{t('settings.language')}</Text>
+                {LANGUAGES.map((lang) => {
+                  const isSelected = i18n.language === lang.value;
+                  return (
+                    <TouchableOpacity
+                      key={lang.value}
+                      style={[styles.modalOption, isSelected && styles.modalOptionActive]}
+                      onPress={() => handleLanguageChange(lang.value)}
+                      activeOpacity={0.7}
+                    >
+                      <View style={styles.modalOptionContent}>
+                        <Text style={styles.langFlag}>{lang.flag}</Text>
+                        <View style={{ flex: 1, marginLeft: 12 }}>
+                          <Text style={[styles.modalOptionLabel, isSelected && styles.modalOptionLabelActive]}>
+                            {lang.label}
+                          </Text>
+                          <Text style={styles.modalOptionDesc}>{lang.description}</Text>
+                        </View>
+                        {isSelected && <Text style={styles.modalCheckmark}>✓</Text>}
+                      </View>
+                    </TouchableOpacity>
+                  );
+                })}
+                <TouchableOpacity
+                  style={styles.modalCancel}
+                  onPress={() => setLangPickerOpen(false)}
+                >
+                  <Text style={styles.modalCancelText}>{t('common.cancel')}</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
+          </Modal>
         </View>
 
         <TouchableOpacity style={styles.logoutButton} onPress={confirmLogout}>
@@ -335,28 +451,6 @@ export default function SettingsScreen() {
   );
 }
 
-function ScanModeOption({ label, description, active, onPress, disabled }) {
-  return (
-    <TouchableOpacity
-      style={[styles.scanModeOption, active && styles.scanModeOptionActive]}
-      onPress={onPress}
-      disabled={disabled}
-      activeOpacity={0.7}
-    >
-      <View style={styles.scanModeRow}>
-        <View style={[styles.scanModeRadio, active && styles.scanModeRadioActive]}>
-          {active && <View style={styles.scanModeRadioInner} />}
-        </View>
-        <View style={styles.scanModeTextWrap}>
-          <Text style={[styles.scanModeLabel, active && styles.scanModeLabelActive]}>
-            {label}
-          </Text>
-          <Text style={styles.scanModeDescription}>{description}</Text>
-        </View>
-      </View>
-    </TouchableOpacity>
-  );
-}
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
@@ -376,56 +470,103 @@ const styles = StyleSheet.create({
   text:       { fontSize: 14, color: Colors.textSecondary, marginBottom: 6 },
   helperText: { fontSize: 12, color: Colors.textMuted, marginBottom: 12 },
 
-  langOption: {
+  langFlag: { fontSize: 24 },
+
+  dropdownTrigger: {
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    borderRadius: Radius.md,
+    padding: 14,
+    backgroundColor: Colors.inputBg,
+  },
+  dropdownTriggerContent: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+  },
+  dropdownValue: {
+    fontSize: 15,
+    color: Colors.textPrimary,
+    fontWeight: '600',
+  },
+  dropdownDesc: {
+    fontSize: 12,
+    color: Colors.textMuted,
+    marginTop: 2,
+  },
+  dropdownChevron: {
+    fontSize: 20,
+    color: Colors.textMuted,
+    marginLeft: 8,
+  },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.45)',
+    justifyContent: 'flex-end',
+  },
+  modalSheet: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: Radius.lg,
+    borderTopRightRadius: Radius.lg,
+    padding: 20,
+    paddingBottom: 32,
+  },
+  modalTitle: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textMuted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+    marginBottom: 12,
+  },
+  modalOption: {
+    paddingVertical: 14,
     paddingHorizontal: 12,
     borderRadius: Radius.sm,
     marginBottom: 4,
   },
-  langOptionActive: { backgroundColor: Colors.primaryLight },
-  langText:         { fontSize: 15, color: Colors.textSecondary, fontWeight: '500' },
-  langTextActive:   { color: Colors.primary, fontWeight: '700' },
-  checkmark:        { color: Colors.primary, fontSize: 18, fontWeight: '700' },
-
-  scanModeOption: {
-    paddingVertical: 12,
-    paddingHorizontal: 12,
-    borderRadius: Radius.sm,
-    marginBottom: 6,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-  },
-  scanModeOptionActive: {
-    borderColor: Colors.primary,
+  modalOptionActive: {
     backgroundColor: Colors.primaryLight,
   },
-  scanModeRow:    { flexDirection: 'row', alignItems: 'flex-start' },
-  scanModeRadio: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    borderWidth: 2,
-    borderColor: Colors.border,
+  modalOptionContent: {
+    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+  },
+  modalOptionLabel: {
+    fontSize: 15,
+    color: Colors.textPrimary,
+    fontWeight: '600',
+  },
+  modalOptionLabelActive: {
+    color: Colors.primary,
+  },
+  modalOptionDesc: {
+    fontSize: 12,
+    color: Colors.textMuted,
     marginTop: 2,
-    marginRight: 12,
   },
-  scanModeRadioActive:  { borderColor: Colors.primary },
-  scanModeRadioInner: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: Colors.primary,
+  modalCheckmark: {
+    fontSize: 18,
+    color: Colors.primary,
+    fontWeight: '700',
+    marginLeft: 8,
   },
-  scanModeTextWrap:    { flex: 1 },
-  scanModeLabel:       { fontSize: 15, color: Colors.textPrimary, fontWeight: '600' },
-  scanModeLabelActive: { color: Colors.primary },
-  scanModeDescription: { fontSize: 12, color: Colors.textMuted, marginTop: 2 },
+  modalCancel: {
+    marginTop: 8,
+    padding: 14,
+    borderRadius: Radius.md,
+    backgroundColor: Colors.inputBg,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  modalCancelText: {
+    fontSize: 15,
+    color: Colors.textSecondary,
+    fontWeight: '600',
+  },
 
   actionButton: {
     backgroundColor: Colors.primary,

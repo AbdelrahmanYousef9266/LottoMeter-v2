@@ -87,7 +87,7 @@ export function AuthProvider({ children }) {
   }, [user]);
 
   // Helper: pull scan_mode out of the store, with a safe default
-  const scanMode = store?.scan_mode || 'camera_single';
+  const scanMode = store?.scan_mode || 'hardware_scanner';
 
   return (
     <AuthContext.Provider

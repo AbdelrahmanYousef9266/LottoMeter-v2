@@ -17,6 +17,7 @@ import { listSlots, assignBook } from '../api/slots';
 import { useAuth } from '../context/AuthContext';
 import { useFeedback } from '../hooks/useFeedback';
 import { friendlyScanError } from '../utils/scanErrorMessages';
+import { normalizeBarcode } from '../utils/barcodeUtils';
 
 export default function BulkAssignScreen() {
   const { t } = useTranslation();
@@ -72,22 +73,27 @@ export default function BulkAssignScreen() {
   // the `barcode` state when null/undefined (hardware-scanner text-input path).
   const handleSubmit = useCallback(
     async (barcodeArg, confirmReassign = false) => {
-      const trimmed = (barcodeArg != null ? String(barcodeArg) : barcode).trim();
-      if (!/^\d{13}$/.test(trimmed)) return;
+      const normalized = normalizeBarcode(barcodeArg ?? barcode);
+      console.log('[assign] normalized:', normalized, 'length:', normalized.length);
+
+      if (normalized.length !== 13) {
+        Alert.alert('Invalid Barcode', `Expected 13 digits, got ${normalized.length}`);
+        return;
+      }
       if (busyRef.current) return;
 
       const now = Date.now();
       const sinceLastScan = now - lastScanRef.current.timestamp;
-      if (lastScanRef.current.barcode === trimmed && sinceLastScan < 2000) {
+      if (lastScanRef.current.barcode === normalized && sinceLastScan < 2000) {
         if (!useCamera) setBarcode('');
         return;
       }
-      lastScanRef.current = { barcode: trimmed, timestamp: now };
+      lastScanRef.current = { barcode: normalized, timestamp: now };
 
       setBusyBoth(true);
       try {
         const result = await assignBook(currentSlot.slot_id, {
-          barcode: trimmed,
+          barcode: normalized,
           confirm_reassign: confirmReassign,
         });
 
@@ -120,8 +126,8 @@ export default function BulkAssignScreen() {
               },
               {
                 text: t('slotDetail.reassignMove'),
-                // Pass trimmed explicitly so the confirm call doesn't rely on stale state.
-                onPress: () => handleSubmit(trimmed, true),
+                // Pass normalized explicitly so the confirm call doesn't rely on stale state.
+                onPress: () => handleSubmit(normalized, true),
               },
             ]
           );
@@ -141,16 +147,15 @@ export default function BulkAssignScreen() {
   );
 
   const handleBarCodeScanned = useCallback(
-    ({ data, type }) => {
-      // Normalize ITF-14 reads of 13-digit barcodes (matches CameraScannerScreen behavior).
-      let code = data;
-      if (type === 'itf14' && code.length === 14) code = code.slice(0, 13);
-      handleSubmit(code);
+    ({ data }) => {
+      console.log('[assign camera] raw from camera:', data);
+      const normalized = normalizeBarcode(data);
+      handleSubmit(normalized);
     },
     [handleSubmit]
   );
 
-  const isBarcodeValid = /^\d{13}$/.test(barcode.trim());
+  const isBarcodeValid = /^\d{13}$/.test(normalizeBarcode(barcode));
 
   // ── Loading ──────────────────────────────────────────────────────────────────
 
@@ -275,11 +280,16 @@ export default function BulkAssignScreen() {
             ref={inputRef}
             style={styles.input}
             value={barcode}
-            onChangeText={setBarcode}
+            onChangeText={(text) => {
+              console.log('[assign input] raw text received:', text);
+              console.log('[assign input] text length:', text?.length);
+              console.log('[assign input] after normalize:', normalizeBarcode(text));
+              setBarcode(normalizeBarcode(text));
+            }}
             placeholder={t('bulkAssign.barcodePlaceholder')}
             placeholderTextColor="#aaa"
             keyboardType="numeric"
-            maxLength={13}
+            maxLength={14}
             autoFocus
             editable={!busy}
             returnKeyType="done"
