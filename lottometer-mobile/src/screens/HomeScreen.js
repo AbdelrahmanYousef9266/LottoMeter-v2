@@ -19,6 +19,7 @@ import { useAuth } from '../context/AuthContext';
 import { getDb } from '../offline/db';
 import { openOfflineShift, syncPendingItems } from '../offline';
 import { openShift, listShifts, closeShift, getShiftSummary, getCurrentOpenShift } from '../api/shifts';
+import { getBooksSummary } from '../api/books';
 import { getSubscription } from '../api/subscription';
 import TrialBannerComponent from './TrialBannerComponent';
 import { getTodaysBusinessDay, closeBusinessDay } from '../api/businessDays';
@@ -110,6 +111,8 @@ export default function HomeScreen() {
   const [summary, setSummary]           = useState(null);
 
   const [subscription, setSubscription] = useState(null);
+
+  const [hasBooks, setHasBooks] = useState(true);
 
   const [pendingSyncCount, setPendingSyncCount] = useState(0);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -209,6 +212,7 @@ export default function HomeScreen() {
                WHERE store_id = ? AND is_active = 1 AND is_sold = 0`,
               [store?.store_id]
             );
+            setHasBooks((totalActive?.count ?? 0) > 0);
             setSummary({
               books_pending_close: (totalActive?.count || 0) - (closeCount?.count || 0),
             });
@@ -254,8 +258,15 @@ export default function HomeScreen() {
         } catch {
           setSummary(null);
         }
+        try {
+          const booksSummary = await getBooksSummary();
+          setHasBooks((booksSummary?.active ?? 0) > 0);
+        } catch {
+          setHasBooks(true);
+        }
       } else {
         setSummary(null);
+        setHasBooks(true);
       }
     } catch (err) {
       Alert.alert(t('home.errorLoadingShift'), err.message || t('common.networkError'));
@@ -511,6 +522,25 @@ export default function HomeScreen() {
             onScan={() => navigation.navigate('Scan')}
             t={t}
           />
+        )}
+
+        {/* No books warning */}
+        {hasActiveShift && !hasBooks && (
+          <View style={{
+            backgroundColor: '#FEF9EE',
+            borderLeftWidth: 3,
+            borderLeftColor: '#D97706',
+            margin: 16,
+            padding: 12,
+            borderRadius: 8,
+          }}>
+            <Text style={{ color: '#D97706', fontWeight: '600', fontSize: 14 }}>
+              ⚠️ No books assigned
+            </Text>
+            <Text style={{ color: '#64748B', fontSize: 13, marginTop: 4 }}>
+              Assign books to slots before scanning.
+            </Text>
+          </View>
         )}
 
         {/* Books dashboard (admin only) */}

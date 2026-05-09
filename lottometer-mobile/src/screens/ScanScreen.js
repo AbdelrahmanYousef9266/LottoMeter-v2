@@ -17,6 +17,7 @@ import { useFocusEffect, useNavigation, useRoute } from '@react-navigation/nativ
 import { useTranslation } from 'react-i18next';
 
 import { getCurrentOpenShift, getShiftSummary } from '../api/shifts';
+import { getBooksSummary } from '../api/books';
 import { recordScan } from '../api/scan';
 import { listSlots } from '../api/slots';
 import { useAuth } from '../context/AuthContext';
@@ -67,11 +68,13 @@ export default function ScanScreen() {
   const navigation = useNavigation();
   const route = useRoute();
   const { scanMode, isOffline, user, store } = useAuth();
+  const isAdmin = user?.role === 'admin';
   const [loading, setLoading] = useState(true);
   const [shift, setShift] = useState(null);
   const [openSubId, setOpenSubId] = useState(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [hasBooks, setHasBooks] = useState(true);
 
   const [slots, setSlots] = useState([]);
 
@@ -150,6 +153,11 @@ export default function ScanScreen() {
           ? counts.books_pending_close
           : counts.books_pending_open
         );
+        const activeBookCount = await db.getFirstAsync(
+          `SELECT COUNT(*) as count FROM local_books WHERE store_id = ? AND is_active = 1 AND is_sold = 0`,
+          [store?.store_id]
+        );
+        setHasBooks((activeBookCount?.count ?? 0) > 0);
         return;
       }
 
@@ -177,6 +185,12 @@ export default function ScanScreen() {
       } catch {
         setPendingCount(0);
         setIsInitialized(true);
+      }
+      try {
+        const booksSummary = await getBooksSummary();
+        setHasBooks((booksSummary?.active ?? 0) > 0);
+      } catch {
+        setHasBooks(true);
       }
     } catch (err) {
       if (currentlyOffline) {
@@ -473,239 +487,270 @@ export default function ScanScreen() {
           contentContainerStyle={s.scroll}
           keyboardShouldPersistTaps="handled"
         >
-          {/* ── Status Banner ───────────────────────────────────────────── */}
-          {!isInitialized ? (
-            <View style={s.statusWarn}>
-              <Text style={s.statusWarnIcon}>⚠️</Text>
-              <View style={s.statusBody}>
-                <Text style={s.statusWarnTitle}>
-                  {t('scan.bannerNotInitialized', { count: pendingCount })}
-                </Text>
-                <Text style={s.statusSub}>Scan all books to initialize this shift</Text>
+          {/* ── Empty State (no books assigned) ─────────────────────────── */}
+          {!hasBooks ? (
+            <View style={s.emptyState}>
+              <View style={s.emptyIconCircle}>
+                <Text style={{ fontSize: 40 }}>📦</Text>
               </View>
+              <Text style={s.emptyTitle}>No Books Assigned</Text>
+              <Text style={s.emptySubtitle}>
+                Assign lottery books to slots before{'\n'}
+                opening a shift for scanning.
+              </Text>
+              {isAdmin && (
+                <TouchableOpacity
+                  style={s.emptyActionButton}
+                  onPress={() => navigation.navigate('Books')}
+                >
+                  <Text style={s.emptyActionText}>Go to Books →</Text>
+                </TouchableOpacity>
+              )}
+              {!isAdmin && (
+                <View style={s.emptyHint}>
+                  <Text style={s.emptyHintText}>
+                    Contact your admin to assign books to slots.
+                  </Text>
+                </View>
+              )}
             </View>
           ) : (
-            <View style={s.statusOk}>
-              <Text style={s.statusOkIcon}>✓</Text>
-              <View style={s.statusBody}>
-                <Text style={s.statusOkTitle}>{t('scan.bannerInitialized')}</Text>
-                <Text style={s.statusSub}>Ready for sales and close scans</Text>
-              </View>
-            </View>
-          )}
-
-          {/* ── Progress Bar (not initialized) ──────────────────────────── */}
-          {!isInitialized && totalBooks > 0 && (
-            <View style={s.progressWrap}>
-              <Text style={s.progressLabel}>
-                {scannedBooks} / {totalBooks} books scanned
-              </Text>
-              <View style={s.progressTrack}>
-                <View
-                  style={[
-                    s.progressFill,
-                    { width: `${Math.round(progressPct * 100)}%` },
-                  ]}
-                />
-              </View>
-            </View>
-          )}
-
-          {/* ── Close scan count (initialized) ──────────────────────────── */}
-          {isInitialized && pendingCount > 0 && (
-            <View style={s.closeCountWrap}>
-              <Text style={s.closeCountText}>
-                {pendingCount} close scan{pendingCount !== 1 ? 's' : ''} remaining
-              </Text>
-            </View>
-          )}
-
-          {/* ── Scan Type Selector ──────────────────────────────────────── */}
-          <View style={s.selectorCard}>
-            <View style={s.selectorRow}>
-              <TouchableOpacity
-                style={[
-                  s.selectorOpt,
-                  scanType === 'open' && s.selectorOptActive,
-                  isInitialized && s.selectorOptDisabled,
-                ]}
-                onPress={() => !isInitialized && setScanType('open')}
-                disabled={isInitialized}
-              >
-                <Text
-                  style={[
-                    s.selectorTxt,
-                    scanType === 'open' && s.selectorTxtActive,
-                    isInitialized && s.selectorTxtDim,
-                  ]}
-                >
-                  {t('scan.open')}
-                </Text>
-              </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  s.selectorOpt,
-                  scanType === 'close' && s.selectorOptActive,
-                  !isInitialized && s.selectorOptDisabled,
-                ]}
-                onPress={() => isInitialized && setScanType('close')}
-                disabled={!isInitialized}
-              >
-                <Text
-                  style={[
-                    s.selectorTxt,
-                    scanType === 'close' && s.selectorTxtActive,
-                    !isInitialized && s.selectorTxtDim,
-                  ]}
-                >
-                  {t('scan.close')}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* ── Camera Button ───────────────────────────────────────────── */}
-          {scanMode !== 'hardware_scanner' && (
-            <TouchableOpacity
-              style={[s.cameraBtn, busy && s.dimmed]}
-              onPress={handleOpenCamera}
-              disabled={busy}
-            >
-              <Text style={s.cameraBtnIcon}>📷</Text>
-              <Text style={s.cameraBtnText}>{t('scan.scanWithCamera')}</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* ── Divider ─────────────────────────────────────────────────── */}
-          {scanMode !== 'hardware_scanner' && (
-            <View style={s.divRow}>
-              <View style={s.divLine} />
-              <Text style={s.divTxt}>{t('scan.orEnterManually')}</Text>
-              <View style={s.divLine} />
-            </View>
-          )}
-
-          {/* ── Barcode Input ────────────────────────────────────────────── */}
-          <Animated.View
-            style={[
-              s.inputWrap,
-              scanMode === 'hardware_scanner' && { borderColor: pulseBorder },
-            ]}
-          >
-            <TextInput
-              ref={inputRef}
-              style={s.input}
-              value={barcode}
-              onChangeText={(text) => {
-                const normalized = normalizeBarcode(text);
-                setBarcode(normalized);
-                if (scanMode === 'hardware_scanner' && normalized.length === 13) {
-                  submitScan(normalized);
-                  setBarcode('');
-                  setTimeout(() => inputRef.current?.focus(), 50);
-                }
-              }}
-              placeholder={
-                scanMode === 'hardware_scanner'
-                  ? 'Waiting for scanner...'
-                  : t('scan.barcodePlaceholder')
-              }
-              placeholderTextColor={D.SUBTLE}
-              autoCapitalize="none"
-              autoCorrect={false}
-              keyboardType="numeric"
-              maxLength={scanMode === 'hardware_scanner' ? 14 : 20}
-              returnKeyType="done"
-              onSubmitEditing={handleManualScan}
-              autoFocus={scanMode === 'hardware_scanner'}
-              onBlur={() => {
-                if (scanMode === 'hardware_scanner') {
-                  setTimeout(() => inputRef.current?.focus(), 100);
-                }
-              }}
-            />
-          </Animated.View>
-
-          {/* ── Submit Button (manual / camera mode) ────────────────────── */}
-          {scanMode !== 'hardware_scanner' && (
-            <TouchableOpacity
-              style={[s.submitBtn, (!isBarcodeValid || busy) && s.dimmed]}
-              onPress={handleManualScan}
-              disabled={!isBarcodeValid || busy}
-            >
-              {busy ? (
-                <ActivityIndicator color="#fff" />
+            <>
+              {/* ── Status Banner ─────────────────────────────────────── */}
+              {!isInitialized ? (
+                <View style={s.statusWarn}>
+                  <Text style={s.statusWarnIcon}>⚠️</Text>
+                  <View style={s.statusBody}>
+                    <Text style={s.statusWarnTitle}>
+                      {t('scan.bannerNotInitialized', { count: pendingCount })}
+                    </Text>
+                    <Text style={s.statusSub}>Scan all books to initialize this shift</Text>
+                  </View>
+                </View>
               ) : (
-                <Text style={s.submitBtnTxt}>{t('scan.submitScan')}</Text>
+                <View style={s.statusOk}>
+                  <Text style={s.statusOkIcon}>✓</Text>
+                  <View style={s.statusBody}>
+                    <Text style={s.statusOkTitle}>{t('scan.bannerInitialized')}</Text>
+                    <Text style={s.statusSub}>Ready for sales and close scans</Text>
+                  </View>
+                </View>
               )}
-            </TouchableOpacity>
-          )}
 
-          {/* ── Hardware scanner hint ────────────────────────────────────── */}
-          {scanMode === 'hardware_scanner' && (
-            <Text style={s.scannerHint}>
-              Point scanner at barcode to scan automatically
-            </Text>
-          )}
-
-          {/* ── Last Scan Card ───────────────────────────────────────────── */}
-          {lastScan && (
-            <View style={s.lastCard}>
-              <View style={s.lastCardMain}>
-                {lastScan.book?.is_sold ? (
-                  <View style={s.ticketCircle}>
-                    <Text style={s.ticketStar}>⭐</Text>
-                  </View>
-                ) : (
-                  <View style={s.successCircle}>
-                    <Text style={s.successCheck}>✓</Text>
-                  </View>
-                )}
-                <View style={s.lastCardInfo}>
-                  <Text style={s.lastCardCode}>{lastScan.book?.static_code}</Text>
-                  <View style={s.lastCardMeta}>
+              {/* ── Progress Bar (not initialized) ────────────────────── */}
+              {!isInitialized && totalBooks > 0 && (
+                <View style={s.progressWrap}>
+                  <Text style={s.progressLabel}>
+                    {scannedBooks} / {totalBooks} books scanned
+                  </Text>
+                  <View style={s.progressTrack}>
                     <View
                       style={[
-                        s.typeBadge,
-                        lastScan.scan?.scan_type === 'open'
-                          ? s.typeBadgeOpen
-                          : s.typeBadgeClose,
+                        s.progressFill,
+                        { width: `${Math.round(progressPct * 100)}%` },
+                      ]}
+                    />
+                  </View>
+                </View>
+              )}
+
+              {/* ── Close scan count (initialized) ────────────────────── */}
+              {isInitialized && pendingCount > 0 && (
+                <View style={s.closeCountWrap}>
+                  <Text style={s.closeCountText}>
+                    {pendingCount} close scan{pendingCount !== 1 ? 's' : ''} remaining
+                  </Text>
+                </View>
+              )}
+
+              {/* ── Scan Type Selector ────────────────────────────────── */}
+              <View style={s.selectorCard}>
+                <View style={s.selectorRow}>
+                  <TouchableOpacity
+                    style={[
+                      s.selectorOpt,
+                      scanType === 'open' && s.selectorOptActive,
+                      isInitialized && s.selectorOptDisabled,
+                    ]}
+                    onPress={() => !isInitialized && setScanType('open')}
+                    disabled={isInitialized}
+                  >
+                    <Text
+                      style={[
+                        s.selectorTxt,
+                        scanType === 'open' && s.selectorTxtActive,
+                        isInitialized && s.selectorTxtDim,
                       ]}
                     >
-                      <Text
-                        style={[
-                          s.typeBadgeTxt,
-                          lastScan.scan?.scan_type === 'open'
-                            ? s.typeBadgeTxtOpen
-                            : s.typeBadgeTxtClose,
-                        ]}
-                      >
-                        {lastScan.scan?.scan_type === 'open'
-                          ? t('scan.open')
-                          : t('scan.close')}
-                      </Text>
-                    </View>
-                    {lastScan.scan?.start_at_scan != null && (
-                      <Text style={s.lastCardPos}>
-                        #{lastScan.scan.start_at_scan}
-                      </Text>
-                    )}
-                  </View>
-                  {lastScan.scan?.slot_name != null && (
-                    <Text style={s.lastCardSlot}>{lastScan.scan.slot_name}</Text>
-                  )}
+                      {t('scan.open')}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={[
+                      s.selectorOpt,
+                      scanType === 'close' && s.selectorOptActive,
+                      !isInitialized && s.selectorOptDisabled,
+                    ]}
+                    onPress={() => isInitialized && setScanType('close')}
+                    disabled={!isInitialized}
+                  >
+                    <Text
+                      style={[
+                        s.selectorTxt,
+                        scanType === 'close' && s.selectorTxtActive,
+                        !isInitialized && s.selectorTxtDim,
+                      ]}
+                    >
+                      {t('scan.close')}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </View>
-              <Text style={s.sessionCount}>
-                {t('scan.scansThisSession', { count: scanCount })}
-              </Text>
-            </View>
+
+              {/* ── Camera Button ─────────────────────────────────────── */}
+              {scanMode !== 'hardware_scanner' && (
+                <TouchableOpacity
+                  style={[s.cameraBtn, busy && s.dimmed]}
+                  onPress={handleOpenCamera}
+                  disabled={busy}
+                >
+                  <Text style={s.cameraBtnIcon}>📷</Text>
+                  <Text style={s.cameraBtnText}>{t('scan.scanWithCamera')}</Text>
+                </TouchableOpacity>
+              )}
+
+              {/* ── Divider ───────────────────────────────────────────── */}
+              {scanMode !== 'hardware_scanner' && (
+                <View style={s.divRow}>
+                  <View style={s.divLine} />
+                  <Text style={s.divTxt}>{t('scan.orEnterManually')}</Text>
+                  <View style={s.divLine} />
+                </View>
+              )}
+
+              {/* ── Barcode Input ─────────────────────────────────────── */}
+              <Animated.View
+                style={[
+                  s.inputWrap,
+                  scanMode === 'hardware_scanner' && { borderColor: pulseBorder },
+                ]}
+              >
+                <TextInput
+                  ref={inputRef}
+                  style={s.input}
+                  value={barcode}
+                  onChangeText={(text) => {
+                    const normalized = normalizeBarcode(text);
+                    setBarcode(normalized);
+                    if (scanMode === 'hardware_scanner' && normalized.length === 13) {
+                      submitScan(normalized);
+                      setBarcode('');
+                      setTimeout(() => inputRef.current?.focus(), 50);
+                    }
+                  }}
+                  placeholder={
+                    scanMode === 'hardware_scanner'
+                      ? 'Waiting for scanner...'
+                      : t('scan.barcodePlaceholder')
+                  }
+                  placeholderTextColor={D.SUBTLE}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  keyboardType="numeric"
+                  maxLength={scanMode === 'hardware_scanner' ? 14 : 20}
+                  returnKeyType="done"
+                  onSubmitEditing={handleManualScan}
+                  autoFocus={scanMode === 'hardware_scanner'}
+                  onBlur={() => {
+                    if (scanMode === 'hardware_scanner') {
+                      setTimeout(() => inputRef.current?.focus(), 100);
+                    }
+                  }}
+                />
+              </Animated.View>
+
+              {/* ── Submit Button (manual / camera mode) ──────────────── */}
+              {scanMode !== 'hardware_scanner' && (
+                <TouchableOpacity
+                  style={[s.submitBtn, (!isBarcodeValid || busy) && s.dimmed]}
+                  onPress={handleManualScan}
+                  disabled={!isBarcodeValid || busy}
+                >
+                  {busy ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={s.submitBtnTxt}>{t('scan.submitScan')}</Text>
+                  )}
+                </TouchableOpacity>
+              )}
+
+              {/* ── Hardware scanner hint ──────────────────────────────── */}
+              {scanMode === 'hardware_scanner' && (
+                <Text style={s.scannerHint}>
+                  Point scanner at barcode to scan automatically
+                </Text>
+              )}
+
+              {/* ── Last Scan Card ────────────────────────────────────── */}
+              {lastScan && (
+                <View style={s.lastCard}>
+                  <View style={s.lastCardMain}>
+                    {lastScan.book?.is_sold ? (
+                      <View style={s.ticketCircle}>
+                        <Text style={s.ticketStar}>⭐</Text>
+                      </View>
+                    ) : (
+                      <View style={s.successCircle}>
+                        <Text style={s.successCheck}>✓</Text>
+                      </View>
+                    )}
+                    <View style={s.lastCardInfo}>
+                      <Text style={s.lastCardCode}>{lastScan.book?.static_code}</Text>
+                      <View style={s.lastCardMeta}>
+                        <View
+                          style={[
+                            s.typeBadge,
+                            lastScan.scan?.scan_type === 'open'
+                              ? s.typeBadgeOpen
+                              : s.typeBadgeClose,
+                          ]}
+                        >
+                          <Text
+                            style={[
+                              s.typeBadgeTxt,
+                              lastScan.scan?.scan_type === 'open'
+                                ? s.typeBadgeTxtOpen
+                                : s.typeBadgeTxtClose,
+                            ]}
+                          >
+                            {lastScan.scan?.scan_type === 'open'
+                              ? t('scan.open')
+                              : t('scan.close')}
+                          </Text>
+                        </View>
+                        {lastScan.scan?.start_at_scan != null && (
+                          <Text style={s.lastCardPos}>
+                            #{lastScan.scan.start_at_scan}
+                          </Text>
+                        )}
+                      </View>
+                      {lastScan.scan?.slot_name != null && (
+                        <Text style={s.lastCardSlot}>{lastScan.scan.slot_name}</Text>
+                      )}
+                    </View>
+                  </View>
+                  <Text style={s.sessionCount}>
+                    {t('scan.scansThisSession', { count: scanCount })}
+                  </Text>
+                </View>
+              )}
+            </>
           )}
         </ScrollView>
 
         {/* ── Done Button (fixed bottom) ──────────────────────────────────── */}
-        {isInitialized && scanType === 'close' && (
+        {isInitialized && scanType === 'close' && hasBooks && (
           <View style={s.doneWrap}>
             <TouchableOpacity style={s.doneBtn} onPress={handleDonePress}>
               <Text style={s.doneBtnTxt}>{t('scan.done')}</Text>
@@ -946,6 +991,61 @@ const s = StyleSheet.create({
     alignItems: 'center',
   },
   doneBtnTxt: { fontSize: FS.md, fontWeight: FW.bold, color: '#fff' },
+
+  // empty state
+  emptyState: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 32,
+    marginTop: 40,
+  },
+  emptyIconCircle: {
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  emptyTitle: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#0F172A',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 15,
+    color: '#64748B',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  emptyActionButton: {
+    backgroundColor: '#0077CC',
+    paddingHorizontal: 24,
+    paddingVertical: 14,
+    borderRadius: 26,
+    marginBottom: 12,
+  },
+  emptyActionText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontSize: 15,
+  },
+  emptyHint: {
+    backgroundColor: '#F1F5F9',
+    borderRadius: 8,
+    padding: 12,
+    marginTop: 8,
+  },
+  emptyHintText: {
+    color: '#64748B',
+    fontSize: 13,
+    textAlign: 'center',
+  },
 
   // toast
   toast: {
