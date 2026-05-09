@@ -77,7 +77,7 @@ export function AuthProvider({ children }) {
         await new Promise(resolve => setTimeout(resolve, 1000));
         await syncPendingItems();
         if (store?.store_id && user?.user_id) {
-          seedLocalDatabase(store.store_id, user.user_id).catch(console.warn);
+          seedLocalDatabase(store.store_id, user.user_id).catch(console.error);
         }
       },
       undefined

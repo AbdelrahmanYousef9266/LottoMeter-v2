@@ -37,34 +37,17 @@ export function useFeedback() {
   const shiftClosedPlayer = useAudioPlayer(SOUND_FILES.shift_closed);
 
   useEffect(() => {
-    console.log('[useFeedback] players initialized:', {
-      success: !!successPlayer,
-      error: !!errorPlayer,
-      last_ticket: !!lastTicketPlayer,
-      shift_closed: !!shiftClosedPlayer,
-    });
-    if (successPlayer) {
-      console.log('[useFeedback] successPlayer keys:', Object.keys(successPlayer));
-      console.log('[useFeedback] successPlayer.duration:', successPlayer.duration);
-      console.log('[useFeedback] successPlayer.isLoaded:', successPlayer.isLoaded);
-    }
-  }, [successPlayer, errorPlayer, lastTicketPlayer, shiftClosedPlayer]);
-
-  useEffect(() => {
     AsyncStorage.getItem(STORAGE_KEY_SOUND).then((value) => {
       _soundEnabled = value !== 'false';
-      console.log('[useFeedback] mount — STORAGE_KEY_SOUND raw:', value, '_soundEnabled:', _soundEnabled);
     });
     AsyncStorage.getItem(STORAGE_KEY_VIBRATION).then((value) => {
       _vibrationEnabled = value !== 'false';
-      console.log('[useFeedback] mount — STORAGE_KEY_VIBRATION raw:', value, '_vibrationEnabled:', _vibrationEnabled);
     });
   }, []);
 
   const fire = useCallback(
     async (type) => {
       if (_soundEnabled) {
-        console.log('[useFeedback] _soundEnabled =', _soundEnabled, 'type =', type);
         const players = {
           success: successPlayer,
           error: errorPlayer,
@@ -72,23 +55,14 @@ export function useFeedback() {
           shift_closed: shiftClosedPlayer,
         };
         const player = players[type];
-        console.log('[useFeedback] player resolved:', !!player, 'player object:', player);
         if (player) {
           try {
-            console.log('[useFeedback] calling seekTo(0)...');
-            const seekResult = player.seekTo(0);
-            console.log('[useFeedback] seekTo result:', seekResult);
-            console.log('[useFeedback] calling play()...');
+            player.seekTo(0);
             player.play();
-            console.log('[useFeedback] play() returned, audio should be playing now');
           } catch (e) {
             console.error('[useFeedback] PLAYBACK FAILED:', e);
           }
-        } else {
-          console.warn('[useFeedback] no player for type:', type);
         }
-      } else {
-        console.log('[useFeedback] sound is disabled, skipping');
       }
       if (_vibrationEnabled) {
         try {
@@ -106,7 +80,6 @@ export function useFeedback() {
 
 export async function setSoundEnabled(enabled) {
   _soundEnabled = enabled;
-  console.log('[useFeedback] setSoundEnabled called with', enabled, '— _soundEnabled is now:', _soundEnabled);
   await AsyncStorage.setItem(STORAGE_KEY_SOUND, enabled ? 'true' : 'false');
 }
 

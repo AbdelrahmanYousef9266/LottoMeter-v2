@@ -14,7 +14,6 @@ export const saveLocalStore = async (store) => {
        store.scan_mode || 'camera_single', new Date().toISOString()]
     );
   } catch (e) {
-    console.warn('[localDb] saveLocalStore failed:', e.message);
   }
 };
 
@@ -31,7 +30,6 @@ export const saveLocalUser = async (user, storeId) => {
        storeId, new Date().toISOString()]
     );
   } catch (e) {
-    console.warn('[localDb] saveLocalUser failed:', e.message);
   }
 };
 
@@ -50,7 +48,6 @@ export const saveLocalSlot = async (slot, storeId) => {
        slot.deleted_at ? 1 : 0, new Date().toISOString()]
     );
   } catch (e) {
-    console.warn('[localDb] saveLocalSlot failed:', e.message);
   }
 };
 
@@ -68,7 +65,6 @@ export const deleteLocalSlot = async (slotId) => {
       [slotId]
     );
   } catch (e) {
-    console.warn('[localDb] deleteLocalSlot failed:', e.message);
   }
 };
 
@@ -88,7 +84,6 @@ export const saveLocalBook = async (book, storeId) => {
        book.start_position, new Date().toISOString()]
     );
   } catch (e) {
-    console.warn('[localDb] saveLocalBook failed:', e.message);
   }
 };
 
@@ -101,7 +96,6 @@ export const markLocalBookSold = async (staticCode, storeId) => {
       [staticCode, storeId]
     );
   } catch (e) {
-    console.warn('[localDb] markLocalBookSold failed:', e.message);
   }
 };
 
@@ -129,7 +123,6 @@ export const saveLocalBusinessDay = async (day, storeId) => {
     );
     return dayUuid;
   } catch (e) {
-    console.warn('[localDb] saveLocalBusinessDay failed:', e.message);
     return null;
   }
 };
@@ -163,7 +156,6 @@ export const saveLocalEmployeeShift = async (shift, businessDayUuid, storeId) =>
     );
     return shiftUuid;
   } catch (e) {
-    console.warn('[localDb] saveLocalEmployeeShift failed:', e.message);
     return null;
   }
 };
@@ -192,7 +184,6 @@ export const closeLocalEmployeeShift = async (shiftServerId, closeData) => {
        closeData.shift_status, shiftServerId]
     );
   } catch (e) {
-    console.warn('[localDb] closeLocalEmployeeShift failed:', e.message);
   }
 };
 
@@ -218,7 +209,6 @@ export const saveLocalScan = async (scan, shiftUuid, storeId, userId) => {
     );
 
   } catch (e) {
-    console.warn('[localDb] saveLocalScan failed:', e.message);
   }
 };
 
@@ -241,6 +231,5 @@ export const saveLocalExtraSale = async (sale, shiftUuid, storeId, userId) => {
        userId, sale.created_at, new Date().toISOString()]
     );
   } catch (e) {
-    console.warn('[localDb] saveLocalExtraSale failed:', e.message);
   }
 };

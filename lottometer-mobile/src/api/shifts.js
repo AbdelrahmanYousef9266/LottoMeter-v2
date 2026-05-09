@@ -35,7 +35,6 @@ export async function openShift() {
         await saveLocalEmployeeShift(shift, dayRow.uuid, storeId);
       }
     } catch (e) {
-      console.warn('[shifts] write-through openShift:', e.message);
     }
   }
 
@@ -67,9 +66,7 @@ export async function closeShift(shiftId, payload) {
   // Note: closeShift response uses key 'shift' (openShift uses 'employee_shift')
   const { storeId } = getSessionContext();
   if (storeId && data.shift) {
-    closeLocalEmployeeShift(shiftId, data.shift).catch(e =>
-      console.warn('[shifts] write-through closeShift:', e.message)
-    );
+    closeLocalEmployeeShift(shiftId, data.shift);
   }
 
   return data;

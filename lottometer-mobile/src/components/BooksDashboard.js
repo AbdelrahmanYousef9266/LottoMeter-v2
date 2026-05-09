@@ -32,7 +32,6 @@ export default function BooksDashboard() {
       const data = await getBooksSummary();
       setSummary(data);
     } catch (err) {
-      console.warn('[BooksDashboard] summary failed:', err);
       setSummary(null);
     } finally {
       setSummaryLoading(false);
@@ -45,7 +44,6 @@ export default function BooksDashboard() {
       const data = await getBooksActivity(p);
       setActivity(data);
     } catch (err) {
-      console.warn('[BooksDashboard] activity failed:', err);
       setActivity(null);
     } finally {
       setActivityLoading(false);

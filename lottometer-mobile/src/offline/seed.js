@@ -26,7 +26,6 @@ export const seedLocalDatabase = async (storeId, userId) => {
         );
       }
     } catch (e) {
-      console.warn('[seed] slots failed:', e.message);
     }
 
     // 2. Seed active books
@@ -47,7 +46,6 @@ export const seedLocalDatabase = async (storeId, userId) => {
         );
       }
     } catch (e) {
-      console.warn('[seed] books failed:', e.message);
     }
 
     // 3. Seed today's business day
@@ -96,14 +94,11 @@ export const seedLocalDatabase = async (storeId, userId) => {
             );
           }
         } catch (e) {
-          console.warn('[seed] shifts failed:', e.message);
         }
       }
     } catch (e) {
-      console.warn('[seed] business day failed:', e.message);
     }
 
-    console.log('[seed] Local database seeded successfully');
     return true;
   } catch (error) {
     console.error('[seed] Seed failed:', error.message);
@@ -125,7 +120,6 @@ export const clearLocalDatabase = async () => {
       DELETE FROM local_extra_sales;
       DELETE FROM sync_queue;
     `);
-    console.log('[seed] Local database cleared');
   } catch (e) {
     console.error('[seed] Clear failed:', e.message);
   }

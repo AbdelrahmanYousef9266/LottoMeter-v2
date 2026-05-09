@@ -77,23 +77,33 @@ function getDayStatusBadge(day) {
   const today = new Date().toISOString().split('T')[0];
   const isToday = day.business_date === today;
 
-  if (day.status === 'open' && isToday) {
-    return { label: 'Active',      color: '#0077CC', bg: '#EFF6FF' };
+  if (isToday) {
+    const hasOpenShift = (day.shifts || []).some(s => s.status === 'open');
+    return hasOpenShift
+      ? [{ label: 'Active', color: '#0077CC', bg: '#EFF6FF' }]
+      : [{ label: 'Closed', color: '#64748B', bg: '#F1F5F9' }];
   }
-  if (day.status === 'open' && !isToday) {
-    return { label: 'Incomplete',  color: '#D97706', bg: '#FEF9EE' };
+
+  if (day.status === 'auto_closed' || day.status === 'open') {
+    return [{ label: 'Incomplete', color: '#D97706', bg: '#FEF9EE' }];
   }
-  if (day.status === 'auto_closed') {
-    return { label: 'Incomplete',  color: '#D97706', bg: '#FEF9EE' };
-  }
+
   if (day.status === 'closed') {
+    const badges = [{ label: 'Closed', color: '#64748B', bg: '#F1F5F9' }];
     const variance = getDayVariance(day);
-    if (variance === null) return { label: 'Closed',    color: '#16A34A', bg: '#F0FDF4' };
-    if (variance === 0)    return { label: 'Correct',   color: '#16A34A', bg: '#F0FDF4' };
-    if (variance > 0)      return { label: 'Over',      color: '#D97706', bg: '#FEF9EE' };
-    return                        { label: 'Short',     color: '#DC2626', bg: '#FEF2F2' };
+    if (variance !== null) {
+      if (variance === 0) {
+        badges.push({ label: 'Correct',                                color: '#16A34A', bg: '#F0FDF4' });
+      } else if (variance > 0) {
+        badges.push({ label: `+$${Math.abs(variance).toFixed(2)} Over`,  color: '#D97706', bg: '#FEF9EE' });
+      } else {
+        badges.push({ label: `-$${Math.abs(variance).toFixed(2)} Short`, color: '#DC2626', bg: '#FEF2F2' });
+      }
+    }
+    return badges;
   }
-  return { label: day.status, color: '#64748B', bg: '#F1F5F9' };
+
+  return [{ label: 'Closed', color: '#64748B', bg: '#F1F5F9' }];
 }
 
 function getDayTimeRange(day) {
@@ -111,26 +121,36 @@ function getDayTimeRange(day) {
   return `${start} – ${formatLocalTime(closed[closed.length - 1])}`;
 }
 
-function getShiftVariance(shift, businessDate) {
-  if (shift.voided) return { color: D.ERROR, label: 'Voided' };
-  if (shift.status === 'open') {
-    const today = new Date().toISOString().split('T')[0];
-    if (businessDate && businessDate !== today) {
-      return { color: D.WARNING, label: 'Incomplete' };
+function getShiftBadges(shift, businessDate) {
+
+  const today = new Date().toISOString().split('T')[0];
+  const isToday = businessDate === today;
+  const badges = [];
+
+  // State badge — always show one
+  if (shift.status === 'open' && isToday) {
+    badges.push({ label: 'Active',     color: '#0077CC', bg: '#EFF6FF' });
+  } else if (shift.status === 'open' && !isToday) {
+    badges.push({ label: 'Incomplete', color: '#D97706', bg: '#FEF9EE' });
+  } else if (shift.status === 'incomplete') {
+    badges.push({ label: 'Incomplete', color: '#D97706', bg: '#FEF9EE' });
+  } else if (shift.status === 'closed') {
+    badges.push({ label: 'Closed',     color: '#64748B', bg: '#F1F5F9' });
+  }
+
+  // Variance badge — closed shifts with a known difference
+  if (shift.status === 'closed' && shift.difference !== null && shift.difference !== undefined) {
+    const diff = parseFloat(shift.difference);
+    if (diff === 0) {
+      badges.push({ label: 'Correct',                              color: '#16A34A', bg: '#F0FDF4' });
+    } else if (diff > 0) {
+      badges.push({ label: `+$${Math.abs(diff).toFixed(2)} Over`,  color: '#D97706', bg: '#FEF9EE' });
+    } else {
+      badges.push({ label: `-$${Math.abs(diff).toFixed(2)} Short`, color: '#DC2626', bg: '#FEF2F2' });
     }
-    return { color: D.PRIMARY, label: 'Active' };
   }
-  if (shift.status === 'incomplete') return { color: D.WARNING, label: 'Incomplete' };
-  if (shift.shift_status === 'correct') return { color: D.SUCCESS, label: 'Correct' };
-  if (shift.shift_status === 'over') {
-    const n = Math.abs(parseFloat(shift.difference || 0));
-    return { color: D.WARNING, label: `+$${n.toFixed(2)}` };
-  }
-  if (shift.shift_status === 'short') {
-    const n = Math.abs(parseFloat(shift.difference || 0));
-    return { color: D.ERROR, label: `-$${n.toFixed(2)}` };
-  }
-  return { color: D.SUBTLE, label: '—' };
+
+  return badges;
 }
 
 function formatShiftTime(shift, businessDate) {
@@ -176,14 +196,10 @@ export default function HistoryScreen() {
           'SELECT id, uuid, business_day_uuid, shift_number, status, store_id FROM local_employee_shifts WHERE store_id = ?',
           [store?.store_id]
         );
-        console.log('[history] all shifts:', JSON.stringify(allShifts));
-
         const allDays = await db.getAllAsync(
           'SELECT id, uuid, business_date, status, store_id FROM local_business_days WHERE store_id = ?',
           [store?.store_id]
         );
-        console.log('[history] all days:', JSON.stringify(allDays));
-
         const localDays = await db.getAllAsync(
           `SELECT DISTINCT business_date,
                   MAX(id) as id,
@@ -401,7 +417,7 @@ function FilterIcon() {
 function DayCard({ day, isExpanded, cached, user, t, onPress, onShiftPress }) {
   const shifts   = cached?.shifts ?? day.shifts ?? [];
   const shiftsLoading = cached?.loading ?? false;
-  const badge    = getDayStatusBadge(day);
+  const badges   = getDayStatusBadge({ ...day, shifts });
   const year     = day.business_date?.split('-')[0] ?? '';
   const timeRange = getDayTimeRange({ ...day, shifts });
 
@@ -415,13 +431,20 @@ function DayCard({ day, isExpanded, cached, user, t, onPress, onShiftPress }) {
           {!!year && <Text style={s.dayYear}>{year}</Text>}
         </View>
         <View style={s.dayRight}>
-          {badge && (
-            <View style={[s.dayBadge, { backgroundColor: badge.bg }]}>
-              <Text style={[s.dayBadgeText, { color: badge.color }]}>
-                {badge.label}
-              </Text>
-            </View>
-          )}
+          <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {badges.map((badge, i) => (
+              <View key={i} style={{
+                backgroundColor: badge.bg,
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 10,
+              }}>
+                <Text style={{ color: badge.color, fontWeight: '600', fontSize: 11 }}>
+                  {badge.label}
+                </Text>
+              </View>
+            ))}
+          </View>
           <Text style={[s.chevron, isExpanded && s.chevronExpanded]}>›</Text>
         </View>
       </TouchableOpacity>
@@ -476,7 +499,7 @@ function DayCard({ day, isExpanded, cached, user, t, onPress, onShiftPress }) {
 // ── ShiftRow ──────────────────────────────────────────────────────────────────
 
 function ShiftRow({ shift, isLast, user, t, onPress, businessDate }) {
-  const variance  = getShiftVariance(shift, businessDate);
+  const badges    = getShiftBadges(shift, businessDate);
   const timeLabel = formatShiftTime(shift, businessDate);
 
   return (
@@ -498,15 +521,23 @@ function ShiftRow({ shift, isLast, user, t, onPress, businessDate }) {
         </View>
       </View>
 
-      {/* Right: amount + variance + chevron */}
+      {/* Right: amount + badges + chevron */}
       <View style={s.shiftRight}>
         <View style={s.shiftRightInfo}>
           <Text style={s.shiftSales}>{fmt$(shift.gross_sales)}</Text>
-          <View style={s.varRow}>
-            <View style={[s.varDot, { backgroundColor: variance.color }]} />
-            <Text style={[s.varLabel, { color: variance.color }]}>
-              {variance.label}
-            </Text>
+          <View style={{ flexDirection: 'row', gap: 4, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+            {badges.map((badge, i) => (
+              <View key={i} style={{
+                backgroundColor: badge.bg,
+                paddingHorizontal: 8,
+                paddingVertical: 3,
+                borderRadius: 10,
+              }}>
+                <Text style={{ color: badge.color, fontWeight: '600', fontSize: 11 }}>
+                  {badge.label}
+                </Text>
+              </View>
+            ))}
           </View>
         </View>
         <Text style={s.shiftChevron}>›</Text>

@@ -132,8 +132,7 @@ export default function LoginScreen() {
         username: session.username,
         role: session.role,
       });
-    } catch (err) {
-      console.warn('[offline] session restore failed:', err.message);
+    } catch {
       setCanLoginOffline(false);
     }
   };
@@ -150,9 +149,9 @@ export default function LoginScreen() {
       const data = await login({ store_code: storeCode, username, password });
 
       setSessionContext(data.user.user_id, data.store.store_id);
-      saveOfflineSession(data.user, data.store, data.token).catch(console.warn);
-      saveLocalStore(data.store).catch(console.warn);
-      saveLocalUser(data.user, data.store.store_id).catch(console.warn);
+      saveOfflineSession(data.user, data.store, data.token).catch(console.error);
+      saveLocalStore(data.store).catch(console.error);
+      saveLocalUser(data.user, data.store.store_id).catch(console.error);
       seedLocalDatabase(data.store?.store_id, data.user?.user_id)
         .catch(e => console.error('[login] Seed error:', e.message));
 

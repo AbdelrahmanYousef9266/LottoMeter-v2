@@ -193,9 +193,7 @@ export default function ScanScreen() {
         setHasBooks(true);
       }
     } catch (err) {
-      if (currentlyOffline) {
-        console.warn('[ScanScreen] offline loadShift error:', err.message);
-      } else {
+      if (!currentlyOffline) {
         Alert.alert(t('home.errorLoadingShift'), err.message || t('common.tryAgain'));
       }
     }
@@ -216,8 +214,7 @@ export default function ScanScreen() {
     try {
       const result = await listSlots();
       setSlots(result.slots || []);
-    } catch (err) {
-      console.warn('[ScanScreen] failed to load slots:', err);
+    } catch {
     }
   }, []);
 

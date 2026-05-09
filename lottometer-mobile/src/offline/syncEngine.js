@@ -144,13 +144,11 @@ const syncCloseShift = async (db, item) => {
 
 export const syncPendingItems = async (onProgress) => {
   if (isSyncing) {
-    console.log('[sync] Already syncing, skipping');
     return { synced: 0, failed: 0, conflicts: 0 };
   }
 
   const netState = await NetInfo.fetch();
   if (!netState.isConnected) {
-    console.log('[sync] No connection, skipping');
     return { synced: 0, failed: 0, conflicts: 0 };
   }
 
@@ -169,11 +167,6 @@ export const syncPendingItems = async (onProgress) => {
        WHERE status = 'pending' AND retry_count >= max_retries`
     );
 
-    const allItems = await db.getAllAsync(
-      'SELECT uuid, operation, status, retry_count, last_error FROM sync_queue'
-    );
-    console.log('[sync] All queue items:', JSON.stringify(allItems));
-
     const pendingItems = await db.getAllAsync(
       `SELECT * FROM sync_queue
        WHERE status = 'pending' AND retry_count < max_retries
@@ -187,8 +180,6 @@ export const syncPendingItems = async (onProgress) => {
          END,
          created_at ASC`
     );
-
-    console.log('[sync] Pending items found:', pendingItems.length);
 
     for (const item of pendingItems) {
       await db.runAsync(
@@ -227,7 +218,6 @@ export const syncPendingItems = async (onProgress) => {
         );
         conflicts++;
       } else {
-        console.warn('[sync] item failed:', item.operation, result.error);
         await db.runAsync(
           `UPDATE sync_queue
            SET status = 'pending', retry_count = retry_count + 1, last_error = ?
@@ -246,7 +236,6 @@ export const syncPendingItems = async (onProgress) => {
       }
     }
 
-    console.log(`[sync] Complete: ${synced} synced, ${failed} failed, ${conflicts} conflicts`);
   } finally {
     isSyncing = false;
   }
@@ -259,10 +248,8 @@ export const syncPendingItems = async (onProgress) => {
 export const startSyncListener = (onConnected, onDisconnected) => {
   return NetInfo.addEventListener(async (state) => {
     if (state.isConnected && state.isInternetReachable !== false) {
-      console.log('[sync] Connection restored');
       if (onConnected) await onConnected();
     } else {
-      console.log('[sync] Connection lost');
       if (onDisconnected) onDisconnected();
     }
   });

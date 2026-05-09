@@ -28,7 +28,6 @@ import WholeBookSaleModal from '../components/WholeBookSaleModal';
 import ReturnBookModal from '../components/ReturnBookModal';
 import BooksDashboard from '../components/BooksDashboard';
 import { formatBusinessDate, formatLocalTime } from '../utils/dateTime';
-import { debugLocalDb } from '../offline/debugDb';
 
 // ── design tokens ──────────────────────────────────────────────────────────────
 const D = {
@@ -153,17 +152,12 @@ export default function HomeScreen() {
         const allShifts = await db.getAllAsync(
           'SELECT server_id, uuid, status, store_id FROM local_employee_shifts'
         );
-        console.log('[home offline] all local shifts:', JSON.stringify(allShifts));
-        console.log('[home offline] looking for store_id:', store?.store_id);
-
         const localShift = await db.getFirstAsync(
           `SELECT * FROM local_employee_shifts
            WHERE store_id = ? AND status = 'open'
            ORDER BY id DESC LIMIT 1`,
           [store?.store_id]
         );
-        console.log('[home offline] found shift:', JSON.stringify(localShift));
-
         const localDay = await db.getFirstAsync(
           `SELECT * FROM local_business_days WHERE store_id = ? AND business_date = ?`,
           [store?.store_id, today]
@@ -226,8 +220,7 @@ export default function HomeScreen() {
           setActiveShift(null);
           setSummary(null);
         }
-      } catch (err) {
-        console.warn('[HomeScreen] offline loadData error:', err.message);
+      } catch {
       }
       return;
     }
@@ -282,16 +275,17 @@ export default function HomeScreen() {
 
   async function handleRefresh() {
     setRefreshing(true);
-    await loadData();
-    setRefreshing(false);
+    try {
+      await loadData();
+    } finally {
+      setRefreshing(false);
+    }
   }
 
   async function handleSyncNow() {
     setIsSyncing(true);
     try {
-      const result = await syncPendingItems((progress) => {
-        console.log('[sync progress]', progress);
-      });
+      const result = await syncPendingItems();
 
       if (result.synced > 0) {
         Alert.alert('Sync Complete', `${result.synced} item(s) synced successfully.`);
@@ -569,26 +563,6 @@ export default function HomeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Debug: clear local data */}
-        {isAdmin && (
-          <TouchableOpacity
-            onPress={async () => {
-              const db = await getDb();
-              await db.execAsync(`
-                DELETE FROM local_business_days;
-                DELETE FROM local_employee_shifts;
-                DELETE FROM local_shift_books;
-                DELETE FROM local_extra_sales;
-                DELETE FROM sync_queue;
-              `);
-              Alert.alert('Done', 'Local data cleared');
-              await loadData();
-            }}
-            style={s.debugBtn}
-          >
-            <Text style={s.debugBtnText}>🗑 Clear Local Data (Debug)</Text>
-          </TouchableOpacity>
-        )}
 
         <View style={{ height: 100 }} />
       </ScrollView>
@@ -929,14 +903,4 @@ const s = StyleSheet.create({
   },
   closeBizText: { fontSize: FS.sm, fontWeight: FW.semibold, color: D.ERROR },
 
-  // ── Debug button ───────────────────────────────────────────────────────────
-  debugBtn: {
-    padding: SP.md,
-    marginHorizontal: SP.lg,
-    marginBottom: SP.sm,
-    backgroundColor: '#EF4444',
-    borderRadius: BR.sm,
-    alignItems: 'center',
-  },
-  debugBtnText: { color: '#fff', fontWeight: FW.semibold, fontSize: FS.sm },
 });
