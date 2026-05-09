@@ -78,20 +78,21 @@ function getDayStatusBadge(day) {
   const isToday = day.business_date === today;
 
   if (day.status === 'open' && isToday) {
-    return { label: 'Active', color: '#0077CC', bg: '#EFF6FF' };
+    return { label: 'Active',      color: '#0077CC', bg: '#EFF6FF' };
   }
   if (day.status === 'open' && !isToday) {
-    return { label: 'Incomplete', color: '#D97706', bg: '#FEF9EE' };
+    return { label: 'Incomplete',  color: '#D97706', bg: '#FEF9EE' };
   }
   if (day.status === 'incomplete') {
-    return { label: 'Incomplete', color: '#D97706', bg: '#FEF9EE' };
+    return { label: 'Incomplete',  color: '#D97706', bg: '#FEF9EE' };
   }
-  if (day.status === 'closed') {
+  if (day.status === 'completed' || day.status === 'closed') {
     const variance = getDayVariance(day);
-    if (variance === null) return { label: 'Closed',      color: '#64748B', bg: '#F1F5F9' };
-    if (variance === 0)    return { label: 'Correct',     color: '#16A34A', bg: '#F0FDF4' };
-    if (variance > 0)      return { label: 'Over',        color: '#D97706', bg: '#FEF9EE' };
-    return                        { label: 'Short',       color: '#DC2626', bg: '#FEF2F2' };
+    const fallback = day.status === 'completed' ? 'Completed' : 'Closed';
+    if (variance === null) return { label: fallback,    color: '#16A34A', bg: '#F0FDF4' };
+    if (variance === 0)    return { label: 'Correct',   color: '#16A34A', bg: '#F0FDF4' };
+    if (variance > 0)      return { label: 'Over',      color: '#D97706', bg: '#FEF9EE' };
+    return                        { label: 'Short',     color: '#DC2626', bg: '#FEF2F2' };
   }
   return { label: day.status, color: '#64748B', bg: '#F1F5F9' };
 }
