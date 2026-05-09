@@ -75,6 +75,48 @@ def list_business_days(store_id: int) -> list[BusinessDay]:
     )
 
 
+def auto_close_stale_business_days(store_id: int) -> None:
+    """Auto-close any business days that are still open but belong to a previous date."""
+    today = _get_store_business_date(store_id)
+
+    stale_days = BusinessDay.query.filter(
+        BusinessDay.store_id == store_id,
+        BusinessDay.status == 'open',
+        BusinessDay.business_date < today,
+    ).all()
+
+    for day in stale_days:
+        open_shifts = EmployeeShift.query.filter_by(
+            business_day_id=day.id,
+            store_id=store_id,
+            status='open',
+            voided=False,
+        ).all()
+
+        for shift in open_shifts:
+            shift.status = 'incomplete'
+            shift.closed_at = datetime.combine(day.business_date, datetime.min.time()).replace(tzinfo=timezone.utc)
+
+        closed_shifts = EmployeeShift.query.filter(
+            EmployeeShift.business_day_id == day.id,
+            EmployeeShift.store_id == store_id,
+            EmployeeShift.voided == False,
+            EmployeeShift.status == 'closed',
+        ).all()
+
+        day.total_sales = sum(float(s.tickets_total or 0) for s in closed_shifts)
+        day.total_variance = sum(float(s.difference or 0) for s in closed_shifts)
+        day.status = 'incomplete'
+        day.closed_at = datetime.now(timezone.utc)
+
+    if stale_days:
+        db.session.commit()
+        import logging
+        logging.getLogger(__name__).info(
+            f'[auto-close] Closed {len(stale_days)} stale business days for store {store_id}'
+        )
+
+
 def close_business_day(
     store_id: int,
     business_day_id: int,

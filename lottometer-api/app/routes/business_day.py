@@ -17,7 +17,9 @@ _schema = BusinessDaySchema()
 @business_day_bp.route("", methods=["GET"])
 @jwt_required()
 def list_days():
-    days = business_day_service.list_business_days(current_store_id())
+    store_id = current_store_id()
+    business_day_service.auto_close_stale_business_days(store_id)
+    days = business_day_service.list_business_days(store_id)
     return jsonify({"business_days": [_schema.dump(d) for d in days]})
 
 

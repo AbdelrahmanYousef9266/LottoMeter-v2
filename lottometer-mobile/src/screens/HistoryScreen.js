@@ -73,16 +73,27 @@ function getDayVariance(day) {
   return closed.reduce((sum, s) => sum + parseFloat(s.difference || 0), 0);
 }
 
-function getDayBadge(day) {
-  if (day.status === 'open') {
-    return { label: 'Active', bg: '#DBEAFE', color: D.PRIMARY };
+function getDayStatusBadge(day) {
+  const today = new Date().toISOString().split('T')[0];
+  const isToday = day.business_date === today;
+
+  if (day.status === 'open' && isToday) {
+    return { label: 'Active', color: '#0077CC', bg: '#EFF6FF' };
   }
-  const variance = getDayVariance(day);
-  if (variance === null) return null;
-  const abs = Math.abs(variance).toFixed(2);
-  if (variance === 0)  return { label: `$${abs} · Correct`, bg: '#DCFCE7', color: D.SUCCESS };
-  if (variance > 0)    return { label: `+$${abs} · Over`,   bg: '#FEF9EE', color: D.WARNING };
-  return                      { label: `-$${abs} · Short`,  bg: '#FEE2E2', color: D.ERROR };
+  if (day.status === 'open' && !isToday) {
+    return { label: 'Incomplete', color: '#D97706', bg: '#FEF9EE' };
+  }
+  if (day.status === 'incomplete') {
+    return { label: 'Incomplete', color: '#D97706', bg: '#FEF9EE' };
+  }
+  if (day.status === 'closed') {
+    const variance = getDayVariance(day);
+    if (variance === null) return { label: 'Closed',      color: '#64748B', bg: '#F1F5F9' };
+    if (variance === 0)    return { label: 'Correct',     color: '#16A34A', bg: '#F0FDF4' };
+    if (variance > 0)      return { label: 'Over',        color: '#D97706', bg: '#FEF9EE' };
+    return                        { label: 'Short',       color: '#DC2626', bg: '#FEF2F2' };
+  }
+  return { label: day.status, color: '#64748B', bg: '#F1F5F9' };
 }
 
 function getDayTimeRange(day) {
@@ -91,15 +102,25 @@ function getDayTimeRange(day) {
   const opened = shifts.map(s => s.opened_at).filter(Boolean).sort();
   if (opened.length === 0) return '—';
   const start = formatLocalTime(opened[0]);
-  if (shifts.some(s => s.status === 'open')) return `${start} – Active`;
+  if (shifts.some(s => s.status === 'open')) {
+    const today = new Date().toISOString().split('T')[0];
+    return day.business_date === today ? `${start} – Active` : `${start} – Incomplete`;
+  }
   const closed = shifts.map(s => s.closed_at).filter(Boolean).sort();
   if (closed.length === 0) return start;
   return `${start} – ${formatLocalTime(closed[closed.length - 1])}`;
 }
 
-function getShiftVariance(shift) {
+function getShiftVariance(shift, businessDate) {
   if (shift.voided) return { color: D.ERROR, label: 'Voided' };
-  if (shift.status === 'open') return { color: D.PRIMARY, label: 'Active' };
+  if (shift.status === 'open') {
+    const today = new Date().toISOString().split('T')[0];
+    if (businessDate && businessDate !== today) {
+      return { color: D.WARNING, label: 'Incomplete' };
+    }
+    return { color: D.PRIMARY, label: 'Active' };
+  }
+  if (shift.status === 'incomplete') return { color: D.WARNING, label: 'Incomplete' };
   if (shift.shift_status === 'correct') return { color: D.SUCCESS, label: 'Correct' };
   if (shift.shift_status === 'over') {
     const n = Math.abs(parseFloat(shift.difference || 0));
@@ -112,9 +133,19 @@ function getShiftVariance(shift) {
   return { color: D.SUBTLE, label: '—' };
 }
 
-function formatShiftTime(shift) {
+function formatShiftTime(shift, businessDate) {
   const start = formatLocalTime(shift.opened_at);
-  if (shift.status === 'open') return `${start} – Active`;
+  if (shift.status === 'open') {
+    const today = new Date().toISOString().split('T')[0];
+    if (businessDate && businessDate !== today) return `${start} – Incomplete`;
+    return `${start} – Active`;
+  }
+  if (shift.status === 'incomplete') {
+    if (!shift.closed_at) return `${start} – Incomplete`;
+    const end = formatLocalTime(shift.closed_at);
+    const hrs = Math.round((new Date(shift.closed_at) - new Date(shift.opened_at)) / 3_600_000);
+    return `${start} – ${end}${hrs > 0 ? ` · ${hrs}h` : ''}`;
+  }
   const end = formatLocalTime(shift.closed_at);
   if (!shift.opened_at || !shift.closed_at) return `${start} – ${end}`;
   const hrs = Math.round((new Date(shift.closed_at) - new Date(shift.opened_at)) / 3_600_000);
@@ -370,7 +401,7 @@ function FilterIcon() {
 function DayCard({ day, isExpanded, cached, user, t, onPress, onShiftPress }) {
   const shifts   = cached?.shifts ?? day.shifts ?? [];
   const shiftsLoading = cached?.loading ?? false;
-  const badge    = getDayBadge(day);
+  const badge    = getDayStatusBadge(day);
   const year     = day.business_date?.split('-')[0] ?? '';
   const timeRange = getDayTimeRange({ ...day, shifts });
 
@@ -432,6 +463,7 @@ function DayCard({ day, isExpanded, cached, user, t, onPress, onShiftPress }) {
                 user={user}
                 t={t}
                 onPress={() => onShiftPress(shift.id)}
+                businessDate={day.business_date}
               />
             ))
           )}
@@ -443,9 +475,9 @@ function DayCard({ day, isExpanded, cached, user, t, onPress, onShiftPress }) {
 
 // ── ShiftRow ──────────────────────────────────────────────────────────────────
 
-function ShiftRow({ shift, isLast, user, t, onPress }) {
-  const variance  = getShiftVariance(shift);
-  const timeLabel = formatShiftTime(shift);
+function ShiftRow({ shift, isLast, user, t, onPress, businessDate }) {
+  const variance  = getShiftVariance(shift, businessDate);
+  const timeLabel = formatShiftTime(shift, businessDate);
 
   return (
     <TouchableOpacity
@@ -574,8 +606,8 @@ const s = StyleSheet.create({
   dayYear:  { fontSize: FS.sm, color: D.SUBTLE },
   dayRight: { flexDirection: 'row', alignItems: 'center', gap: SP.sm },
 
-  dayBadge:     { paddingHorizontal: SP.md, paddingVertical: 3, borderRadius: BR.full },
-  dayBadgeText: { fontSize: FS.xs, fontWeight: FW.semibold },
+  dayBadge:     { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  dayBadgeText: { fontSize: 12, fontWeight: FW.semibold },
 
   chevron:         { fontSize: 22, color: D.SUBTLE, transform: [{ rotate: '90deg' }] },
   chevronExpanded: { transform: [{ rotate: '-90deg' }] },
