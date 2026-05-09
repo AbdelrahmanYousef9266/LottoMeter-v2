@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   Text,
@@ -25,7 +25,7 @@ import { normalizeBarcode } from '../utils/barcodeUtils';
 
 export default function SlotDetailScreen({ route }) {
   const { t } = useTranslation();
-  const { slotId } = route.params;
+  const { slotId, autoAssign } = route.params;
   const navigation = useNavigation();
   const { user, scanMode } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -42,6 +42,12 @@ export default function SlotDetailScreen({ route }) {
   const [lastAssigned, setLastAssigned] = useState(null);
 
   const lastScanRef = useRef({ barcode: null, timestamp: 0 });
+
+  useEffect(() => {
+    if (!loading && autoAssign && slot && !slot.current_book) {
+      setManualOpen(true);
+    }
+  }, [loading, autoAssign, slot]);
 
   const loadSlot = useCallback(async () => {
     try {

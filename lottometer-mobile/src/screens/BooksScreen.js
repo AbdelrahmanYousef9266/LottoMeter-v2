@@ -87,7 +87,12 @@ export default function BooksScreen() {
   const loadSlots = useCallback(async () => {
     try {
       const data = await listSlots();
-      setSlots(data.slots || []);
+      const sorted = (data.slots || []).sort((a, b) => {
+        const numA = parseInt(a.slot_name.replace(/\D/g, ''), 10) || 0;
+        const numB = parseInt(b.slot_name.replace(/\D/g, ''), 10) || 0;
+        return numA - numB;
+      });
+      setSlots(sorted);
     } catch (err) {
       Alert.alert(t('books.errorLoadingSlots'), err.message || t('common.tryAgain'));
     }
@@ -328,6 +333,26 @@ export default function BooksScreen() {
           </View>
         )}
 
+        {/* ── Bulk Add Slots (admin only) ──────────────────────────────── */}
+        {isAdmin && !selectMode && (
+          <TouchableOpacity
+            style={s.bulkSlotsCard}
+            onPress={() => setBulkOpen(true)}
+            activeOpacity={0.85}
+          >
+            <View style={s.bulkSlotsIconWrap}>
+              <Ionicons name="add-outline" size={26} color={D.SUCCESS} />
+            </View>
+            <View style={s.bulkAssignBody}>
+              <Text style={s.bulkSlotsTitle}>Bulk Add Slots</Text>
+              <Text style={s.bulkSlotsSub}>
+                Create multiple slots at once
+              </Text>
+            </View>
+            <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.8)" />
+          </TouchableOpacity>
+        )}
+
         {/* ── Bulk Assign (admin only, most prominent) ─────────────────── */}
         {isAdmin && !selectMode && (
           <TouchableOpacity
@@ -378,6 +403,10 @@ export default function BooksScreen() {
                 selected={selectedIds.has(slot.slot_id)}
                 onPress={() => handleSlotPress(slot)}
                 onLongPress={() => handleLongPress(slot)}
+                onAssign={() => navigation.navigate('SlotDetail', {
+                  slotId: slot.slot_id,
+                  autoAssign: true,
+                })}
               />
             ))}
           </>
@@ -452,7 +481,7 @@ function SkeletonCard() {
 
 // ── SlotCard ──────────────────────────────────────────────────────────────────
 
-function SlotCard({ slot, t, isAdmin, selectMode, selected, onPress, onLongPress }) {
+function SlotCard({ slot, t, isAdmin, selectMode, selected, onPress, onLongPress, onAssign }) {
   const hasBook = !!slot.current_book;
   const disabled = selectMode && hasBook;
   const assignedDate = hasBook
@@ -525,7 +554,7 @@ function SlotCard({ slot, t, isAdmin, selectMode, selected, onPress, onLongPress
             isAdmin && (
               <TouchableOpacity
                 style={s.assignBtn}
-                onPress={onPress}
+                onPress={onAssign}
                 hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
               >
                 <Text style={s.assignBtnText}>Assign</Text>
@@ -574,6 +603,10 @@ function CreateSlotModal({ visible, t, onClose, onCreated }) {
       Alert.alert(t('books.missingName'), t('books.missingNameHint'));
       return;
     }
+    if (!/^\d{1,3}$/.test(slotName.trim())) {
+      Alert.alert('Invalid slot name', 'Slot name must be 1-3 digits only.');
+      return;
+    }
     setBusy(true);
     try {
       await createSlot({ slot_name: slotName.trim(), ticket_price: price });
@@ -599,8 +632,13 @@ function CreateSlotModal({ visible, t, onClose, onCreated }) {
           <TextInput
             style={s.input}
             value={slotName}
-            onChangeText={setSlotName}
-            placeholder={t('books.slotNamePlaceholder')}
+            onChangeText={(text) => {
+              const digitsOnly = text.replace(/\D/g, '').slice(0, 3);
+              setSlotName(digitsOnly);
+            }}
+            placeholder="e.g. 001"
+            keyboardType="numeric"
+            maxLength={3}
             autoFocus
           />
 
@@ -742,6 +780,34 @@ const s = StyleSheet.create({
   bulkAssignBody:  { flex: 1 },
   bulkAssignTitle: { fontSize: FS.lg, fontWeight: FW.bold, color: '#FFFFFF' },
   bulkAssignSub:   { fontSize: FS.sm, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+
+  // ── bulk add slots card
+  bulkSlotsCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: D.SUCCESS,
+    borderRadius: BR.lg,
+    marginHorizontal: SP.lg,
+    marginBottom: SP.sm,
+    padding: SP.lg,
+    gap: SP.md,
+    shadowColor: D.SUCCESS,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    elevation: 6,
+  },
+  bulkSlotsIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: D.CARD,
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  bulkSlotsTitle: { fontSize: FS.lg, fontWeight: FW.bold, color: '#FFFFFF' },
+  bulkSlotsSub:   { fontSize: FS.sm, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
 
   // ── slots section label
   slotsLabel: {

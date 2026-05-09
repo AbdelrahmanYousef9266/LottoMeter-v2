@@ -1,5 +1,6 @@
 """Slot service — CRUD with soft-delete and store scoping."""
 
+import re
 from decimal import Decimal
 from datetime import datetime, timezone
 from sqlalchemy.exc import IntegrityError
@@ -7,6 +8,8 @@ from sqlalchemy.exc import IntegrityError
 from app.extensions import db
 from app.models.slot import Slot
 from app.errors import NotFoundError, ConflictError, BusinessRuleError
+
+_SLOT_NAME_RE = re.compile(r'^\d{1,3}$')
 
 
 def list_slots(store_id: int) -> list[Slot]:
@@ -33,6 +36,11 @@ def get_slot(store_id: int, slot_id: int) -> Slot:
 
 def create_slot(store_id: int, slot_name: str, ticket_price: str) -> Slot:
     """Create a new slot."""
+    if not _SLOT_NAME_RE.match(slot_name):
+        raise BusinessRuleError(
+            "Slot name must be 1-3 digits only.",
+            code="INVALID_SLOT_NAME",
+        )
     slot = Slot(
         store_id=store_id,
         slot_name=slot_name,
@@ -70,6 +78,11 @@ def update_slot(
     slot = get_slot(store_id, slot_id)
 
     if slot_name is not None:
+        if not _SLOT_NAME_RE.match(slot_name):
+            raise BusinessRuleError(
+                "Slot name must be 1-3 digits only.",
+                code="INVALID_SLOT_NAME",
+            )
         slot.slot_name = slot_name
 
     if ticket_price is not None:
@@ -107,7 +120,7 @@ def soft_delete_slot(store_id: int, slot_id: int) -> None:
 def bulk_create_slots(
     store_id: int,
     tiers: list[dict],
-    name_prefix: str = "Slot ",
+    name_prefix: str = "",
 ) -> dict:
     """Create many slots in one transaction.
 
@@ -159,9 +172,16 @@ def bulk_create_slots(
         count = int(tier["count"])
         price = Decimal(tier["ticket_price"])
         for _ in range(count):
+            generated_name = f"{name_prefix}{next_num}"
+            if not _SLOT_NAME_RE.match(generated_name):
+                raise BusinessRuleError(
+                    f"Generated slot name '{generated_name}' must be 1-3 digits only. "
+                    "Reduce the count or delete unused slots first.",
+                    code="INVALID_SLOT_NAME",
+                )
             slot = Slot(
                 store_id=store_id,
-                slot_name=f"{name_prefix}{next_num}",
+                slot_name=generated_name,
                 ticket_price=price,
             )
             db.session.add(slot)

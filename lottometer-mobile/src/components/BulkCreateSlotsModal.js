@@ -14,7 +14,7 @@ import {
 } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
-import { bulkCreateSlots } from '../api/slots';
+import { listSlots, createSlot } from '../api/slots';
 
 const VALID_PRICES = ['1.00', '2.00', '3.00', '5.00', '10.00', '20.00'];
 
@@ -28,7 +28,6 @@ export default function BulkCreateSlotsModal({ visible, onClose, onCreated }) {
     { count: '10', price: '1.00' },
     { count: '10', price: '5.00' },
   ]);
-  const [namePrefix, setNamePrefix] = useState('');
   const [busy, setBusy] = useState(false);
 
   function reset() {
@@ -39,7 +38,6 @@ export default function BulkCreateSlotsModal({ visible, onClose, onCreated }) {
       { count: '10', price: '1.00' },
       { count: '10', price: '5.00' },
     ]);
-    setNamePrefix('');
   }
 
   function addGroup() {
@@ -59,6 +57,7 @@ export default function BulkCreateSlotsModal({ visible, onClose, onCreated }) {
   }
 
   async function handleCreate() {
+    // ── validate tiers ────────────────────────────────────────────────────────
     let tiers;
     if (mode === 'quick') {
       const n = parseInt(quickCount, 10);
@@ -95,13 +94,47 @@ export default function BulkCreateSlotsModal({ visible, onClose, onCreated }) {
 
     setBusy(true);
     try {
-      const result = await bulkCreateSlots({
-        tiers,
-        name_prefix: namePrefix.trim() || undefined,
-      });
+      // ── find which numbers 1-999 are already in use ───────────────────────
+      const existingData = await listSlots();
+      const takenNumbers = new Set(
+        (existingData.slots || [])
+          .map(s => parseInt(s.slot_name, 10))
+          .filter(n => !isNaN(n))
+      );
+
+      // ── allocate names across all tiers, filling gaps from 1 ─────────────
+      // counter is shared so tier 2 doesn't reuse names allocated by tier 1
+      const allocations = []; // [{ name, ticket_price }]
+      let counter = 1;
+
+      for (const tier of tiers) {
+        let allocated = 0;
+        while (allocated < tier.count) {
+          if (counter > 999) {
+            Alert.alert(
+              'No slots available',
+              'All slot numbers 1–999 are already in use. Delete unused slots first.'
+            );
+            setBusy(false);
+            return;
+          }
+          if (!takenNumbers.has(counter)) {
+            allocations.push({ name: String(counter), ticket_price: tier.ticket_price });
+            takenNumbers.add(counter); // reserve for subsequent tiers
+            allocated++;
+          }
+          counter++;
+        }
+      }
+
+      // ── create each slot individually so names are explicit ───────────────
+      for (const { name, ticket_price } of allocations) {
+        await createSlot({ slot_name: name, ticket_price });
+      }
+
       Alert.alert(
         t('bulkSlots.successTitle'),
-        t('bulkSlots.successHint', { count: result.created_count })
+        t('bulkSlots.successHint', { count: allocations.length })
       );
       reset();
       onCreated();
@@ -252,16 +285,6 @@ export default function BulkCreateSlotsModal({ visible, onClose, onCreated }) {
                 )}
               </View>
             )}
-
-            <Text style={styles.label}>{t('bulkSlots.namePrefix')}</Text>
-            <Text style={styles.helperText}>{t('bulkSlots.namePrefixHint')}</Text>
-            <TextInput
-              style={styles.input}
-              value={namePrefix}
-              onChangeText={setNamePrefix}
-              placeholder={t('bulkSlots.namePrefixPlaceholder')}
-              autoCapitalize="words"
-            />
 
             <View style={styles.previewCard}>
               <Text style={styles.previewLabel}>{t('bulkSlots.totalLabel')}</Text>

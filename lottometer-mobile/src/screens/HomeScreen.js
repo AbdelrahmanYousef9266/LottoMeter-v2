@@ -453,11 +453,14 @@ export default function HomeScreen() {
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <View style={s.header}>
-        <Text style={s.headerStore} numberOfLines={1}>
-          {store?.name || store?.store_name || 'LottoMeter'}
+        <Text style={s.headerGreeting} numberOfLines={1}>
+          Hi, {user?.username}
         </Text>
-        <View style={s.avatar}>
-          <Text style={s.avatarText}>{getInitials(user?.username)}</Text>
+        <Text style={s.headerStoreCode} numberOfLines={1}>
+          {store?.store_code || store?.code || ''}
+        </Text>
+        <View style={s.headerAvatar}>
+          <Text style={s.headerAvatarText}>{(user?.username || '?')[0].toUpperCase()}</Text>
         </View>
       </View>
 
@@ -749,8 +752,18 @@ const s = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: SP.lg,
   },
-  headerStore: { fontSize: FS.md, fontWeight: FW.bold, color: D.TEXT, flex: 1, marginRight: SP.sm },
-  avatar: {
+  headerGreeting: { fontSize: FS.sm, fontWeight: FW.medium, color: D.SUBTLE, flex: 1 },
+  headerStoreCode: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontSize: FS.lg,
+    fontWeight: FW.bold,
+    color: D.TEXT,
+    pointerEvents: 'none',
+  },
+  headerAvatar: {
     width: 36,
     height: 36,
     borderRadius: 18,
@@ -758,7 +771,7 @@ const s = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  avatarText: { fontSize: FS.sm, fontWeight: FW.bold, color: '#fff' },
+  headerAvatarText: { fontSize: FS.sm, fontWeight: FW.bold, color: '#fff' },
 
   // offline
   offlineBanner:     { backgroundColor: D.WARNING, padding: 10, alignItems: 'center' },
