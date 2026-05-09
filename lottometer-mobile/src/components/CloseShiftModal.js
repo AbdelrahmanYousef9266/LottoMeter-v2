@@ -12,6 +12,7 @@ import {
   ScrollView,
   Alert,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
 import { getSubshiftSummary } from '../api/shifts';
@@ -19,6 +20,30 @@ import { useFeedback } from '../hooks/useFeedback';
 import { useAuth } from '../context/AuthContext';
 import { getDb } from '../offline/db';
 import { closeOfflineShift, getOfflineShiftSummary } from '../offline';
+
+// ── design tokens ─────────────────────────────────────────────────────────────
+const D = {
+  PRIMARY:    '#0077CC',
+  SUCCESS:    '#16A34A',
+  ERROR:      '#DC2626',
+  WARNING:    '#D97706',
+  BACKGROUND: '#F8FAFC',
+  CARD:       '#FFFFFF',
+  TEXT:       '#0F172A',
+  SUBTLE:     '#64748B',
+  BORDER:     '#E2E8F0',
+};
+const FS = { xs: 11, sm: 13, md: 15, lg: 18, xl: 22 };
+const FW = { medium: '500', semibold: '600', bold: '700' };
+const SP = { xs: 4, sm: 8, md: 12, lg: 16, xl: 24 };
+const BR = { sm: 6, md: 10, lg: 14, full: 999 };
+const CARD_SHADOW = {
+  shadowColor: '#000',
+  shadowOffset: { width: 0, height: 1 },
+  shadowOpacity: 0.06,
+  shadowRadius: 4,
+  elevation: 2,
+};
 
 export default function CloseShiftModal({
   visible,
@@ -41,6 +66,7 @@ export default function CloseShiftModal({
   const [cancels, setCancels] = useState('');
   const [busy, setBusy] = useState(false);
   const [confirmingClose, setConfirmingClose] = useState(false);
+  const [focusedField, setFocusedField] = useState(null);
 
   const [summary, setSummary] = useState(null);
   const [summaryLoading, setSummaryLoading] = useState(false);
@@ -94,6 +120,8 @@ export default function CloseShiftModal({
     }
   }, [subshiftId, shiftUuid, isOffline, store]);
 
+  // ── calculations (unchanged) ───────────────────────────────────────────────
+
   const ticketsTotal = parseFloat(summary?.tickets_total || '0') || 0;
   const grossSalesNum = parseFloat(grossSales) || 0;
   const cashOutNum = parseFloat(cashOut) || 0;
@@ -102,6 +130,7 @@ export default function CloseShiftModal({
   const expectedCash = grossSalesNum + ticketsTotal - cashOutNum - cancelsNum;
   const difference = cashInHandNum - expectedCash;
 
+  // Legacy status vars — kept for handleSubmit Alert
   let status = '—';
   let statusColor = '#888';
   let statusBgColor = '#f0f0f0';
@@ -121,12 +150,37 @@ export default function CloseShiftModal({
     }
   }
 
+  // ── live display state ─────────────────────────────────────────────────────
+
+  const hasInput = cashInHand !== '';
+  const isExact = hasInput && Math.abs(difference) < 0.005;
+  const isOver  = hasInput && difference > 0.005;
+  const isShort = hasInput && difference < -0.005;
+
+  const barColor     = !hasInput ? D.BORDER : isExact ? D.SUCCESS : isOver ? D.WARNING : D.ERROR;
+  const diffBg       = !hasInput ? D.BACKGROUND : isExact ? '#F0FDF4' : isOver ? '#FFFBEB' : '#FEF2F2';
+  const diffColor    = !hasInput ? D.SUBTLE : isExact ? D.SUCCESS : isOver ? D.WARNING : D.ERROR;
+  const diffAmount   = !hasInput ? '—'
+    : isExact ? '$0.00'
+    : isOver  ? `+$${difference.toFixed(2)}`
+    :           `-$${Math.abs(difference).toFixed(2)}`;
+
+  const pillLabel = !hasInput   ? 'Enter values below'
+    : isExact ? '✓ Correct'
+    : isShort ? `✗ Short $${Math.abs(difference).toFixed(2)}`
+    :           `↑ Over $${difference.toFixed(2)}`;
+  const pillColor = !hasInput ? D.SUBTLE : isExact ? D.SUCCESS : isOver ? D.WARNING : D.ERROR;
+  const pillBg    = !hasInput ? D.BORDER : isExact ? '#DCFCE7' : isOver ? '#FEF9C3' : '#FEE2E2';
+
   const booksPending = summary?.books_pending_close ?? 0;
   const blockedByPendingCloses = booksPending > 0;
 
   const isHandover = mode === 'handover';
-  const titleText = isHandover ? t('closeShift.handoverTitle') : t('closeShift.finalTitle');
   const submitText = isHandover ? t('closeShift.endSubshift') : t('closeShift.endMainShift');
+  const isSubmitDisabled = !cashInHand || !grossSales || !cashOut || !cancels || busy || blockedByPendingCloses;
+  const submitBg = isSubmitDisabled ? D.BORDER : isExact ? D.SUCCESS : D.PRIMARY;
+
+  // ── logic (unchanged) ──────────────────────────────────────────────────────
 
   async function doClose() {
     setBusy(true);
@@ -180,7 +234,7 @@ export default function CloseShiftModal({
   }
 
   async function handleSubmit() {
-    if (cashInHand === '' || grossSales === '' || cashOut === '') {
+    if (cashInHand === '' || grossSales === '' || cashOut === '' || cancels === '') {
       Alert.alert(t('closeShift.missingValues'), t('closeShift.missingValuesHint'));
       return;
     }
@@ -206,61 +260,114 @@ export default function CloseShiftModal({
     }
   }
 
+  // ── render ─────────────────────────────────────────────────────────────────
+
   return (
     <Modal
       visible={visible}
-      transparent
       animationType="slide"
       onRequestClose={onCancel}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.backdrop}
-      >
-        <View style={styles.card}>
-          <ScrollView keyboardShouldPersistTaps="handled">
-            {confirmingClose ? (
-              <>
-                <Text style={styles.title}>{t('closeShift.confirmFinalTitle')}</Text>
-                <Text style={styles.confirmSubtitle}>{t('closeShift.confirmFinalSubtitle')}</Text>
+      <SafeAreaView style={s.root}>
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={s.flex}
+        >
 
-                <View style={[styles.statusBadge, { backgroundColor: statusBgColor }]}>
-                  <Text style={[styles.statusBadgeText, { color: statusColor }]}>{status}</Text>
+          {/* ── HEADER ──────────────────────────────────────────────────────── */}
+          <View style={s.header}>
+            <TouchableOpacity
+              style={s.headerClose}
+              onPress={confirmingClose ? () => setConfirmingClose(false) : onCancel}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Text style={s.headerCloseIcon}>✕</Text>
+            </TouchableOpacity>
+
+            <Text style={s.headerTitle}>
+              {confirmingClose ? 'Confirm Close' : 'Close Shift'}
+            </Text>
+
+            {subshiftId ? (
+              <View style={s.shiftBadge}>
+                <Text style={s.shiftBadgeText}>Shift #{subshiftId}</Text>
+              </View>
+            ) : (
+              <View style={s.headerSpacer} />
+            )}
+          </View>
+
+          {confirmingClose ? (
+            /* ── CONFIRM SCREEN ─────────────────────────────────────────────── */
+            <>
+              <ScrollView
+                style={s.flex}
+                contentContainerStyle={s.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
+                {/* Confirm summary card */}
+                <View style={s.card}>
+                  <View style={[s.colorBar, { backgroundColor: barColor }]} />
+                  <View style={s.cardBody}>
+                    <Text style={s.confirmSubtitle}>{t('closeShift.confirmFinalSubtitle')}</Text>
+
+                    <View style={s.summaryRow}>
+                      <Text style={s.summaryRowLabel}>{t('closeShift.ticketsTotal')}</Text>
+                      <Text style={s.summaryRowValue}>${ticketsTotal.toFixed(2)}</Text>
+                    </View>
+                    {cancelsNum > 0 && (
+                      <View style={s.summaryRow}>
+                        <Text style={s.summaryRowLabel}>{t('closeShift.cancels')}</Text>
+                        <Text style={s.summaryRowValue}>${cancelsNum.toFixed(2)}</Text>
+                      </View>
+                    )}
+                    <View style={s.summaryRow}>
+                      <Text style={s.summaryRowLabel}>{t('closeShift.expectedCash')}</Text>
+                      <Text style={s.summaryRowValue}>${expectedCash.toFixed(2)}</Text>
+                    </View>
+                    <View style={s.summaryRow}>
+                      <Text style={s.summaryRowLabel}>{t('closeShift.cashInHand')}</Text>
+                      <Text style={s.summaryRowValue}>${cashInHandNum.toFixed(2)}</Text>
+                    </View>
+
+                    {/* Difference row */}
+                    <View style={[s.diffRow, { backgroundColor: diffBg }]}>
+                      <Text style={s.diffRowLabel}>{t('closeShift.difference')}</Text>
+                      <Text style={[s.diffRowValue, { color: diffColor }]}>{diffAmount}</Text>
+                    </View>
+                  </View>
                 </View>
 
-                <View style={styles.previewCard}>
-                  <KV k={t('closeShift.ticketsTotal')} v={`$${ticketsTotal.toFixed(2)}`} />
-                  {cancelsNum > 0 && (
-                    <KV k={t('closeShift.cancels')} v={`$${cancelsNum.toFixed(2)}`} />
-                  )}
-                  <KV k={t('closeShift.expectedCash')} v={`$${expectedCash.toFixed(2)}`} />
-                  <KV
-                    k={t('closeShift.difference')}
-                    v={`$${difference.toFixed(2)}`}
-                    vColor={statusColor}
-                  />
+                {/* Status pill */}
+                <View style={[s.statusPill, { backgroundColor: pillBg, alignSelf: 'center' }]}>
+                  <Text style={[s.statusPillText, { color: pillColor }]}>{pillLabel}</Text>
                 </View>
 
-                <Text style={styles.confirmInfoText}>
+                <Text style={s.confirmInfoText}>
                   {t('closeShift.confirmFinalInfo', {
                     closed: closedSubshiftCount,
                     voided: voidedSubshiftCount,
                   })}
                 </Text>
+              </ScrollView>
 
-                <View style={styles.actions}>
+              {/* Confirm action buttons */}
+              <View style={s.submitContainer}>
+                <View style={s.confirmActions}>
                   <TouchableOpacity
-                    style={[styles.button, styles.cancelButton]}
+                    style={s.backButton}
                     onPress={() => setConfirmingClose(false)}
                     disabled={busy}
                   >
-                    <Text style={styles.cancelText}>{t('common.back')}</Text>
+                    <Text style={s.backButtonText}>{t('common.back')}</Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[
-                      styles.button,
-                      styles.submitButton,
-                      busy && styles.disabled,
+                      s.submitButton,
+                      s.submitFlex,
+                      { backgroundColor: isExact ? D.SUCCESS : D.PRIMARY },
+                      busy && s.submitDisabled,
                     ]}
                     onPress={doClose}
                     disabled={busy}
@@ -268,215 +375,340 @@ export default function CloseShiftModal({
                     {busy ? (
                       <ActivityIndicator color="#fff" />
                     ) : (
-                      <Text style={styles.submitText}>{t('closeShift.endMainShift')}</Text>
+                      <Text style={s.submitText}>{t('closeShift.endMainShift')}</Text>
                     )}
                   </TouchableOpacity>
                 </View>
-              </>
-            ) : (
-              <>
-                <Text style={styles.title}>{titleText}</Text>
+              </View>
+            </>
+          ) : (
+            /* ── MAIN SCREEN ────────────────────────────────────────────────── */
+            <>
+              <ScrollView
+                style={s.flex}
+                contentContainerStyle={s.scrollContent}
+                keyboardShouldPersistTaps="handled"
+                showsVerticalScrollIndicator={false}
+              >
 
+                {/* Live Preview Card */}
+                <View style={s.card}>
+                  <View style={[s.colorBar, { backgroundColor: barColor }]} />
+
+                  <View style={s.previewHeader}>
+                    <Text style={s.previewHeaderLabel}>Live Preview</Text>
+                    <View style={[s.statusPill, { backgroundColor: pillBg }]}>
+                      <Text style={[s.statusPillText, { color: pillColor }]}>{pillLabel}</Text>
+                    </View>
+                  </View>
+
+                  <View style={s.statsGrid}>
+                    <View style={s.statCell}>
+                      <Text style={s.statValue}>${ticketsTotal.toFixed(2)}</Text>
+                      <Text style={s.statCaption}>From scans</Text>
+                      <Text style={s.statLabel}>Ticket Sales</Text>
+                    </View>
+                    <View style={[s.statCell, s.statCellRight]}>
+                      <Text style={s.statValue}>${expectedCash.toFixed(2)}</Text>
+                      <Text style={s.statCaption}>Expected</Text>
+                      <Text style={s.statLabel}>Expected Cash</Text>
+                    </View>
+                  </View>
+
+                  <View style={[s.diffRow, { backgroundColor: diffBg }]}>
+                    <Text style={s.diffRowLabel}>Difference</Text>
+                    <Text style={[s.diffRowValue, { color: diffColor }]}>{diffAmount}</Text>
+                  </View>
+                </View>
+
+                {/* Books Pending Warning */}
                 {summaryLoading ? (
-                  <View style={styles.banner}>
-                    <ActivityIndicator />
+                  <View style={s.loadingRow}>
+                    <ActivityIndicator size="small" color={D.SUBTLE} />
                   </View>
-                ) : blockedByPendingCloses ? (
-                  <View style={[styles.banner, styles.bannerError]}>
-                    <Text style={styles.bannerErrorText}>
-                      {t('closeShift.pendingClosesWarning', { count: booksPending })}
-                    </Text>
-                    <Text style={styles.bannerErrorHint}>
-                      {t('closeShift.pendingClosesHint')}
-                    </Text>
+                ) : booksPending > 0 ? (
+                  <View style={s.pendingWarning}>
+                    <Text style={s.pendingWarningIcon}>⚠️</Text>
+                    <View style={s.pendingWarningBody}>
+                      <Text style={s.pendingWarningTitle}>
+                        {booksPending} {booksPending === 1 ? 'book' : 'books'} still need close scans
+                      </Text>
+                      <Text style={s.pendingWarningHint}>Complete scanning before closing</Text>
+                    </View>
                   </View>
-                ) : (
-                  <View style={[styles.banner, styles.bannerOk]}>
-                    <Text style={styles.bannerOkText}>{t('closeShift.allBooksClosed')}</Text>
+                ) : null}
+
+                {/* Input Fields Section */}
+                <View style={s.card}>
+                  <View style={s.cardBody}>
+                    <Text style={s.sectionTitle}>Shift Details</Text>
+
+                    <InputField
+                      label="Cash in Hand"
+                      required
+                      value={cashInHand}
+                      onChangeText={setCashInHand}
+                      helper="Total cash at end of shift"
+                      focused={focusedField === 'cashInHand'}
+                      onFocus={() => setFocusedField('cashInHand')}
+                      onBlur={() => setFocusedField(null)}
+                    />
+                    <InputField
+                      label="Gross Sales"
+                      required
+                      value={grossSales}
+                      onChangeText={setGrossSales}
+                      helper="Total sales from register"
+                      focused={focusedField === 'grossSales'}
+                      onFocus={() => setFocusedField('grossSales')}
+                      onBlur={() => setFocusedField(null)}
+                    />
+                    <InputField
+                      label="Cash Out"
+                      required
+                      value={cashOut}
+                      onChangeText={setCashOut}
+                      helper="Cash removed during shift"
+                      focused={focusedField === 'cashOut'}
+                      onFocus={() => setFocusedField('cashOut')}
+                      onBlur={() => setFocusedField(null)}
+                    />
+                    <InputField
+                      label="Cancels"
+                      required
+                      value={cancels}
+                      onChangeText={setCancels}
+                      helper="Lottery machine cancellations"
+                      focused={focusedField === 'cancels'}
+                      onFocus={() => setFocusedField('cancels')}
+                      onBlur={() => setFocusedField(null)}
+                      last
+                    />
                   </View>
-                )}
+                </View>
 
-                <Text style={styles.label}>{t('closeShift.cashInHand')}</Text>
-                <TextInput
-                  style={styles.input}
-                  value={cashInHand}
-                  onChangeText={setCashInHand}
-                  placeholder="0.00"
-                  keyboardType="decimal-pad"
-                />
+              </ScrollView>
 
-                <Text style={styles.label}>{t('closeShift.grossSales')}</Text>
-                <TextInput
-                  style={styles.input}
-                  value={grossSales}
-                  onChangeText={setGrossSales}
-                  placeholder="0.00"
-                  keyboardType="decimal-pad"
-                />
-
-                <Text style={styles.label}>{t('closeShift.cashOut')}</Text>
-                <TextInput
-                  style={styles.input}
-                  value={cashOut}
-                  onChangeText={setCashOut}
-                  placeholder="0.00"
-                  keyboardType="decimal-pad"
-                />
-
-                <Text style={styles.label}>{t('closeShift.cancels')}</Text>
-                <TextInput
-                  style={styles.input}
-                  value={cancels}
-                  onChangeText={setCancels}
-                  placeholder={t('closeShift.cancelsPlaceholder')}
-                  keyboardType="decimal-pad"
-                />
-
-                <View style={styles.previewCard}>
-                  <Text style={styles.previewTitle}>{t('closeShift.livePreview')}</Text>
-                  <KV k={t('closeShift.ticketsTotal')} v={`$${ticketsTotal.toFixed(2)}`} />
-                  {cancelsNum > 0 && (
-                    <KV k={t('closeShift.cancels')} v={`$${cancelsNum.toFixed(2)}`} />
+              {/* Submit Button */}
+              <View style={s.submitContainer}>
+                <TouchableOpacity
+                  style={[s.submitButton, { backgroundColor: submitBg }, isSubmitDisabled && s.submitDisabled]}
+                  onPress={handleSubmit}
+                  disabled={isSubmitDisabled}
+                >
+                  {busy ? (
+                    <ActivityIndicator color="#fff" />
+                  ) : (
+                    <Text style={s.submitText}>{submitText}</Text>
                   )}
-                  <KV k={t('closeShift.expectedCash')} v={`$${expectedCash.toFixed(2)}`} />
-                  <KV
-                    k={t('closeShift.difference')}
-                    v={`$${difference.toFixed(2)}`}
-                    vColor={statusColor}
-                  />
-                  <KV k={t('closeShift.status')} v={status} vColor={statusColor} />
-                </View>
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
 
-                <View style={styles.actions}>
-                  <TouchableOpacity
-                    style={[styles.button, styles.cancelButton]}
-                    onPress={onCancel}
-                    disabled={busy}
-                  >
-                    <Text style={styles.cancelText}>{t('common.cancel')}</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[
-                      styles.button,
-                      styles.submitButton,
-                      (busy || blockedByPendingCloses) && styles.disabled,
-                    ]}
-                    onPress={handleSubmit}
-                    disabled={busy || blockedByPendingCloses}
-                  >
-                    {busy ? (
-                      <ActivityIndicator color="#fff" />
-                    ) : (
-                      <Text style={styles.submitText}>{submitText}</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-          </ScrollView>
-        </View>
-      </KeyboardAvoidingView>
+        </KeyboardAvoidingView>
+      </SafeAreaView>
     </Modal>
   );
 }
 
-function KV({ k, v, vColor }) {
+// ── sub-components ────────────────────────────────────────────────────────────
+
+function InputField({ label, required, value, onChangeText, helper, focused, onFocus, onBlur, last }) {
   return (
-    <View style={styles.kvRow}>
-      <Text style={styles.kvKey}>{k}</Text>
-      <Text style={[styles.kvValue, vColor && { color: vColor }]}>{v}</Text>
+    <View style={[s.fieldGroup, last && s.fieldGroupLast]}>
+      <Text style={s.fieldLabel}>
+        {label}
+        {required && <Text style={s.required}> *</Text>}
+      </Text>
+      <TextInput
+        style={[s.input, focused && s.inputFocused]}
+        value={value}
+        onChangeText={onChangeText}
+        placeholder="0.00"
+        placeholderTextColor={D.SUBTLE}
+        keyboardType="decimal-pad"
+        onFocus={onFocus}
+        onBlur={onBlur}
+      />
+      <Text style={s.fieldHelper}>{helper}</Text>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  backdrop: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
+// ── styles ────────────────────────────────────────────────────────────────────
+
+const s = StyleSheet.create({
+  root: { flex: 1, backgroundColor: D.BACKGROUND },
+  flex: { flex: 1 },
+
+  // ── header ──────────────────────────────────────────────────────────────────
+  header: {
+    height: 56,
+    backgroundColor: D.CARD,
+    borderBottomWidth: 1,
+    borderBottomColor: D.BORDER,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: SP.lg,
   },
+  headerClose: { width: 32, alignItems: 'flex-start' },
+  headerCloseIcon: { fontSize: 20, fontWeight: FW.bold, color: D.TEXT },
+  headerTitle: { fontSize: FS.md, fontWeight: FW.bold, color: D.TEXT },
+  shiftBadge: {
+    backgroundColor: '#DBEAFE',
+    paddingHorizontal: SP.sm,
+    paddingVertical: 3,
+    borderRadius: BR.full,
+  },
+  shiftBadgeText: { fontSize: FS.sm, fontWeight: FW.semibold, color: D.PRIMARY },
+  headerSpacer: { width: 60 },
+
+  // ── scroll ──────────────────────────────────────────────────────────────────
+  scrollContent: { padding: SP.lg, paddingBottom: SP.xl },
+
+  // ── card ────────────────────────────────────────────────────────────────────
   card: {
-    backgroundColor: '#fff',
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    paddingBottom: 40,
-    maxHeight: '90%',
+    backgroundColor: D.CARD,
+    borderRadius: BR.lg,
+    ...CARD_SHADOW,
+    marginBottom: SP.md,
+    overflow: 'hidden',
   },
-  title: { fontSize: 22, fontWeight: '700', marginBottom: 16 },
+  cardBody: { padding: SP.lg },
+  colorBar: { height: 4 },
 
-  banner: { borderRadius: 8, padding: 12, marginBottom: 16 },
-  bannerError: { backgroundColor: '#fef2f2' },
-  bannerErrorText: { color: '#dc2626', fontWeight: '600', marginBottom: 4 },
-  bannerErrorHint: { color: '#7f1d1d', fontSize: 12 },
-  bannerOk: { backgroundColor: '#dcfce7' },
-  bannerOkText: { color: '#166534', fontWeight: '600' },
-
-  label: {
-    fontSize: 13,
-    color: '#444',
-    marginBottom: 6,
-    marginTop: 12,
-    fontWeight: '600',
-  },
-  input: {
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    backgroundColor: '#fafafa',
-  },
-
-  previewCard: {
-    backgroundColor: '#f4f5f7',
-    borderRadius: 10,
-    padding: 14,
-    marginTop: 20,
-  },
-  previewTitle: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#555',
-    marginBottom: 10,
-  },
-  kvRow: {
+  // ── live preview ─────────────────────────────────────────────────────────────
+  previewHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 4,
+    alignItems: 'center',
+    paddingHorizontal: SP.lg,
+    paddingTop: SP.md,
+    paddingBottom: SP.sm,
   },
-  kvKey: { color: '#666', fontSize: 14 },
-  kvValue: { color: '#222', fontSize: 14, fontWeight: '600' },
+  previewHeaderLabel: { fontSize: FS.sm, fontWeight: FW.semibold, color: D.SUBTLE },
 
-  actions: { flexDirection: 'row', gap: 12, marginTop: 20 },
-  button: { flex: 1, padding: 14, borderRadius: 8, alignItems: 'center' },
-  cancelButton: { backgroundColor: '#f0f0f0' },
-  cancelText: { color: '#444', fontWeight: '600' },
-  submitButton: { backgroundColor: '#1a73e8' },
-  submitText: { color: '#fff', fontWeight: '600' },
-  disabled: { opacity: 0.5 },
-
-  confirmSubtitle: {
-    fontSize: 14,
-    color: '#555',
-    marginBottom: 16,
+  statusPill: {
+    paddingHorizontal: SP.sm,
+    paddingVertical: 3,
+    borderRadius: BR.full,
   },
+  statusPillText: { fontSize: FS.xs, fontWeight: FW.semibold },
+
+  statsGrid: {
+    flexDirection: 'row',
+    paddingHorizontal: SP.lg,
+    paddingBottom: SP.md,
+  },
+  statCell: { flex: 1 },
+  statCellRight: {
+    borderLeftWidth: 1,
+    borderLeftColor: D.BORDER,
+    paddingLeft: SP.lg,
+  },
+  statValue:   { fontSize: FS.lg, fontWeight: FW.bold, color: D.TEXT, marginBottom: 2 },
+  statCaption: { fontSize: FS.xs, color: D.SUBTLE, marginBottom: 2 },
+  statLabel:   { fontSize: FS.xs, color: D.SUBTLE },
+
+  diffRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: SP.md,
+    paddingHorizontal: SP.lg,
+  },
+  diffRowLabel: { fontSize: FS.md, fontWeight: FW.semibold, color: D.TEXT },
+  diffRowValue: { fontSize: FS.lg, fontWeight: FW.bold },
+
+  // ── books pending warning ────────────────────────────────────────────────────
+  loadingRow: { alignItems: 'center', paddingVertical: SP.sm, marginBottom: SP.sm },
+  pendingWarning: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#FEF9EE',
+    borderWidth: 1,
+    borderColor: D.WARNING,
+    borderRadius: BR.md,
+    padding: SP.md,
+    marginBottom: SP.md,
+  },
+  pendingWarningIcon:  { fontSize: FS.lg, marginRight: SP.sm },
+  pendingWarningBody:  { flex: 1 },
+  pendingWarningTitle: { fontSize: FS.sm, fontWeight: FW.semibold, color: D.WARNING, marginBottom: 2 },
+  pendingWarningHint:  { fontSize: FS.xs, color: D.SUBTLE },
+
+  // ── input fields ─────────────────────────────────────────────────────────────
+  sectionTitle: { fontSize: FS.md, fontWeight: FW.semibold, color: D.TEXT, marginBottom: SP.md },
+  fieldGroup: { marginBottom: SP.md },
+  fieldGroupLast: { marginBottom: 0 },
+  fieldLabel: { fontSize: FS.sm, fontWeight: FW.semibold, color: D.TEXT, marginBottom: SP.xs },
+  required:   { color: D.ERROR },
+  input: {
+    height: 52,
+    backgroundColor: D.BACKGROUND,
+    borderWidth: 1.5,
+    borderColor: D.BORDER,
+    borderRadius: BR.md,
+    paddingHorizontal: SP.lg,
+    fontSize: FS.md,
+    color: D.TEXT,
+  },
+  inputFocused: { borderColor: D.PRIMARY },
+  fieldHelper:  { fontSize: FS.xs, color: D.SUBTLE, marginTop: SP.xs },
+
+  // ── submit area ──────────────────────────────────────────────────────────────
+  submitContainer: {
+    padding: SP.lg,
+    backgroundColor: D.BACKGROUND,
+    borderTopWidth: 1,
+    borderTopColor: D.BORDER,
+  },
+  submitButton: {
+    height: 52,
+    borderRadius: BR.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: D.PRIMARY,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  submitFlex:     { flex: 1 },
+  submitText:     { fontSize: FS.md, fontWeight: FW.bold, color: '#fff' },
+  submitDisabled: { opacity: 0.7, elevation: 0, shadowOpacity: 0 },
+
+  confirmActions: { flexDirection: 'row', gap: SP.sm },
+  backButton: {
+    height: 52,
+    paddingHorizontal: SP.xl,
+    borderRadius: BR.full,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: D.BACKGROUND,
+    borderWidth: 1,
+    borderColor: D.BORDER,
+  },
+  backButtonText: { fontSize: FS.md, fontWeight: FW.semibold, color: D.TEXT },
+
+  // ── confirm screen ────────────────────────────────────────────────────────────
+  confirmSubtitle: { fontSize: FS.sm, color: D.SUBTLE, marginBottom: SP.md },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: SP.xs + 2,
+    borderBottomWidth: 1,
+    borderBottomColor: D.BORDER,
+  },
+  summaryRowLabel: { fontSize: FS.sm, color: D.SUBTLE },
+  summaryRowValue: { fontSize: FS.sm, fontWeight: FW.semibold, color: D.TEXT },
   confirmInfoText: {
-    fontSize: 13,
-    color: '#666',
+    fontSize: FS.sm,
+    color: D.SUBTLE,
     textAlign: 'center',
-    marginTop: 12,
-    marginBottom: 4,
-  },
-  statusBadge: {
-    alignSelf: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 8,
-    borderRadius: 999,
-    marginBottom: 16,
-  },
-  statusBadgeText: {
-    fontSize: 16,
-    fontWeight: '700',
+    marginTop: SP.md,
+    marginBottom: SP.sm,
   },
 });

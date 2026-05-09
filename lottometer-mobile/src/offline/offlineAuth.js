@@ -1,54 +1,7 @@
 import * as SecureStore from 'expo-secure-store';
 import settings from '../config/settings';
 
-const PIN_HASH_KEY = 'lm_pin_hash';
 const SESSION_KEY = 'lm_offline_session';
-const ATTEMPTS_KEY = 'lm_pin_attempts';
-
-// Simple but consistent hash — no crypto module in RN
-// In production consider expo-crypto for SHA-256
-const hashPin = (pin, salt) => {
-  const str = pin + salt + 'lottometer2026';
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(36);
-};
-
-export const setupOfflinePin = async (pin, userId) => {
-  if (!/^\d{4,6}$/.test(pin)) {
-    throw new Error('PIN must be 4-6 digits');
-  }
-  const hash = hashPin(pin, userId.toString());
-  await SecureStore.setItemAsync(PIN_HASH_KEY, hash);
-  await SecureStore.setItemAsync(ATTEMPTS_KEY, '0');
-  return true;
-};
-
-export const verifyOfflinePin = async (pin, userId) => {
-  const attemptsStr = await SecureStore.getItemAsync(ATTEMPTS_KEY);
-  const attempts = parseInt(attemptsStr || '0');
-
-  if (attempts >= settings.OFFLINE_MAX_PIN_ATTEMPTS) {
-    throw new Error('Too many failed attempts. Please login online.');
-  }
-
-  const storedHash = await SecureStore.getItemAsync(PIN_HASH_KEY);
-  if (!storedHash) return false;
-
-  const inputHash = hashPin(pin, userId.toString());
-
-  if (inputHash === storedHash) {
-    await SecureStore.setItemAsync(ATTEMPTS_KEY, '0');
-    return true;
-  } else {
-    await SecureStore.setItemAsync(ATTEMPTS_KEY, (attempts + 1).toString());
-    return false;
-  }
-};
 
 export const saveOfflineSession = async (user, store, token) => {
   const expiresAt = new Date();
@@ -87,12 +40,9 @@ export const getOfflineSession = async () => {
 
 export const clearOfflineSession = async () => {
   await SecureStore.deleteItemAsync(SESSION_KEY);
-  await SecureStore.deleteItemAsync(PIN_HASH_KEY);
-  await SecureStore.deleteItemAsync(ATTEMPTS_KEY);
 };
 
 export const hasOfflineAccess = async () => {
   const session = await getOfflineSession();
-  const pin = await SecureStore.getItemAsync(PIN_HASH_KEY);
-  return session !== null && pin !== null;
+  return session !== null;
 };

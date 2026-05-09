@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
-  TextInput,
   TouchableOpacity,
   StyleSheet,
   Alert,
@@ -16,7 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 
 import { logout } from '../api/auth';
-import { changeStorePin, changeScanMode } from '../api/store';
+import { changeScanMode } from '../api/store';
 import { useAuth } from '../context/AuthContext';
 import { setStoredLanguage } from '../i18n';
 import { syncRTL } from '../utils/rtl';
@@ -101,11 +100,6 @@ export default function SettingsScreen() {
     await setVibrationEnabled(value);
   }
 
-  const [pinFormOpen, setPinFormOpen] = useState(false);
-  const [currentPin, setCurrentPin] = useState('');
-  const [newPin, setNewPin] = useState('');
-  const [confirmPin, setConfirmPin] = useState('');
-  const [pinSaving, setPinSaving] = useState(false);
   const [scanModeSaving, setScanModeSaving] = useState(false);
   const [scanModePickerOpen, setScanModePickerOpen] = useState(false);
   const [langPickerOpen, setLangPickerOpen] = useState(false);
@@ -141,40 +135,6 @@ export default function SettingsScreen() {
       Alert.alert(t('common.error'), err.message || t('common.tryAgain'));
     } finally {
       setBusy(false);
-    }
-  }
-
-  function resetPinForm() {
-    setCurrentPin('');
-    setNewPin('');
-    setConfirmPin('');
-  }
-
-  async function handleSavePin() {
-    if (!/^\d{4}$/.test(currentPin) || !/^\d{4}$/.test(newPin)) {
-      Alert.alert(t('settings.pinFormatTitle'), t('settings.pinFormatHint'));
-      return;
-    }
-    if (newPin !== confirmPin) {
-      Alert.alert(t('settings.pinMismatchTitle'), t('settings.pinMismatchHint'));
-      return;
-    }
-    setPinSaving(true);
-    try {
-      await changeStorePin({ current_pin: currentPin, new_pin: newPin });
-      resetPinForm();
-      setPinFormOpen(false);
-      Alert.alert(t('settings.pinChangedTitle'), t('settings.pinChangedHint'));
-    } catch (err) {
-      if (err.code === 'INVALID_PIN') {
-        Alert.alert(t('settings.currentPinWrongTitle'), t('settings.currentPinWrongHint'));
-      } else if (err.code === 'INVALID_PIN_FORMAT') {
-        Alert.alert(t('settings.pinFormatTitle'), t('settings.pinFormatHint'));
-      } else {
-        Alert.alert(err.code || t('common.error'), err.message || t('common.tryAgain'));
-      }
-    } finally {
-      setPinSaving(false);
     }
   }
 
@@ -353,29 +313,6 @@ export default function SettingsScreen() {
             </>
           )}
 
-          {/* Change PIN — admin only */}
-          {isAdmin && (
-            <>
-              <TouchableOpacity
-                style={s.settingRow}
-                onPress={() => setPinFormOpen(true)}
-                activeOpacity={0.7}
-              >
-                <View style={s.rowLeft}>
-                  <View style={[s.iconCircle, { backgroundColor: '#FFFBEB' }]}>
-                    <Text style={s.iconText}>🔑</Text>
-                  </View>
-                  <Text style={s.rowLabel}>{t('settings.storePin')}</Text>
-                </View>
-                <View style={s.rowRight}>
-                  <Text style={s.rowValue}>{t('settings.changePin')}</Text>
-                  <Text style={s.chevron}>›</Text>
-                </View>
-              </TouchableOpacity>
-              <View style={s.rowDivider} />
-            </>
-          )}
-
           {/* About */}
           <TouchableOpacity
             style={s.settingRow}
@@ -506,77 +443,6 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
-      </Modal>
-
-      {/* ── PIN Change Bottom Sheet ─────────────────────────────────────────── */}
-      <Modal
-        visible={pinFormOpen}
-        transparent
-        animationType="slide"
-        onRequestClose={() => { resetPinForm(); setPinFormOpen(false); }}
-      >
-        <View style={s.modalOverlay}>
-          <View style={s.bottomSheet}>
-            <View style={s.sheetHeader}>
-              <Text style={s.sheetTitle}>{t('settings.changePin')}</Text>
-            </View>
-            <View style={s.pinBody}>
-              <Text style={s.pinLabel}>{t('settings.currentPin')}</Text>
-              <TextInput
-                style={s.pinInput}
-                value={currentPin}
-                onChangeText={(text) => setCurrentPin(text.replace(/\D/g, '').slice(0, 4))}
-                placeholder="••••"
-                placeholderTextColor={D.SUBTLE}
-                keyboardType="number-pad"
-                secureTextEntry
-                maxLength={4}
-              />
-              <Text style={s.pinLabel}>{t('settings.newPin')}</Text>
-              <TextInput
-                style={s.pinInput}
-                value={newPin}
-                onChangeText={(text) => setNewPin(text.replace(/\D/g, '').slice(0, 4))}
-                placeholder="••••"
-                placeholderTextColor={D.SUBTLE}
-                keyboardType="number-pad"
-                secureTextEntry
-                maxLength={4}
-              />
-              <Text style={s.pinLabel}>{t('settings.confirmPin')}</Text>
-              <TextInput
-                style={s.pinInput}
-                value={confirmPin}
-                onChangeText={(text) => setConfirmPin(text.replace(/\D/g, '').slice(0, 4))}
-                placeholder="••••"
-                placeholderTextColor={D.SUBTLE}
-                keyboardType="number-pad"
-                secureTextEntry
-                maxLength={4}
-              />
-              <View style={s.pinActions}>
-                <TouchableOpacity
-                  style={[s.pinBtn, s.pinBtnCancel]}
-                  onPress={() => { resetPinForm(); setPinFormOpen(false); }}
-                  disabled={pinSaving}
-                >
-                  <Text style={s.pinBtnCancelText}>{t('common.cancel')}</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[s.pinBtn, s.pinBtnSave, pinSaving && s.dimmed]}
-                  onPress={handleSavePin}
-                  disabled={pinSaving}
-                >
-                  {pinSaving ? (
-                    <ActivityIndicator color="#fff" />
-                  ) : (
-                    <Text style={s.pinBtnSaveText}>{t('settings.save')}</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-          </View>
-        </View>
       </Modal>
 
     </SafeAreaView>
@@ -720,23 +586,4 @@ const s = StyleSheet.create({
   sheetCancelText: { fontSize: FS.md, fontWeight: FW.semibold, color: D.TEXT },
   langFlag:        { fontSize: 24 },
 
-  // ── pin modal body ────────────────────────────────────────────────────────────
-  pinBody:   { padding: SP.lg, paddingBottom: SP.xl },
-  pinLabel:  { fontSize: FS.sm, fontWeight: FW.semibold, color: D.SUBTLE, marginBottom: SP.xs, marginTop: SP.md },
-  pinInput:  {
-    borderWidth: 1.5,
-    borderColor: D.BORDER,
-    borderRadius: BR.md,
-    padding: SP.md,
-    fontSize: FS.lg,
-    color: D.TEXT,
-    backgroundColor: D.BACKGROUND,
-  },
-  pinActions:      { flexDirection: 'row', gap: SP.sm, marginTop: SP.lg },
-  pinBtn:          { flex: 1, height: 48, borderRadius: BR.md, justifyContent: 'center', alignItems: 'center' },
-  pinBtnCancel:    { backgroundColor: D.BACKGROUND, borderWidth: 1, borderColor: D.BORDER },
-  pinBtnCancelText: { fontSize: FS.md, fontWeight: FW.semibold, color: D.TEXT },
-  pinBtnSave:      { backgroundColor: D.PRIMARY },
-  pinBtnSaveText:  { fontSize: FS.md, fontWeight: FW.bold, color: '#fff' },
-  dimmed:          { opacity: 0.6 },
 });

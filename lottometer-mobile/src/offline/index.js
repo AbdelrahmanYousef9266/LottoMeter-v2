@@ -4,8 +4,6 @@ export {
   clearLocalDatabase,
 } from './seed';
 export {
-  setupOfflinePin,
-  verifyOfflinePin,
   saveOfflineSession,
   getOfflineSession,
   clearOfflineSession,
