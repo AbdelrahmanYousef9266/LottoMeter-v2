@@ -104,7 +104,7 @@ def auto_close_stale_business_days(store_id: int) -> None:
             shift.status = 'incomplete'
             shift.closed_at = datetime.now(timezone.utc)
 
-        day.status = 'completed' if closed_shifts else 'incomplete'
+        day.status = 'closed' if closed_shifts else 'auto_closed'
         day.closed_at = datetime.now(timezone.utc)
         day.total_sales = sum(float(s.tickets_total or 0) for s in closed_shifts)
         day.total_variance = sum(float(s.difference or 0) for s in closed_shifts)

@@ -83,13 +83,12 @@ function getDayStatusBadge(day) {
   if (day.status === 'open' && !isToday) {
     return { label: 'Incomplete',  color: '#D97706', bg: '#FEF9EE' };
   }
-  if (day.status === 'incomplete') {
+  if (day.status === 'auto_closed') {
     return { label: 'Incomplete',  color: '#D97706', bg: '#FEF9EE' };
   }
-  if (day.status === 'completed' || day.status === 'closed') {
+  if (day.status === 'closed') {
     const variance = getDayVariance(day);
-    const fallback = day.status === 'completed' ? 'Completed' : 'Closed';
-    if (variance === null) return { label: fallback,    color: '#16A34A', bg: '#F0FDF4' };
+    if (variance === null) return { label: 'Closed',    color: '#16A34A', bg: '#F0FDF4' };
     if (variance === 0)    return { label: 'Correct',   color: '#16A34A', bg: '#F0FDF4' };
     if (variance > 0)      return { label: 'Over',      color: '#D97706', bg: '#FEF9EE' };
     return                        { label: 'Short',     color: '#DC2626', bg: '#FEF2F2' };
