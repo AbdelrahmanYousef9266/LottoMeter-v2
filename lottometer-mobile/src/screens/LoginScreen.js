@@ -122,10 +122,15 @@ export default function LoginScreen() {
       setSessionContext(session.user_id, session.store_id);
       // Set store before user — RootNavigator triggers on user, store must be ready first
       setStore({
-        store_id: session.store_id,
+        store_id:   session.store_id,
         store_code: session.store_code,
         store_name: session.store_name,
-        scan_mode: session.scan_mode || 'hardware_scanner',
+        scan_mode:  session.scan_mode || 'hardware_scanner',
+        owner_name: session.owner_name,
+        address:    session.address,
+        city:       session.city,
+        state:      session.state,
+        zip_code:   session.zip_code,
       });
       setUser({
         user_id: session.user_id,

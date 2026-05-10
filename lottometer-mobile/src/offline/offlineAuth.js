@@ -10,14 +10,19 @@ export const saveOfflineSession = async (user, store, token) => {
   );
 
   const session = {
-    user_id: user.user_id,
-    username: user.username,
-    role: user.role,
-    store_id: store.store_id,
+    user_id:    user.user_id,
+    username:   user.username,
+    role:       user.role,
+    store_id:   store.store_id,
     store_code: store.store_code,
     store_name: store.store_name,
-    scan_mode: store.scan_mode || 'camera_single',
-    token: token || null,
+    scan_mode:  store.scan_mode || 'hardware_scanner',
+    owner_name: store.owner_name,
+    address:    store.address,
+    city:       store.city,
+    state:      store.state,
+    zip_code:   store.zip_code,
+    token:      token || null,
     expires_at: expiresAt.toISOString(),
   };
 

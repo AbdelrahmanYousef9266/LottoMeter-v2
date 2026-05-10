@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
+  Image,
   TouchableOpacity,
   StyleSheet,
   ActivityIndicator,
@@ -14,6 +15,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { useNavigation } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
 
+import { Ionicons } from '@expo/vector-icons';
 import NetInfo from '@react-native-community/netinfo';
 import { useAuth } from '../context/AuthContext';
 import { getDb } from '../offline/db';
@@ -440,20 +442,59 @@ export default function HomeScreen() {
     ? user?.username
     : activeShift ? `Employee #${activeShift.employee_id}` : null;
 
+  const storeAddress = [
+    store?.address,
+    store?.city,
+    store?.state,
+    store?.zip_code,
+  ].filter(Boolean).join(', ');
+
   return (
     <SafeAreaView style={s.safeArea}>
 
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <View style={s.header}>
-        <Text style={s.headerGreeting} numberOfLines={1}>
-          Hi, {user?.username}
-        </Text>
-        <Text style={s.headerStoreCode} numberOfLines={1}>
-          {store?.store_code || store?.code || ''}
-        </Text>
-        <View style={s.headerAvatar}>
-          <Text style={s.headerAvatarText}>{(user?.username || '?')[0].toUpperCase()}</Text>
+
+        {/* Top row: logo + store name + avatar */}
+        <View style={s.headerTopRow}>
+          <Image
+            source={require('../../assets/icon1.png')}
+            style={s.headerLogo}
+            resizeMode="contain"
+          />
+          <View style={s.headerStoreInfo}>
+            <View style={s.headerNameRow}>
+              <Text style={s.headerStoreName} numberOfLines={1}>
+                {store?.store_name}
+              </Text>
+              <View style={s.storeCodePill}>
+                <Text style={s.storeCodeText}>{store?.store_code}</Text>
+              </View>
+            </View>
+          </View>
+          <View style={s.headerAvatar}>
+            <Text style={s.headerAvatarText}>
+              {user?.username?.charAt(0)?.toUpperCase()}
+            </Text>
+          </View>
         </View>
+
+        {/* Bottom row: owner + address */}
+        <View style={s.headerBottomRow}>
+          {store?.owner_name && (
+            <View style={s.headerDetailRow}>
+              <Ionicons name="person-outline" size={11} color={D.SUBTLE} />
+              <Text style={s.headerDetailText}>{store.owner_name}</Text>
+            </View>
+          )}
+          {storeAddress ? (
+            <View style={s.headerDetailRow}>
+              <Ionicons name="location-outline" size={11} color={D.SUBTLE} />
+              <Text style={s.headerDetailText}>{storeAddress}</Text>
+            </View>
+          ) : null}
+        </View>
+
       </View>
 
       {/* ── Offline Banner ──────────────────────────────────────────────── */}
@@ -715,25 +756,48 @@ const s = StyleSheet.create({
 
   // header
   header: {
-    height: 56,
     backgroundColor: D.CARD,
     borderBottomWidth: 1,
     borderBottomColor: D.BORDER,
+    paddingHorizontal: SP.lg,
+    paddingTop: SP.md,
+    paddingBottom: SP.md,
+  },
+  headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: SP.lg,
+    gap: SP.sm,
   },
-  headerGreeting: { fontSize: FS.sm, fontWeight: FW.medium, color: D.SUBTLE, flex: 1 },
-  headerStoreCode: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    textAlign: 'center',
+  headerLogo: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    flexShrink: 0,
+  },
+  headerStoreInfo: {
+    flex: 1,
+  },
+  headerNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: SP.xs,
+    flexWrap: 'wrap',
+  },
+  headerStoreName: {
     fontSize: FS.lg,
     fontWeight: FW.bold,
     color: D.TEXT,
-    pointerEvents: 'none',
+  },
+  storeCodePill: {
+    backgroundColor: '#EFF6FF',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: BR.full,
+  },
+  storeCodeText: {
+    fontSize: FS.xs,
+    fontWeight: FW.semibold,
+    color: D.PRIMARY,
   },
   headerAvatar: {
     width: 36,
@@ -742,8 +806,27 @@ const s = StyleSheet.create({
     backgroundColor: D.PRIMARY,
     justifyContent: 'center',
     alignItems: 'center',
+    flexShrink: 0,
   },
-  headerAvatarText: { fontSize: FS.sm, fontWeight: FW.bold, color: '#fff' },
+  headerAvatarText: {
+    color: '#FFFFFF',
+    fontWeight: FW.bold,
+    fontSize: FS.md,
+  },
+  headerBottomRow: {
+    marginTop: SP.sm,
+    marginLeft: 48,
+    gap: 3,
+  },
+  headerDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  headerDetailText: {
+    fontSize: FS.xs,
+    color: D.SUBTLE,
+  },
 
   // offline
   offlineBanner:     { backgroundColor: D.WARNING, padding: 10, alignItems: 'center' },

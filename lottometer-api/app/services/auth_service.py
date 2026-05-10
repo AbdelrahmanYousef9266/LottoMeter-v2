@@ -136,10 +136,17 @@ def login(data: dict) -> dict:
             "store_id": store.store_id,
         },
         "store": {
-            "store_id": store.store_id,
+            "store_id":   store.store_id,
             "store_name": store.store_name,
             "store_code": store.store_code,
-            "scan_mode": store.scan_mode,
+            "scan_mode":  store.scan_mode,
+            "owner_name": store.owner_name,
+            "email":      store.email,
+            "phone":      store.phone,
+            "address":    store.address,
+            "city":       store.city,
+            "state":      store.state,
+            "zip_code":   store.zip_code,
         },
     }
 
