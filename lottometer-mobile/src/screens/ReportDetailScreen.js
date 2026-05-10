@@ -18,7 +18,7 @@ import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
 
 import { getShiftReport } from '../api/reports';
-import { formatLocalDateTime, formatLocalTime, formatBusinessDate } from '../utils/dateTime';
+import { formatLocalDateTime, formatLocalTime, formatBusinessDate, formatDuration } from '../utils/dateTime';
 import { useAuth } from '../context/AuthContext';
 import { getDb } from '../offline/db';
 
@@ -92,14 +92,6 @@ function getInitials(name) {
   return name.slice(0, 2).toUpperCase();
 }
 
-function shiftDuration(openedAt, closedAt) {
-  if (!openedAt) return '—';
-  const end = closedAt ? new Date(closedAt) : new Date();
-  const ms  = end - new Date(openedAt);
-  const h   = Math.floor(ms / 3_600_000);
-  const m   = Math.floor((ms % 3_600_000) / 60_000);
-  return `${h}h ${m}m`;
-}
 
 // ── screen ─────────────────────────────────────────────────────────────────────
 
@@ -462,7 +454,7 @@ export default function ReportDetailScreen({ route }) {
             </Text>
             {shift.opened_at && (
               <Text style={s.empDuration}>
-                Duration: {shiftDuration(shift.opened_at, shift.closed_at)}
+                Duration: {formatDuration(shift.opened_at, shift.closed_at)}
               </Text>
             )}
           </View>

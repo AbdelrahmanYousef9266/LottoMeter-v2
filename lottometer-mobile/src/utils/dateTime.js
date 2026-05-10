@@ -1,28 +1,33 @@
+// Normalize a server UTC string that may lack a timezone suffix.
+// The Flask API returns bare ISO strings like "2026-05-10T04:48:34.548042"
+// (no Z). JS Date treats those as local time, so we force UTC by appending Z.
+const toUtc = (s) =>
+  s && !s.endsWith('Z') && !s.includes('+') ? s + 'Z' : s;
+
 // Format a UTC timestamp to local time — e.g. "09:14 AM"
 export const formatLocalTime = (utcString) => {
   if (!utcString) return '—';
-  return new Date(utcString).toLocaleTimeString([], {
+  return new Date(toUtc(utcString)).toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
     hour12: true,
   });
 };
 
-// Format a UTC timestamp to local date — e.g. "Wednesday, April 30 2026"
+// Format a UTC timestamp to local date — e.g. "May 10, 2026"
 export const formatLocalDate = (utcString) => {
   if (!utcString) return '—';
-  return new Date(utcString).toLocaleDateString([], {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
+  return new Date(toUtc(utcString)).toLocaleDateString([], {
+    month: 'short',
     day: 'numeric',
+    year: 'numeric',
   });
 };
 
-// Format a UTC timestamp to local date + time — e.g. "Apr 30, 09:14 AM"
+// Format a UTC timestamp to local date + time — e.g. "May 10, 09:14 AM"
 export const formatLocalDateTime = (utcString) => {
   if (!utcString) return '—';
-  return new Date(utcString).toLocaleString([], {
+  return new Date(toUtc(utcString)).toLocaleString([], {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
@@ -42,6 +47,33 @@ export const formatBusinessDate = (dateString) => {
     month: 'long',
     day: 'numeric',
   });
+};
+
+// Format a duration between two UTC timestamps — e.g. "2h 15m", "45m", "3h"
+// If endUtc is omitted, uses the current time (active shift).
+export const formatDuration = (startUtc, endUtc) => {
+  if (!startUtc) return '—';
+
+  const addZ = (s) => {
+    if (!s) return s;
+    if (s.endsWith('Z') || s.includes('+')) return s;
+    return s + 'Z';
+  };
+
+  const start = new Date(addZ(startUtc));
+  const end   = endUtc ? new Date(addZ(endUtc)) : new Date();
+
+  if (isNaN(start.getTime())) return '—';
+  if (isNaN(end.getTime())) return '—';
+
+  const diffMs = end - start;
+  if (diffMs < 0) return '0m';
+
+  const hours   = Math.floor(diffMs / 3_600_000);
+  const minutes = Math.floor((diffMs % 3_600_000) / 60_000);
+  if (hours === 0) return `${minutes}m`;
+  if (minutes === 0) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
 };
 
 // Returns "Today", "Yesterday", or formatted date

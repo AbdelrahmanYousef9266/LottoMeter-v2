@@ -135,8 +135,6 @@ export default function HomeScreen() {
   }, []);
 
   const loadData = useCallback(async () => {
-    debugLocalDb().catch(() => {});
-
     // Read connectivity directly — avoids race where context isOffline
     // hasn't propagated yet when loadData first runs after navigation.
     const netState = await NetInfo.fetch();
