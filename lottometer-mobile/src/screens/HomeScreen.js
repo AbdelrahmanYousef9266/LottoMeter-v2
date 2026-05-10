@@ -455,45 +455,39 @@ export default function HomeScreen() {
       {/* ── Header ──────────────────────────────────────────────────────── */}
       <View style={s.header}>
 
-        {/* Top row: logo + store name + avatar */}
-        <View style={s.headerTopRow}>
-          <Image
-            source={require('../../assets/icon1.png')}
-            style={s.headerLogo}
-            resizeMode="contain"
-          />
-          <View style={s.headerStoreInfo}>
-            <View style={s.headerNameRow}>
-              <Text style={s.headerStoreName} numberOfLines={1}>
-                {store?.store_name}
-              </Text>
-              <View style={s.storeCodePill}>
-                <Text style={s.storeCodeText}>{store?.store_code}</Text>
-              </View>
+        {/* Store info — left */}
+        <View style={s.headerInfo}>
+          <Text style={s.headerStoreName} numberOfLines={1}>
+            {store?.store_name}
+          </Text>
+          <View style={s.headerBottomRow}>
+            <View style={s.headerDetailRow}>
+              <Ionicons name="storefront-outline" size={11} color={D.SUBTLE} />
+              <Text style={s.headerDetailText}>{store?.store_code}</Text>
             </View>
-          </View>
-          <View style={s.headerAvatar}>
-            <Text style={s.headerAvatarText}>
-              {user?.username?.charAt(0)?.toUpperCase()}
-            </Text>
+            {store?.owner_name && (
+              <View style={s.headerDetailRow}>
+                <Ionicons name="person-outline" size={11} color={D.SUBTLE} />
+                <Text style={s.headerDetailText}>{store.owner_name}</Text>
+              </View>
+            )}
+            {storeAddress ? (
+              <View style={s.headerDetailRow}>
+                <Ionicons name="location-outline" size={11} color={D.SUBTLE} />
+                <Text style={s.headerDetailText} numberOfLines={1}>
+                  {storeAddress}
+                </Text>
+              </View>
+            ) : null}
           </View>
         </View>
 
-        {/* Bottom row: owner + address */}
-        <View style={s.headerBottomRow}>
-          {store?.owner_name && (
-            <View style={s.headerDetailRow}>
-              <Ionicons name="person-outline" size={11} color={D.SUBTLE} />
-              <Text style={s.headerDetailText}>{store.owner_name}</Text>
-            </View>
-          )}
-          {storeAddress ? (
-            <View style={s.headerDetailRow}>
-              <Ionicons name="location-outline" size={11} color={D.SUBTLE} />
-              <Text style={s.headerDetailText}>{storeAddress}</Text>
-            </View>
-          ) : null}
-        </View>
+        {/* Logo — right */}
+        <Image
+          source={require('../../assets/icon1.png')}
+          style={s.headerLogo}
+          resizeMode="contain"
+        />
 
       </View>
 
@@ -762,60 +756,21 @@ const s = StyleSheet.create({
     paddingHorizontal: SP.lg,
     paddingTop: SP.md,
     paddingBottom: SP.md,
-  },
-  headerTopRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: SP.sm,
+    justifyContent: 'space-between',
   },
-  headerLogo: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    flexShrink: 0,
-  },
-  headerStoreInfo: {
+  headerInfo: {
     flex: 1,
-  },
-  headerNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: SP.xs,
-    flexWrap: 'wrap',
+    marginRight: SP.md,
   },
   headerStoreName: {
     fontSize: FS.lg,
     fontWeight: FW.bold,
     color: D.TEXT,
-  },
-  storeCodePill: {
-    backgroundColor: '#EFF6FF',
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: BR.full,
-  },
-  storeCodeText: {
-    fontSize: FS.xs,
-    fontWeight: FW.semibold,
-    color: D.PRIMARY,
-  },
-  headerAvatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: D.PRIMARY,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexShrink: 0,
-  },
-  headerAvatarText: {
-    color: '#FFFFFF',
-    fontWeight: FW.bold,
-    fontSize: FS.md,
+    marginBottom: 4,
   },
   headerBottomRow: {
-    marginTop: SP.sm,
-    marginLeft: 48,
     gap: 3,
   },
   headerDetailRow: {
@@ -826,6 +781,12 @@ const s = StyleSheet.create({
   headerDetailText: {
     fontSize: FS.xs,
     color: D.SUBTLE,
+  },
+  headerLogo: {
+    width: 56,
+    height: 56,
+    borderRadius: 12,
+    flexShrink: 0,
   },
 
   // offline
