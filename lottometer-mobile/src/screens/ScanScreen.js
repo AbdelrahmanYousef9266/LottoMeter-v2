@@ -20,6 +20,7 @@ import { getCurrentOpenShift, getShiftSummary } from '../api/shifts';
 import { getBooksSummary } from '../api/books';
 import { recordScan } from '../api/scan';
 import { listSlots } from '../api/slots';
+import CloseShiftModal from '../components/CloseShiftModal';
 import { useAuth } from '../context/AuthContext';
 import { useFeedback } from '../hooks/useFeedback';
 import { friendlyScanError } from '../utils/scanErrorMessages';
@@ -86,6 +87,7 @@ export default function ScanScreen() {
   const [busy, setBusy] = useState(false);
   const [lastScan, setLastScan] = useState(null);
   const [scanCount, setScanCount] = useState(0);
+  const [showCloseModal, setShowCloseModal] = useState(false);
 
   const inputRef = useRef(null);
   const lastScanRef = useRef({ barcode: null, timestamp: 0 });
@@ -138,7 +140,7 @@ export default function ScanScreen() {
           setOpenSubId(null);
           shiftUuidRef.current = null;
           setPendingCount(0);
-          setIsInitialized(true);
+          setIsInitialized(false);
           return;
         }
 
@@ -148,7 +150,6 @@ export default function ScanScreen() {
         setOpenSubId(localShift.server_id || localShift.id);
 
         const counts = await getOfflinePendingCounts(localShift.uuid, store?.store_id);
-        setIsInitialized(counts.is_initialized);
         setPendingCount(counts.is_initialized
           ? counts.books_pending_close
           : counts.books_pending_open
@@ -157,7 +158,9 @@ export default function ScanScreen() {
           `SELECT COUNT(*) as count FROM local_books WHERE store_id = ? AND is_active = 1 AND is_sold = 0`,
           [store?.store_id]
         );
-        setHasBooks((activeBookCount?.count ?? 0) > 0);
+        const totalActive = activeBookCount?.count ?? 0;
+        setHasBooks(totalActive > 0);
+        setIsInitialized(counts.is_initialized && totalActive > 0);
         return;
       }
 
@@ -168,7 +171,7 @@ export default function ScanScreen() {
         setShift(null);
         setOpenSubId(null);
         setPendingCount(0);
-        setIsInitialized(true);
+        setIsInitialized(false);
         return;
       }
       setShift(shift);
@@ -181,15 +184,18 @@ export default function ScanScreen() {
         // (no close scans exist yet), so the new-shift case is always correct.
         const pending = summary.books_pending_open ?? summary.books_pending_close ?? 0;
         setPendingCount(pending);
-        setIsInitialized(pending === 0);
+        try {
+          const booksSummary = await getBooksSummary();
+          const totalActive = booksSummary?.active ?? 0;
+          setHasBooks(totalActive > 0);
+          setIsInitialized(pending === 0 && totalActive > 0);
+        } catch {
+          setHasBooks(true);
+          setIsInitialized(false);
+        }
       } catch {
         setPendingCount(0);
-        setIsInitialized(true);
-      }
-      try {
-        const booksSummary = await getBooksSummary();
-        setHasBooks((booksSummary?.active ?? 0) > 0);
-      } catch {
+        setIsInitialized(false);
         setHasBooks(true);
       }
     } catch (err) {
@@ -317,6 +323,9 @@ export default function ScanScreen() {
             [{ text: t('common.ok') }]
           );
         }
+        if (pending_scans_remaining === 0 && scanType === 'close') {
+          setShowCloseModal(true);
+        }
       } catch (err) {
         fireFeedback('error');
         Alert.alert(t('scan.scanFailed'), friendlyScanError(err, t));
@@ -386,17 +395,6 @@ export default function ScanScreen() {
     const normalized = normalizeBarcode(barcode);
     if (!/^\d{13}$/.test(normalized)) return;
     submitScan(normalized);
-  }
-
-  function handleDonePress() {
-    Alert.alert(
-      t('scan.allClosesDoneTitle'),
-      t('scan.allClosesDoneBody'),
-      [
-        { text: t('scan.notYet'), style: 'cancel' },
-        { text: t('scan.yesClose'), onPress: () => navigation.navigate('Home') },
-      ]
-    );
   }
 
   function handleOpenCamera() {
@@ -658,7 +656,8 @@ export default function ScanScreen() {
                   maxLength={scanMode === 'hardware_scanner' ? 14 : 20}
                   returnKeyType="done"
                   onSubmitEditing={handleManualScan}
-                  autoFocus={scanMode === 'hardware_scanner'}
+                  autoFocus={false}
+                  showSoftInputOnFocus={false}
                   onBlur={() => {
                     if (scanMode === 'hardware_scanner') {
                       setTimeout(() => inputRef.current?.focus(), 100);
@@ -746,15 +745,19 @@ export default function ScanScreen() {
           )}
         </ScrollView>
 
-        {/* ── Done Button (fixed bottom) ──────────────────────────────────── */}
-        {isInitialized && scanType === 'close' && hasBooks && (
-          <View style={s.doneWrap}>
-            <TouchableOpacity style={s.doneBtn} onPress={handleDonePress}>
-              <Text style={s.doneBtnTxt}>{t('scan.done')}</Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </KeyboardAvoidingView>
+
+      {/* ── Close Shift Modal (auto-shown when all close scans done) ───────── */}
+      <CloseShiftModal
+        visible={showCloseModal}
+        shiftId={openSubId}
+        shiftUuid={shiftUuidRef.current}
+        onClose={() => setShowCloseModal(false)}
+        onSubmit={() => {
+          setShowCloseModal(false);
+          navigation.navigate('Home');
+        }}
+      />
 
       {/* ── Toast ──────────────────────────────────────────────────────────── */}
       {toastVisible && (
@@ -972,22 +975,6 @@ const s = StyleSheet.create({
   lastCardPos:    { fontSize: FS.sm, color: D.SUBTLE },
   lastCardSlot:   { fontSize: FS.xs, color: D.SUBTLE },
   sessionCount:   { fontSize: FS.xs, color: D.SUBTLE, textAlign: 'right' },
-
-  // done button (fixed bottom)
-  doneWrap: {
-    paddingHorizontal: SP.lg,
-    paddingTop: SP.sm,
-    paddingBottom: SP.lg,
-    backgroundColor: D.BACKGROUND,
-  },
-  doneBtn: {
-    height: 52,
-    backgroundColor: D.SUCCESS,
-    borderRadius: BR.full,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  doneBtnTxt: { fontSize: FS.md, fontWeight: FW.bold, color: '#fff' },
 
   // empty state
   emptyState: {

@@ -90,8 +90,11 @@ def auto_close_stale_business_days(store_id: int) -> None:
             business_day_id=day.id,
             store_id=store_id,
             status='open',
-            voided=False,
         ).all()
+
+        for shift in open_shifts:
+            shift.status = 'closed'
+            shift.closed_at = datetime.now(timezone.utc)
 
         closed_shifts = EmployeeShift.query.filter_by(
             business_day_id=day.id,
@@ -100,11 +103,7 @@ def auto_close_stale_business_days(store_id: int) -> None:
             voided=False,
         ).all()
 
-        for shift in open_shifts:
-            shift.status = 'incomplete'
-            shift.closed_at = datetime.now(timezone.utc)
-
-        day.status = 'closed' if closed_shifts else 'auto_closed'
+        day.status = 'closed' if (closed_shifts and any(s.tickets_total for s in closed_shifts)) else 'auto_closed'
         day.closed_at = datetime.now(timezone.utc)
         day.total_sales = sum(float(s.tickets_total or 0) for s in closed_shifts)
         day.total_variance = sum(float(s.difference or 0) for s in closed_shifts)
