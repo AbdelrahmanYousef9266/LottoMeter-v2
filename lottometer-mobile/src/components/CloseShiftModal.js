@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 
-import { getSubshiftSummary } from '../api/shifts';
+import { getSubshiftSummary, closeShift } from '../api/shifts';
 import { useFeedback } from '../hooks/useFeedback';
 import { useAuth } from '../context/AuthContext';
 import { getDb } from '../offline/db';
@@ -184,6 +184,12 @@ export default function CloseShiftModal({
 
   async function doClose() {
     setBusy(true);
+    console.error('[close] subshiftId:', subshiftId);
+    console.error('[close] shiftUuid:', shiftUuid);
+    console.error('[close] isOffline:', isOffline);
+    console.error('[close] payload:', JSON.stringify({
+      cash_in_hand: cashInHand, gross_sales: grossSales, cash_out: cashOut, cancels,
+    }));
     try {
       if (isOffline) {
         // OFFLINE PATH — close locally without going through onSubmit API call
@@ -203,6 +209,7 @@ export default function CloseShiftModal({
               );
           resolvedUuid = row?.uuid;
         }
+        console.error('[close] resolvedUuid:', resolvedUuid);
         const result = await closeOfflineShift({
           store_id: store?.store_id,
           shift_uuid: resolvedUuid,
@@ -213,19 +220,23 @@ export default function CloseShiftModal({
           cash_out: cashOut,
           cancels: cancels || '0',
         });
+        console.error('[close] result:', JSON.stringify(result));
         await onSubmit(result);
         fireFeedback('shift_closed');
       } else {
-        // ONLINE PATH — unchanged
-        await onSubmit({
+        // ONLINE PATH — call close API then notify parent
+        const res = await closeShift(subshiftId, {
           cash_in_hand: cashInHand,
           gross_sales: grossSales,
           cash_out: cashOut,
           cancels: cancels || '0',
         });
+        console.error('[close] result:', JSON.stringify(res));
+        await onSubmit(res);
         fireFeedback('shift_closed');
       }
     } catch (err) {
+      console.error('[close] error:', err?.message, JSON.stringify(err));
       fireFeedback('error');
     } finally {
       setBusy(false);

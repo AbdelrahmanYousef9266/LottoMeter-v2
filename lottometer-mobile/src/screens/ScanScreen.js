@@ -169,18 +169,22 @@ export default function ScanScreen() {
         return;
       }
 
-      // ONLINE PATH — unchanged
-      shiftUuidRef.current = null;
+      // ONLINE PATH
       const shift = await getCurrentOpenShift();
+      console.error('[loadShift] shift keys:', Object.keys(shift || {}));
+      console.error('[loadShift] shift.uuid:', shift?.uuid);
+      console.error('[loadShift] shift.id:', shift?.id);
       if (!shift) {
         setShift(null);
         setOpenSubId(null);
+        shiftUuidRef.current = null;
         setPendingCount(0);
         setIsInitialized(false);
         return;
       }
       setShift(shift);
       setOpenSubId(shift.id);
+      shiftUuidRef.current = shift.uuid || null;
 
       try {
         const summary = await getShiftSummary(shift.id);
@@ -833,8 +837,15 @@ export default function ScanScreen() {
         shiftUuid={shiftUuidRef.current}
         onCancel={() => setShowCloseModal(false)}
         onSubmit={async () => {
+          console.error('[close modal] shiftId:', openSubId);
+          console.error('[close modal] shiftUuid:', shiftUuidRef.current);
           setShowCloseModal(false);
-          navigation.navigate('Home');
+          setShift(null);
+          setOpenSubId(null);
+          setIsInitialized(false);
+          setPendingCount(0);
+          setScanType('open');
+          navigation.navigate('Home', { refresh: true });
         }}
       />
 
