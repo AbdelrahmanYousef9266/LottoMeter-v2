@@ -77,16 +77,18 @@ def _compute_shift_tickets_total(shift_id: int, store_id: int) -> Decimal:
 
 
 def _verify_all_active_books_have_close_scan(store_id: int, shift_id: int) -> None:
-    """BR-ES-04: every book that was opened in this shift must also have a close scan.
-
-    Books unassigned mid-shift have no open scan and are therefore not checked.
-    """
-    open_scans = ShiftBooks.query.filter_by(
-        shift_id=shift_id,
-        store_id=store_id,
-        scan_type="open",
-    ).all()
-    if not open_scans:
+    """BR-ES-04: every currently active book assigned to a slot must have a close scan."""
+    active_books = (
+        Book.query
+        .filter(
+            Book.store_id == store_id,
+            Book.is_active == True,
+            Book.is_sold == False,
+            Book.slot_id.isnot(None),
+        )
+        .all()
+    )
+    if not active_books:
         return
 
     closed_codes = {
@@ -95,7 +97,7 @@ def _verify_all_active_books_have_close_scan(store_id: int, shift_id: int) -> No
         .filter_by(shift_id=shift_id, store_id=store_id, scan_type="close")
         .all()
     }
-    missing = [s.static_code for s in open_scans if s.static_code not in closed_codes]
+    missing = [b.static_code for b in active_books if b.static_code not in closed_codes]
     if missing:
         raise BusinessRuleError(
             f"{len(missing)} book(s) still need close scans.",
@@ -269,15 +271,26 @@ def get_running_summary(store_id: int, shift_id: int) -> dict:
     extras = ShiftExtraSales.query.filter_by(shift_id=shift_id, store_id=store_id).all()
     whole_book_total = sum((e.value for e in extras), Decimal("0"))
 
-    active_books = _all_active_books(store_id)
+    # Only books assigned to a slot count toward pending open/close
+    active_books = (
+        Book.query
+        .filter(
+            Book.store_id == store_id,
+            Book.is_active == True,
+            Book.is_sold == False,
+            Book.slot_id.isnot(None),
+        )
+        .all()
+    )
     scan_rows   = ShiftBooks.query.filter_by(shift_id=shift_id, store_id=store_id).all()
     open_codes  = {s.static_code for s in scan_rows if s.scan_type == "open"}
     close_codes = {s.static_code for s in scan_rows if s.scan_type == "close"}
 
-    books_with_open  = sum(1 for b in active_books if b.static_code in open_codes)
-    books_with_close = sum(1 for b in active_books if b.static_code in close_codes)
-    books_pending_open  = len(active_books) - books_with_open
-    is_initialized = books_pending_open == 0
+    books_pending_open  = sum(1 for b in active_books if b.static_code not in open_codes)
+    books_pending_close = sum(1 for b in active_books if b.static_code not in close_codes)
+    books_with_open     = len(active_books) - books_pending_open
+    books_with_close    = len(active_books) - books_pending_close
+    is_initialized      = books_pending_open == 0
 
     return {
         "tickets_total":       str(tickets_total),
@@ -286,7 +299,7 @@ def get_running_summary(store_id: int, shift_id: int) -> dict:
         "books_with_open":     books_with_open,
         "books_with_close":    books_with_close,
         "books_pending_open":  books_pending_open,
-        "books_pending_close": len(active_books) - books_with_close,
+        "books_pending_close": books_pending_close,
         "is_initialized":      is_initialized,
     }
 

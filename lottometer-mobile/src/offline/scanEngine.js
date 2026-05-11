@@ -179,10 +179,11 @@ export const recordOfflineScan = async ({
      now]
   );
 
-  // Calculate pending counts for response
+  // Calculate pending counts for response — only slot-assigned active books count
   const pendingOpen = await db.getFirstAsync(
     `SELECT COUNT(*) as count FROM local_books lb
      WHERE lb.store_id = ? AND lb.is_active = 1 AND lb.is_sold = 0
+     AND lb.slot_id IS NOT NULL
      AND NOT EXISTS (
        SELECT 1 FROM local_shift_books sb
        WHERE sb.shift_uuid = ? AND sb.static_code = lb.static_code
@@ -194,6 +195,7 @@ export const recordOfflineScan = async ({
   const pendingClose = await db.getFirstAsync(
     `SELECT COUNT(*) as count FROM local_books lb
      WHERE lb.store_id = ? AND lb.is_active = 1 AND lb.is_sold = 0
+     AND lb.slot_id IS NOT NULL
      AND NOT EXISTS (
        SELECT 1 FROM local_shift_books sb
        WHERE sb.shift_uuid = ? AND sb.static_code = lb.static_code
@@ -238,6 +240,7 @@ export const getOfflinePendingCounts = async (shift_uuid, store_id) => {
   const pendingOpen = await db.getFirstAsync(
     `SELECT COUNT(*) as count FROM local_books lb
      WHERE lb.store_id = ? AND lb.is_active = 1 AND lb.is_sold = 0
+     AND lb.slot_id IS NOT NULL
      AND NOT EXISTS (
        SELECT 1 FROM local_shift_books sb
        WHERE sb.shift_uuid = ? AND sb.static_code = lb.static_code
@@ -249,6 +252,7 @@ export const getOfflinePendingCounts = async (shift_uuid, store_id) => {
   const pendingClose = await db.getFirstAsync(
     `SELECT COUNT(*) as count FROM local_books lb
      WHERE lb.store_id = ? AND lb.is_active = 1 AND lb.is_sold = 0
+     AND lb.slot_id IS NOT NULL
      AND NOT EXISTS (
        SELECT 1 FROM local_shift_books sb
        WHERE sb.shift_uuid = ? AND sb.static_code = lb.static_code

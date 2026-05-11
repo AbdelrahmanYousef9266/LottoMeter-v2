@@ -238,21 +238,20 @@ export default function ScanScreen() {
         const shiftUuid = shiftUuidRef.current;
         if (!shiftUuid) return;
         const pending = await db.getAllAsync(
-          `SELECT lsb.static_code, lb.ticket_price, lb.slot_id, ls.slot_name
-           FROM local_shift_books lsb
-           JOIN local_books lb ON lb.static_code = lsb.static_code
+          `SELECT lb.static_code, lb.ticket_price, lb.slot_id, ls.slot_name
+           FROM local_books lb
            LEFT JOIN local_slots ls ON ls.server_id = lb.slot_id
-           WHERE lsb.shift_uuid = ?
-           AND lsb.scan_type = 'open'
-           AND lsb.store_id = ?
+           WHERE lb.store_id = ?
+           AND lb.is_active = 1 AND lb.is_sold = 0
+           AND lb.slot_id IS NOT NULL
            AND NOT EXISTS (
-             SELECT 1 FROM local_shift_books cb
-             WHERE cb.shift_uuid = lsb.shift_uuid
-             AND cb.static_code = lsb.static_code
-             AND cb.scan_type = 'close'
+             SELECT 1 FROM local_shift_books sb
+             WHERE sb.shift_uuid = ?
+             AND sb.static_code = lb.static_code
+             AND sb.scan_type = ?
            )
            ORDER BY CAST(ls.slot_name AS INTEGER) ASC`,
-          [shiftUuid, store?.store_id]
+          [store?.store_id, shiftUuid, scanType]
         );
         setPendingSlots(pending);
       } else {
@@ -365,8 +364,8 @@ export default function ScanScreen() {
             [{ text: t('common.ok') }]
           );
         }
-        if (pending_scans_remaining === 0 && scanType === 'close') {
-          setShowCloseModal(true);
+        if (scanType === 'close' && pending_scans_remaining === 0 && is_initialized) {
+          setTimeout(() => setShowCloseModal(true), 500);
         }
       } catch (err) {
         fireFeedback('error');
