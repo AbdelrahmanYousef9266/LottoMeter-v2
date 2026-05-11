@@ -32,13 +32,32 @@ api.interceptors.request.use(async (config) => {
 
 api.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const status = error.response?.status;
+    const originalRequest = error.config;
+
+    if (status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      try {
+        const savedToken = await getToken();
+        if (savedToken) {
+          api.defaults.headers.common['Authorization'] = `Bearer ${savedToken}`;
+          originalRequest.headers['Authorization'] = `Bearer ${savedToken}`;
+          return api(originalRequest);
+        }
+      } catch (_) {
+        // silent
+      }
+      const { DeviceEventEmitter } = require('react-native');
+      DeviceEventEmitter.emit('auth:logout');
+    }
+
     const errorPayload = error.response?.data?.error || {
       code: 'NETWORK_ERROR',
       message: error.message || 'Network request failed.',
     };
     return Promise.reject({
-      status: error.response?.status,
+      status,
       ...errorPayload,
     });
   }

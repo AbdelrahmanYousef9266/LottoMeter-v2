@@ -115,3 +115,24 @@ def bulk_delete_slots():
         slot_ids=data["slot_ids"],
     )
     return jsonify(result), 200
+
+
+@slot_bp.route("/unassign-all", methods=["POST"])
+@admin_required
+def unassign_all_slots():
+    """Admin-only: remove the current book assignment from every slot in the store."""
+    from app.models.book import Book
+    from app.extensions import db
+
+    store_id = current_store_id()
+    books = Book.query.filter(
+        Book.store_id == store_id,
+        Book.is_active == True,
+        Book.is_sold == False,
+        Book.slot_id.isnot(None),
+    ).all()
+    count = len(books)
+    for book in books:
+        book.slot_id = None
+    db.session.commit()
+    return jsonify({"message": f"{count} books unassigned successfully", "unassigned_count": count}), 200

@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { DeviceEventEmitter } from 'react-native';
 import NetInfo from '@react-native-community/netinfo';
-import { getToken, saveToken } from '../api/client';
+import { getToken, saveToken, clearToken } from '../api/client';
 import { getMe } from '../api/auth';
 import { setSessionContext } from '../offline/sessionStore';
 import { startSyncListener, syncPendingItems } from '../offline/syncEngine';
@@ -86,6 +87,18 @@ export function AuthProvider({ children }) {
     return () => unsubscribe();
   }, [user]);
 
+  const handleLogout = async () => {
+    await clearToken().catch(() => {});
+    setUser(null);
+    setStore(null);
+  };
+
+  // Listen for auth:logout emitted by the 401 interceptor
+  useEffect(() => {
+    const sub = DeviceEventEmitter.addListener('auth:logout', handleLogout);
+    return () => sub.remove();
+  }, []);
+
   // Helper: pull scan_mode out of the store, with a safe default
   const scanMode = store?.scan_mode || 'hardware_scanner';
 
@@ -99,6 +112,7 @@ export function AuthProvider({ children }) {
         scanMode,
         loading,
         isOffline,
+        handleLogout,
       }}
     >
       {children}

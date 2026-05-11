@@ -78,6 +78,7 @@ export default function ScanScreen() {
   const [hasBooks, setHasBooks] = useState(true);
 
   const [slots, setSlots] = useState([]);
+  const [pendingSlots, setPendingSlots] = useState([]);
 
   const [barcode, setBarcode] = useState('');
   const initialScanType = route.params?.scanType ?? 'open';
@@ -230,6 +231,42 @@ export default function ScanScreen() {
     }, [loadSlots])
   );
 
+  const loadPendingSlots = useCallback(async () => {
+    try {
+      if (isOffline) {
+        const db = await getDb();
+        const shiftUuid = shiftUuidRef.current;
+        if (!shiftUuid) return;
+        const pending = await db.getAllAsync(
+          `SELECT lb.static_code, lb.ticket_price, lb.slot_id, ls.slot_name
+           FROM local_books lb
+           LEFT JOIN local_slots ls ON ls.server_id = lb.slot_id
+           WHERE lb.store_id = ? AND lb.is_active = 1 AND lb.is_sold = 0
+           AND NOT EXISTS (
+             SELECT 1 FROM local_shift_books sb
+             WHERE sb.shift_uuid = ?
+             AND sb.static_code = lb.static_code
+             AND sb.scan_type = ?
+           )
+           ORDER BY CAST(ls.slot_name AS INTEGER) ASC`,
+          [store?.store_id, shiftUuid, scanType]
+        );
+        setPendingSlots(pending);
+      } else {
+        if (!openSubId) return;
+        const summary = await getShiftSummary(openSubId);
+        setPendingSlots(summary?.pending_scans || []);
+      }
+    } catch {
+      // silent fail — pending list is display-only
+    }
+  }, [isOffline, store, openSubId, scanType]);
+
+  // Load pending slots whenever the active shift or scan type changes
+  useEffect(() => {
+    if (openSubId) loadPendingSlots();
+  }, [openSubId, scanType]);
+
   useEffect(() => {
     setScanType(isInitialized ? 'close' : 'open');
   }, [isInitialized]);
@@ -315,6 +352,8 @@ export default function ScanScreen() {
         }
         setBarcode('');
         setTimeout(() => inputRef.current?.focus(), 50);
+
+        loadPendingSlots();
 
         if (pending_scans_remaining === 0 && scanType === 'open') {
           Alert.alert(
@@ -688,6 +727,32 @@ export default function ScanScreen() {
                 </Text>
               )}
 
+              {/* ── Pending Slots ─────────────────────────────────────── */}
+              {pendingSlots.length > 0 && (
+                <View style={s.pendingSlotsContainer}>
+                  <View style={s.pendingSlotsHeader}>
+                    <Text style={s.pendingSlotsTitle}>
+                      {scanType === 'open' ? 'Needs Open Scan' : 'Needs Close Scan'}
+                    </Text>
+                    <View style={s.pendingCountBadge}>
+                      <Text style={s.pendingCountText}>{pendingSlots.length}</Text>
+                    </View>
+                  </View>
+                  <View style={s.slotsGrid}>
+                    {pendingSlots.map((slot, index) => (
+                      <View key={slot.static_code || index} style={s.slotChip}>
+                        <Text style={s.slotChipName}>
+                          {slot.slot_name || `Slot ${slot.slot_id}`}
+                        </Text>
+                        <Text style={s.slotChipPrice}>
+                          ${parseFloat(slot.ticket_price).toFixed(0)}
+                        </Text>
+                      </View>
+                    ))}
+                  </View>
+                </View>
+              )}
+
               {/* ── Last Scan Card ────────────────────────────────────── */}
               {lastScan && (
                 <View style={s.lastCard}>
@@ -1029,6 +1094,66 @@ const s = StyleSheet.create({
     color: '#64748B',
     fontSize: 13,
     textAlign: 'center',
+  },
+
+  // pending slots
+  pendingSlotsContainer: {
+    backgroundColor: D.CARD,
+    borderRadius: BR.md,
+    padding: SP.md,
+    marginTop: SP.sm,
+    marginBottom: SP.sm,
+    ...CARD_SHADOW,
+  },
+  pendingSlotsHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: SP.sm,
+  },
+  pendingSlotsTitle: {
+    fontSize: FS.sm,
+    fontWeight: FW.semibold,
+    color: D.TEXT,
+  },
+  pendingCountBadge: {
+    backgroundColor: D.ERROR,
+    borderRadius: BR.full,
+    minWidth: 22,
+    height: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 6,
+  },
+  pendingCountText: {
+    color: '#FFFFFF',
+    fontSize: FS.xs,
+    fontWeight: FW.bold,
+  },
+  slotsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: SP.xs,
+  },
+  slotChip: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    borderRadius: BR.sm,
+    paddingHorizontal: SP.sm,
+    paddingVertical: SP.xs,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  slotChipName: {
+    fontSize: FS.xs,
+    fontWeight: FW.bold,
+    color: D.ERROR,
+  },
+  slotChipPrice: {
+    fontSize: FS.xs,
+    color: D.ERROR,
   },
 
   // toast

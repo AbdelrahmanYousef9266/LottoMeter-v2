@@ -20,7 +20,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
-import { listSlots, createSlot, bulkDeleteSlots } from '../api/slots';
+import { listSlots, createSlot, bulkDeleteSlots, unassignAllBooks } from '../api/slots';
 import { getBooksSummary } from '../api/books';
 import ActionPopupMenu from '../components/ActionPopupMenu';
 import BulkCreateSlotsModal from '../components/BulkCreateSlotsModal';
@@ -213,6 +213,42 @@ export default function BooksScreen() {
     }
   }
 
+  const [unassigning, setUnassigning] = useState(false);
+
+  async function handleUnassignAll() {
+    const assignedCount = slots.filter((s) => s.current_book).length;
+    if (assignedCount === 0) {
+      Alert.alert('No Books Assigned', 'All slots are already empty.');
+      return;
+    }
+    Alert.alert(
+      'Unassign All Books',
+      `This will remove ${assignedCount} book${assignedCount !== 1 ? 's' : ''} from all slots. This cannot be undone.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Unassign All',
+          style: 'destructive',
+          onPress: async () => {
+            setUnassigning(true);
+            try {
+              const result = await unassignAllBooks();
+              Alert.alert(
+                'Done',
+                `${result.unassigned_count} book${result.unassigned_count !== 1 ? 's' : ''} unassigned.`
+              );
+              await loadSlots();
+            } catch (err) {
+              Alert.alert('Error', err.message || 'Could not unassign books. Try again.');
+            } finally {
+              setUnassigning(false);
+            }
+          },
+        },
+      ]
+    );
+  }
+
   // ── derived ────────────────────────────────────────────────────────────────
   const emptySlotCount = slots.filter((s) => !s.current_book).length;
 
@@ -370,6 +406,28 @@ export default function BooksScreen() {
               </Text>
             </View>
             <Ionicons name="chevron-forward" size={20} color="rgba(255,255,255,0.8)" />
+          </TouchableOpacity>
+        )}
+
+        {/* ── Unassign All Books (admin only, only when slots have books) ─ */}
+        {isAdmin && !selectMode && slots.some((s) => s.current_book) && (
+          <TouchableOpacity
+            style={[s.unassignAllCard, unassigning && s.dimmed]}
+            onPress={handleUnassignAll}
+            activeOpacity={0.85}
+            disabled={unassigning}
+          >
+            <View style={s.unassignAllIconWrap}>
+              {unassigning ? (
+                <ActivityIndicator color={D.ERROR} />
+              ) : (
+                <Ionicons name="trash-outline" size={22} color={D.ERROR} />
+              )}
+            </View>
+            <View style={s.bulkAssignBody}>
+              <Text style={s.unassignAllTitle}>Unassign All Books</Text>
+              <Text style={s.unassignAllSub}>Remove all books from their slots</Text>
+            </View>
           </TouchableOpacity>
         )}
 
@@ -808,6 +866,32 @@ const s = StyleSheet.create({
   },
   bulkSlotsTitle: { fontSize: FS.lg, fontWeight: FW.bold, color: '#FFFFFF' },
   bulkSlotsSub:   { fontSize: FS.sm, color: 'rgba(255,255,255,0.8)', marginTop: 2 },
+
+  // ── unassign all card
+  unassignAllCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: D.CARD,
+    borderRadius: BR.lg,
+    marginHorizontal: SP.lg,
+    marginBottom: SP.md,
+    padding: SP.lg,
+    gap: SP.md,
+    borderWidth: 1.5,
+    borderColor: '#FECACA',
+    ...CARD_SHADOW,
+  },
+  unassignAllIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FEF2F2',
+    justifyContent: 'center',
+    alignItems: 'center',
+    flexShrink: 0,
+  },
+  unassignAllTitle: { fontSize: FS.md, fontWeight: FW.semibold, color: D.ERROR },
+  unassignAllSub:   { fontSize: FS.sm, color: D.SUBTLE, marginTop: 2 },
 
   // ── slots section label
   slotsLabel: {

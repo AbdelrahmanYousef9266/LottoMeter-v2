@@ -25,7 +25,7 @@ services:
       DATABASE_URL: postgresql://lottometer:lottometer_dev_pw@db:5432/lottometer
       SECRET_KEY: dev-secret-change-me
       JWT_SECRET_KEY: jwt-dev-secret-change-me
-      JWT_ACCESS_TOKEN_EXPIRES_HOURS: 8
+      JWT_ACCESS_TOKEN_EXPIRES_HOURS: 168
     ports:
       - "5000:5000"
     # Run migrations on startup, then start gunicorn

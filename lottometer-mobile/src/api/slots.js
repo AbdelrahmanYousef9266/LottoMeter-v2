@@ -46,3 +46,8 @@ export async function bulkDeleteSlots(slotIds) {
   const { data } = await api.post('/slots/bulk-delete', { slot_ids: slotIds });
   return data;
 }
+
+export async function unassignAllBooks() {
+  const { data } = await api.post('/slots/unassign-all');
+  return data;
+}

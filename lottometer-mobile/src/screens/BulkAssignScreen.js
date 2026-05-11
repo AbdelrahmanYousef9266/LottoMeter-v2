@@ -34,6 +34,7 @@ export default function BulkAssignScreen() {
   const [busy, setBusy] = useState(false);
   const [assignedCount, setAssignedCount] = useState(0);
   const [skippedCount, setSkippedCount] = useState(0);
+  const [skippedSlotIds, setSkippedSlotIds] = useState(new Set());
   const [allDone, setAllDone] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [lastAssigned, setLastAssigned] = useState(null);
@@ -156,25 +157,72 @@ export default function BulkAssignScreen() {
     if (busyRef.current) return;
     setBusyBoth(true);
     try {
+      // Mark current slot as skipped
+      const newSkipped = new Set(skippedSlotIds);
+      if (currentSlot) {
+        newSkipped.add(currentSlot.slot_id);
+        setSkippedSlotIds(newSkipped);
+      }
+
       const data = await listSlots();
       const slots = data.slots || data;
-      const emptySlots = slots.filter(
-        (s) => !s.current_book && !s.deleted_at && s.slot_id !== currentSlot?.slot_id
+      const sorted = [...slots].sort((a, b) => {
+        const numA = parseInt(a.slot_name, 10) || 0;
+        const numB = parseInt(b.slot_name, 10) || 0;
+        return numA - numB;
+      });
+
+      // Next empty slot that hasn't been visited yet
+      const nextSlot = sorted.find(
+        (s) =>
+          !s.current_book &&
+          !s.deleted_at &&
+          s.slot_id !== currentSlot?.slot_id &&
+          !newSkipped.has(s.slot_id)
       );
-      if (emptySlots.length > 0) {
-        setCurrentSlot(emptySlots[0]);
+
+      if (nextSlot) {
+        setCurrentSlot(nextSlot);
         setBarcode('');
         setSkippedCount((c) => c + 1);
         if (!useCamera) setTimeout(() => inputRef.current?.focus(), 100);
       } else {
-        setAllDone(true);
+        // No unvisited empty slots — check if skipped slots still need books
+        const skippedRemaining = sorted.filter(
+          (s) => !s.current_book && !s.deleted_at && newSkipped.has(s.slot_id)
+        );
+
+        if (skippedRemaining.length > 0) {
+          Alert.alert(
+            'Skipped Slots',
+            `You have ${skippedRemaining.length} skipped slot(s). Go back to assign them?`,
+            [
+              {
+                text: 'Skip All',
+                style: 'cancel',
+                onPress: () => setAllDone(true),
+              },
+              {
+                text: 'Go Back',
+                onPress: () => {
+                  setSkippedSlotIds(new Set());
+                  setCurrentSlot(skippedRemaining[0]);
+                  setBarcode('');
+                  if (!useCamera) setTimeout(() => inputRef.current?.focus(), 100);
+                },
+              },
+            ]
+          );
+        } else {
+          setAllDone(true);
+        }
       }
     } catch (err) {
       Alert.alert(t('bulkAssign.loadFailedTitle'), t('bulkAssign.loadFailedBody'));
     } finally {
       setBusyBoth(false);
     }
-  }, [currentSlot, t, useCamera]);
+  }, [currentSlot, skippedSlotIds, t, useCamera]);
 
   // ── Loading ──────────────────────────────────────────────────────────────────
 

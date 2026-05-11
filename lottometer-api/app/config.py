@@ -21,7 +21,7 @@ class Config:
     # JWT
     JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY", "jwt-dev-secret-change-me")
     JWT_ACCESS_TOKEN_EXPIRES = timedelta(
-        hours=int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES_HOURS", 8))
+        hours=int(os.getenv("JWT_ACCESS_TOKEN_EXPIRES_HOURS", 168))  # 7 days
     )
 
     # JSON output
