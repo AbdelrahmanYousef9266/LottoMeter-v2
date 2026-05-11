@@ -66,7 +66,7 @@ function formatShortDate(dateStr) {
 
 export default function BooksScreen() {
   const { t } = useTranslation();
-  const { user } = useAuth();
+  const { user, store } = useAuth();
   const navigation = useNavigation();
   const isAdmin = user?.role === 'admin';
 

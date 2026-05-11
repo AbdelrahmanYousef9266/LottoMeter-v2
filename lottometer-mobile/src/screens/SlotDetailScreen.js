@@ -22,12 +22,13 @@ import { getSlot, assignBook, unassignBook, deleteSlot } from '../api/slots';
 import ReturnBookModal from '../components/ReturnBookModal';
 import { useFeedback } from '../hooks/useFeedback';
 import { normalizeBarcode } from '../utils/barcodeUtils';
+import { getDb } from '../offline/db';
 
 export default function SlotDetailScreen({ route }) {
   const { t } = useTranslation();
   const { slotId, autoAssign } = route.params;
   const navigation = useNavigation();
-  const { user, scanMode } = useAuth();
+  const { user, store, scanMode } = useAuth();
   const isAdmin = user?.role === 'admin';
 
   const fireFeedback = useFeedback();
@@ -84,10 +85,17 @@ export default function SlotDetailScreen({ route }) {
     setBusy(true);
     const slotName = slot?.slot_name;
     try {
-      await assignBook(slotId, {
+      const result = await assignBook(slotId, {
         barcode,
         confirm_reassign: confirmReassign,
       });
+      try {
+        const db = await getDb();
+        await db.runAsync(
+          `UPDATE local_books SET is_active = 1, slot_id = ? WHERE static_code = ? AND store_id = ?`,
+          [slotId, result.book.static_code, store?.store_id]
+        );
+      } catch {}
       fireFeedback('success');
       setLastAssigned(slotName);
       setTimeout(() => setLastAssigned(null), 1500);
@@ -189,8 +197,16 @@ export default function SlotDetailScreen({ route }) {
   async function handleUnassign() {
     if (!slot?.current_book) return;
     setBusy(true);
+    const staticCode = slot.current_book.static_code;
     try {
       await unassignBook(slot.current_book.book_id);
+      try {
+        const db = await getDb();
+        await db.runAsync(
+          `UPDATE local_books SET is_active = 0, slot_id = NULL WHERE static_code = ? AND store_id = ?`,
+          [staticCode, store?.store_id]
+        );
+      } catch {}
       await loadSlot();
     } catch (err) {
       Alert.alert(err.code || t('slotDetail.couldNotUnassign'), err.message || t('common.tryAgain'));

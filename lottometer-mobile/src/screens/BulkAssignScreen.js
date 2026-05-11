@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { listSlots, assignBook } from '../api/slots';
 import { useAuth } from '../context/AuthContext';
+import { getDb } from '../offline/db';
 import { useFeedback } from '../hooks/useFeedback';
 import { friendlyScanError } from '../utils/scanErrorMessages';
 import { normalizeBarcode } from '../utils/barcodeUtils';
@@ -22,7 +23,7 @@ import { normalizeBarcode } from '../utils/barcodeUtils';
 export default function BulkAssignScreen() {
   const { t } = useTranslation();
   const navigation = useNavigation();
-  const { scanMode } = useAuth();
+  const { scanMode, store } = useAuth();
   const fireFeedback = useFeedback();
 
   // Camera mode for any camera-based scan_mode; hardware_scanner users keep text input.
@@ -95,6 +96,14 @@ export default function BulkAssignScreen() {
           barcode: normalized,
           confirm_reassign: confirmReassign,
         });
+
+        try {
+          const db = await getDb();
+          await db.runAsync(
+            `UPDATE local_books SET is_active = 1, slot_id = ? WHERE static_code = ? AND store_id = ?`,
+            [currentSlot.slot_id, result.book.static_code, store?.store_id]
+          );
+        } catch {}
 
         fireFeedback('success');
         setAssignedCount((c) => c + 1);
