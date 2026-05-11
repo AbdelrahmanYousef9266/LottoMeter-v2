@@ -25,3 +25,22 @@ class ChangeScanModeSchema(Schema):
             ["camera_single", "camera_continuous", "hardware_scanner"]
         ),
     )
+
+
+class SetStorePinSchema(Schema):
+    """Validates PUT /api/store/pin request body."""
+
+    pin = fields.Str(
+        required=True,
+        validate=validate.Regexp(r"^\d{4,6}$", error="PIN must be 4-6 digits."),
+    )
+    confirm_pin = fields.Str(
+        required=True,
+        validate=validate.Regexp(r"^\d{4,6}$", error="PIN must be 4-6 digits."),
+    )
+
+
+class VerifyStorePinSchema(Schema):
+    """Validates POST /api/store/verify-pin request body."""
+
+    pin = fields.Str(required=True)

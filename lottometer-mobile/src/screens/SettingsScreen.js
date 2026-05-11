@@ -8,6 +8,9 @@ import {
   ActivityIndicator,
   Switch,
   Modal,
+  TextInput,
+  KeyboardAvoidingView,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ScrollView } from 'react-native';
@@ -15,7 +18,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigation } from '@react-navigation/native';
 
 import { logout } from '../api/auth';
-import { changeScanMode } from '../api/store';
+import { changeScanMode, setStorePin } from '../api/store';
 import { useAuth } from '../context/AuthContext';
 import { setStoredLanguage } from '../i18n';
 import { syncRTL } from '../utils/rtl';
@@ -103,6 +106,34 @@ export default function SettingsScreen() {
   const [scanModeSaving, setScanModeSaving] = useState(false);
   const [scanModePickerOpen, setScanModePickerOpen] = useState(false);
   const [langPickerOpen, setLangPickerOpen] = useState(false);
+
+  const [pinModalOpen, setPinModalOpen] = useState(false);
+  const [newPin, setNewPin] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [pinSaving, setPinSaving] = useState(false);
+
+  async function handleSetStorePin() {
+    if (!/^\d{4,6}$/.test(newPin)) {
+      Alert.alert('Invalid PIN', 'PIN must be 4-6 digits.');
+      return;
+    }
+    if (newPin !== confirmPin) {
+      Alert.alert('PIN Mismatch', 'PINs do not match.');
+      return;
+    }
+    setPinSaving(true);
+    try {
+      await setStorePin({ pin: newPin, confirm_pin: confirmPin });
+      setPinModalOpen(false);
+      setNewPin('');
+      setConfirmPin('');
+      Alert.alert('Done', 'Store PIN updated successfully.');
+    } catch (err) {
+      Alert.alert(err.code || 'Error', err.message || 'Could not update store PIN.');
+    } finally {
+      setPinSaving(false);
+    }
+  }
 
   function confirmLogout() {
     Alert.alert(
@@ -310,6 +341,29 @@ export default function SettingsScreen() {
                 </View>
               </TouchableOpacity>
               <View style={s.rowDivider} />
+
+              {/* Store PIN — admin only */}
+              <TouchableOpacity
+                style={s.settingRow}
+                onPress={() => {
+                  setNewPin('');
+                  setConfirmPin('');
+                  setPinModalOpen(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <View style={s.rowLeft}>
+                  <View style={[s.iconCircle, { backgroundColor: '#FEF9EE' }]}>
+                    <Text style={s.iconText}>🔒</Text>
+                  </View>
+                  <Text style={s.rowLabel}>Store PIN</Text>
+                </View>
+                <View style={s.rowRight}>
+                  <Text style={s.rowValue}>4-6 digits</Text>
+                  <Text style={s.chevron}>›</Text>
+                </View>
+              </TouchableOpacity>
+              <View style={s.rowDivider} />
             </>
           )}
 
@@ -397,6 +451,69 @@ export default function SettingsScreen() {
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
+      </Modal>
+
+      {/* ── Set Store PIN Modal ─────────────────────────────────────────────── */}
+      <Modal
+        visible={pinModalOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setPinModalOpen(false)}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={s.modalOverlay}
+        >
+          <View style={s.bottomSheet}>
+            <View style={s.sheetHeader}>
+              <Text style={s.sheetTitle}>Set Store PIN</Text>
+            </View>
+            <View style={{ padding: SP.lg }}>
+              <Text style={s.pinLabel}>New PIN (4-6 digits)</Text>
+              <TextInput
+                style={s.pinInput}
+                value={newPin}
+                onChangeText={setNewPin}
+                keyboardType="numeric"
+                secureTextEntry
+                maxLength={6}
+                placeholder="Enter PIN"
+                placeholderTextColor={D.SUBTLE}
+                autoFocus
+              />
+              <Text style={[s.pinLabel, { marginTop: SP.md }]}>Confirm PIN</Text>
+              <TextInput
+                style={s.pinInput}
+                value={confirmPin}
+                onChangeText={setConfirmPin}
+                keyboardType="numeric"
+                secureTextEntry
+                maxLength={6}
+                placeholder="Confirm PIN"
+                placeholderTextColor={D.SUBTLE}
+              />
+              <View style={s.pinActions}>
+                <TouchableOpacity
+                  style={s.pinCancelBtn}
+                  onPress={() => setPinModalOpen(false)}
+                  disabled={pinSaving}
+                >
+                  <Text style={s.pinCancelText}>Cancel</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[s.pinSaveBtn, pinSaving && { opacity: 0.6 }]}
+                  onPress={handleSetStorePin}
+                  disabled={pinSaving}
+                >
+                  {pinSaving
+                    ? <ActivityIndicator color="#fff" />
+                    : <Text style={s.pinSaveText}>Save PIN</Text>
+                  }
+                </TouchableOpacity>
+              </View>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
       </Modal>
 
       {/* ── Language Bottom Sheet ───────────────────────────────────────────── */}
@@ -585,5 +702,36 @@ const s = StyleSheet.create({
   },
   sheetCancelText: { fontSize: FS.md, fontWeight: FW.semibold, color: D.TEXT },
   langFlag:        { fontSize: 24 },
+
+  // ── store PIN modal ───────────────────────────────────────────────────────────
+  pinLabel: { fontSize: FS.sm, fontWeight: FW.semibold, color: D.TEXT, marginBottom: SP.xs },
+  pinInput: {
+    borderWidth: 1.5,
+    borderColor: D.BORDER,
+    borderRadius: BR.md,
+    padding: SP.md,
+    fontSize: FS.md,
+    color: D.TEXT,
+    backgroundColor: D.BACKGROUND,
+  },
+  pinActions: { flexDirection: 'row', gap: SP.md, marginTop: SP.xl },
+  pinCancelBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: BR.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+  },
+  pinCancelText: { color: D.TEXT, fontWeight: FW.semibold, fontSize: FS.md },
+  pinSaveBtn: {
+    flex: 1,
+    height: 48,
+    borderRadius: BR.md,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: D.PRIMARY,
+  },
+  pinSaveText: { color: '#fff', fontWeight: FW.semibold, fontSize: FS.md },
 
 });

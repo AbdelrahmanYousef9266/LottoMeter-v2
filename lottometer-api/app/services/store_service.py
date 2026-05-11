@@ -5,7 +5,7 @@ import bcrypt
 
 from app.extensions import db
 from app.models.store import Store
-from app.errors import NotFoundError, InvalidPin, ValidationError
+from app.errors import NotFoundError, InvalidPin, ValidationError, AuthorizationError
 
 _EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
@@ -16,6 +16,27 @@ def _hash_pin(pin: str) -> str:
 
 def _check_pin(pin: str, hashed: str) -> bool:
     return bcrypt.checkpw(pin.encode("utf-8"), hashed.encode("utf-8"))
+
+
+def set_store_pin(store_id: int, pin: str, confirm_pin: str) -> dict:
+    """Admin-only: set (or reset) the store PIN. No current-PIN required."""
+    if pin != confirm_pin:
+        raise ValidationError("PINs do not match.", code="PIN_MISMATCH")
+    store = Store.query.filter_by(store_id=store_id).first()
+    if store is None:
+        raise NotFoundError("Store not found.", code="STORE_NOT_FOUND")
+    store.store_pin_hash = _hash_pin(pin)
+    db.session.commit()
+    return {"message": "Store PIN set successfully."}
+
+
+def verify_store_pin(store_id: int, pin: str) -> None:
+    """Raise InvalidPin (401) if pin does not match the stored hash."""
+    store = Store.query.filter_by(store_id=store_id).first()
+    if store is None:
+        raise NotFoundError("Store not found.", code="STORE_NOT_FOUND")
+    if not store.store_pin_hash or not _check_pin(pin, store.store_pin_hash):
+        raise InvalidPin("Incorrect store PIN.")
 
 
 def change_pin(store_id: int, current_pin: str, new_pin: str) -> dict:

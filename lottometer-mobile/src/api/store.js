@@ -11,3 +11,13 @@ export async function changeScanMode(scanMode) {
   });
   return data;
 }
+
+export async function setStorePin({ pin, confirm_pin }) {
+  const { data } = await api.put('/store/pin', { pin, confirm_pin });
+  return data; // { message }
+}
+
+export async function verifyStorePin({ pin }) {
+  const { data } = await api.post('/store/verify-pin', { pin });
+  return data; // { valid: true }
+}

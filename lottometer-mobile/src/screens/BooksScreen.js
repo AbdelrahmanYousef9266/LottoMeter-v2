@@ -22,7 +22,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { listSlots, createSlot, bulkDeleteSlots, unassignAllBooks } from '../api/slots';
 import { getBooksSummary, markBookSold } from '../api/books';
-import { verifyAdminPin } from '../api/auth';
+import { verifyStorePin } from '../api/store';
 import ActionPopupMenu from '../components/ActionPopupMenu';
 import BulkCreateSlotsModal from '../components/BulkCreateSlotsModal';
 import { getDb } from '../offline/db';
@@ -232,13 +232,13 @@ export default function BooksScreen() {
 
   const handleConfirmMarkSold = async () => {
     if (!pinInput.trim()) return;
+    if (!/^\d{4,6}$/.test(pinInput)) {
+      Alert.alert('Invalid PIN', 'PIN must be 4-6 digits.');
+      return;
+    }
     setPinBusy(true);
     try {
-      await verifyAdminPin({
-        store_code: store?.store_code,
-        username: user?.username,
-        password: pinInput,
-      });
+      await verifyStorePin({ pin: pinInput });
       await markBookSold(pendingMarkSold.book_id);
       const db = await getDb();
       await db.runAsync(
@@ -251,8 +251,8 @@ export default function BooksScreen() {
       Alert.alert('Done', 'Book marked as sold successfully.');
       await Promise.all([loadSlots(), loadSummary()]);
     } catch (err) {
-      if (err?.response?.status === 401 || err?.code === 'INVALID_CREDENTIALS') {
-        Alert.alert('Wrong Password', 'Incorrect admin password.');
+      if (err?.response?.status === 401) {
+        Alert.alert('Wrong PIN', 'Incorrect store PIN.');
       } else {
         Alert.alert('Error', err.message || 'Could not mark book as sold.');
       }
@@ -579,14 +579,16 @@ export default function BooksScreen() {
           style={s.modalBackdrop}
         >
           <View style={s.modalCard}>
-            <Text style={s.modalTitle}>Admin Verification</Text>
-            <Text style={s.label}>Enter admin password to mark book as sold</Text>
+            <Text style={s.modalTitle}>Store PIN Required</Text>
+            <Text style={s.label}>Enter 4-6 digit store PIN</Text>
             <TextInput
               style={s.input}
               value={pinInput}
               onChangeText={setPinInput}
+              keyboardType="numeric"
               secureTextEntry
-              placeholder="Enter password"
+              maxLength={6}
+              placeholder="Enter PIN"
               placeholderTextColor={D.SUBTLE}
               autoFocus
             />

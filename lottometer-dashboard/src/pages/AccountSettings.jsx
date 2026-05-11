@@ -9,6 +9,7 @@ import {
   updateStoreSettings,
   changePassword,
   getSubscription,
+  setStorePin,
 } from '../api/account'
 
 const TABS = [
@@ -312,6 +313,72 @@ function SettingsSection({ showToast }) {
   )
 }
 
+// ─── Section 3a: Store PIN ────────────────────────────────────────────────────
+
+function StorePinSection({ showToast }) {
+  const [form, setForm] = useState({ pin: '', confirm_pin: '' })
+  const [errors, setErrors] = useState({})
+  const [saving, setSaving] = useState(false)
+
+  const set = (field) => (e) => {
+    const val = e.target.value.replace(/\D/g, '').slice(0, 6)
+    setForm(f => ({ ...f, [field]: val }))
+    setErrors(er => ({ ...er, [field]: null }))
+  }
+
+  const handleSave = async () => {
+    const errs = {}
+    if (!/^\d{4,6}$/.test(form.pin))         errs.pin = 'PIN must be 4-6 digits.'
+    if (!form.confirm_pin)                    errs.confirm_pin = 'Please confirm your PIN.'
+    else if (form.pin !== form.confirm_pin)   errs.confirm_pin = 'PINs do not match.'
+    if (Object.keys(errs).length) { setErrors(errs); return }
+
+    setSaving(true)
+    try {
+      await setStorePin(form)
+      showToast('Store PIN updated successfully.', 'success')
+      setForm({ pin: '', confirm_pin: '' })
+      setErrors({})
+    } catch (err) {
+      const code = err.response?.data?.error?.code
+      const msg  = err.response?.data?.error?.message || 'Failed to update store PIN.'
+      if (code === 'PIN_MISMATCH') setErrors({ confirm_pin: 'PINs do not match.' })
+      else showToast(msg, 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <SectionCard title="Store PIN" onSave={handleSave} saving={saving} saveLabel="Set Store PIN">
+      <p style={{ fontSize: 13, color: 'var(--text-secondary)', marginBottom: 16, lineHeight: 1.5 }}>
+        Used to authorize sensitive actions in the mobile app (e.g. marking a book as sold).
+        Must be 4-6 digits.
+      </p>
+      <Input
+        label="New PIN"
+        type="password"
+        inputMode="numeric"
+        maxLength={6}
+        value={form.pin}
+        onChange={set('pin')}
+        placeholder="e.g. 1234"
+        error={errors.pin}
+      />
+      <Input
+        label="Confirm PIN"
+        type="password"
+        inputMode="numeric"
+        maxLength={6}
+        value={form.confirm_pin}
+        onChange={set('confirm_pin')}
+        placeholder="Repeat PIN"
+        error={errors.confirm_pin}
+      />
+    </SectionCard>
+  )
+}
+
 // ─── Section 3: Security ─────────────────────────────────────────────────────
 
 function SecuritySection({ showToast }) {
@@ -502,7 +569,12 @@ export default function AccountSettings() {
         <div>
           {activeTab === 'profile'      && <ProfileSection      showToast={showToast} />}
           {activeTab === 'settings'     && <SettingsSection     showToast={showToast} />}
-          {activeTab === 'security'     && <SecuritySection     showToast={showToast} />}
+          {activeTab === 'security'     && (
+            <>
+              <SecuritySection showToast={showToast} />
+              <StorePinSection showToast={showToast} />
+            </>
+          )}
           {activeTab === 'subscription' && <SubscriptionSection />}
         </div>
       </div>

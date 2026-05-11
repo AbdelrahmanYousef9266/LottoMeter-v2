@@ -4,7 +4,7 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from marshmallow import ValidationError as MarshmallowValidationError
 
-from app.schemas.store_schema import ChangePinSchema, ChangeScanModeSchema
+from app.schemas.store_schema import ChangePinSchema, ChangeScanModeSchema, SetStorePinSchema, VerifyStorePinSchema
 from app.services import store_service
 from app.services.store_settings_service import get_settings, update_settings, serialize_settings
 from app.errors import ValidationError
@@ -12,6 +12,36 @@ from app.auth_helpers import admin_required, current_store_id
 
 
 store_bp = Blueprint("store", __name__, url_prefix="/api/store")
+
+
+@store_bp.route("/pin", methods=["PUT"])
+@admin_required
+def set_store_pin():
+    """Admin-only: set (or reset) the store PIN without requiring the old PIN."""
+    try:
+        data = SetStorePinSchema().load(request.get_json() or {})
+    except MarshmallowValidationError as err:
+        raise ValidationError("Invalid request body.", details=err.messages)
+
+    result = store_service.set_store_pin(
+        store_id=current_store_id(),
+        pin=data["pin"],
+        confirm_pin=data["confirm_pin"],
+    )
+    return jsonify(result), 200
+
+
+@store_bp.route("/verify-pin", methods=["POST"])
+@jwt_required()
+def verify_store_pin():
+    """Any authenticated user: verify the store PIN."""
+    try:
+        data = VerifyStorePinSchema().load(request.get_json() or {})
+    except MarshmallowValidationError as err:
+        raise ValidationError("Invalid request body.", details=err.messages)
+
+    store_service.verify_store_pin(current_store_id(), data["pin"])
+    return jsonify({"valid": True}), 200
 
 
 @store_bp.route("/settings/pin", methods=["PUT"])
