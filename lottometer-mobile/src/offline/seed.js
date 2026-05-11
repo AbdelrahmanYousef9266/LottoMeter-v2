@@ -106,6 +106,22 @@ export const seedLocalDatabase = async (storeId, userId) => {
   }
 };
 
+export const clearShiftData = async () => {
+  try {
+    const db = await getDb();
+    await db.execAsync(`
+      DELETE FROM local_shift_books;
+      DELETE FROM local_employee_shifts;
+      DELETE FROM local_business_days;
+      DELETE FROM local_extra_sales;
+      DELETE FROM sync_queue;
+    `);
+    console.error('[seed] Shift data cleared');
+  } catch (e) {
+    console.error('[seed] Clear shift data failed:', e.message);
+  }
+};
+
 export const clearLocalDatabase = async () => {
   try {
     const db = await getDb();

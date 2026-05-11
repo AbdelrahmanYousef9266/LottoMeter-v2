@@ -196,14 +196,16 @@ export const closeOfflineShift = async ({
   if (shift.status !== 'open') throw { code: 'SHIFT_ALREADY_CLOSED', message: 'Shift is already closed.' };
 
   const missingClose = await db.getFirstAsync(
-    `SELECT COUNT(*) as count FROM local_books lb
-     WHERE lb.store_id = ? AND lb.is_active = 1 AND lb.is_sold = 0
+    `SELECT COUNT(*) as count FROM local_shift_books open_scan
+     WHERE open_scan.shift_uuid = ?
+     AND open_scan.scan_type = 'open'
      AND NOT EXISTS (
-       SELECT 1 FROM local_shift_books sb
-       WHERE sb.shift_uuid = ? AND sb.static_code = lb.static_code
-       AND sb.scan_type = 'close'
+       SELECT 1 FROM local_shift_books close_scan
+       WHERE close_scan.shift_uuid = open_scan.shift_uuid
+       AND close_scan.static_code = open_scan.static_code
+       AND close_scan.scan_type = 'close'
      )`,
-    [store_id, shift_uuid]
+    [shift_uuid]
   );
   if (missingClose.count > 0) {
     throw { code: 'BOOKS_NOT_CLOSED', message: `${missingClose.count} book(s) still need close scans.` };
@@ -352,11 +354,17 @@ export const getOfflineShiftSummary = async (shift_uuid, store_id) => {
 
   const withClose = await db.getFirstAsync(
     `SELECT COUNT(*) as count FROM local_shift_books
-     WHERE shift_uuid = ? AND scan_type = 'close'`,
+     WHERE shift_uuid = ? AND scan_type = 'open'
+     AND NOT EXISTS (
+       SELECT 1 FROM local_shift_books cb
+       WHERE cb.shift_uuid = local_shift_books.shift_uuid
+       AND cb.static_code = local_shift_books.static_code
+       AND cb.scan_type = 'close'
+     )`,
     [shift_uuid]
   );
 
-  const pendingClose = (totalActive?.count || 0) - (withClose?.count || 0);
+  const pendingClose = withClose?.count || 0;
 
   return {
     tickets_total: ticketsTotal.toFixed(2),

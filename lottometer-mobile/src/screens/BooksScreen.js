@@ -24,6 +24,8 @@ import { listSlots, createSlot, bulkDeleteSlots, unassignAllBooks } from '../api
 import { getBooksSummary } from '../api/books';
 import ActionPopupMenu from '../components/ActionPopupMenu';
 import BulkCreateSlotsModal from '../components/BulkCreateSlotsModal';
+import { getDb } from '../offline/db';
+import { seedLocalDatabase } from '../offline/seed';
 
 // ── design tokens ──────────────────────────────────────────────────────────────
 const D = {
@@ -233,11 +235,17 @@ export default function BooksScreen() {
             setUnassigning(true);
             try {
               const result = await unassignAllBooks();
+              const db = await getDb();
+              await db.runAsync(
+                `UPDATE local_books SET is_active = 0, slot_id = NULL WHERE store_id = ?`,
+                [store?.store_id]
+              );
+              seedLocalDatabase(store?.store_id, user?.user_id).catch(console.error);
               Alert.alert(
                 'Done',
                 `${result.unassigned_count} book${result.unassigned_count !== 1 ? 's' : ''} unassigned.`
               );
-              await loadSlots();
+              await Promise.all([loadSlots(), loadSummary()]);
             } catch (err) {
               Alert.alert('Error', err.message || 'Could not unassign books. Try again.');
             } finally {
@@ -410,7 +418,7 @@ export default function BooksScreen() {
         )}
 
         {/* ── Unassign All Books (admin only, only when slots have books) ─ */}
-        {isAdmin && !selectMode && slots.some((s) => s.current_book) && (
+        {isAdmin && !selectMode && (summary?.active > 0) && (
           <TouchableOpacity
             style={[s.unassignAllCard, unassigning && s.dimmed]}
             onPress={handleUnassignAll}
