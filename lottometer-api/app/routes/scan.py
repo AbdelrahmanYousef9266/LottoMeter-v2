@@ -33,7 +33,7 @@ def scan():
     )
 
     totals = scan_service.get_running_totals(sub.id, current_store_id())
-    pending_remaining = scan_service.pending_scans_remaining(
+    pending_remaining, is_initialized = scan_service.pending_scans_remaining(
         current_store_id(), sub.id
     )
 
@@ -48,5 +48,5 @@ def scan():
         "scan": serialize_scan(scan_row),
         "running_totals": totals,
         "pending_scans_remaining": pending_remaining,
-        "is_initialized": pending_remaining == 0,
+        "is_initialized": is_initialized,
     }), 200

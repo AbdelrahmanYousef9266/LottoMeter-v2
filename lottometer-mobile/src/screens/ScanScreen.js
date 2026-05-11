@@ -75,6 +75,7 @@ export default function ScanScreen() {
   const [openSubId, setOpenSubId] = useState(null);
   const [pendingCount, setPendingCount] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
+  const [totalBooks, setTotalBooks] = useState(0);
   const [hasBooks, setHasBooks] = useState(true);
 
   const [slots, setSlots] = useState([]);
@@ -101,10 +102,8 @@ export default function ScanScreen() {
   const pulseAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    if (!isInitialized && pendingCount > totalBooksRef.current) {
-      totalBooksRef.current = pendingCount;
-    }
-  }, [pendingCount, isInitialized]);
+    totalBooksRef.current = totalBooks;
+  }, [totalBooks]);
 
   useEffect(() => {
     if (scanMode !== 'hardware_scanner') return;
@@ -162,6 +161,11 @@ export default function ScanScreen() {
         const totalActive = activeBookCount?.count ?? 0;
         setHasBooks(totalActive > 0);
         setIsInitialized(counts.is_initialized && totalActive > 0);
+        const slottedCount = await db.getFirstAsync(
+          `SELECT COUNT(*) as count FROM local_books WHERE store_id = ? AND is_active = 1 AND is_sold = 0 AND slot_id IS NOT NULL`,
+          [store?.store_id]
+        );
+        setTotalBooks(slottedCount?.count ?? 0);
         return;
       }
 
@@ -185,6 +189,7 @@ export default function ScanScreen() {
         // (no close scans exist yet), so the new-shift case is always correct.
         const pending = summary.books_pending_open ?? summary.books_pending_close ?? 0;
         setPendingCount(pending);
+        setTotalBooks(summary.books_total_active || 0);
         try {
           const booksSummary = await getBooksSummary();
           const totalActive = booksSummary?.active ?? 0;
@@ -364,7 +369,18 @@ export default function ScanScreen() {
             [{ text: t('common.ok') }]
           );
         }
-        if (scanType === 'close' && pending_scans_remaining === 0 && is_initialized) {
+        console.error('[full result]', JSON.stringify(result));
+        console.error('[scan result] pending:', pending_scans_remaining);
+        console.error('[scan result] initialized:', is_initialized);
+        console.error('[scan result] scanType:', scanType);
+        console.error('[scan result] totalBooksRef:', totalBooksRef.current);
+        console.error('[modal check] will show modal:',
+          scanType === 'close' &&
+          pending_scans_remaining === 0 &&
+          is_initialized &&
+          totalBooksRef.current > 0
+        );
+        if (scanType === 'close' && pending_scans_remaining === 0 && is_initialized && totalBooksRef.current > 0) {
           setTimeout(() => setShowCloseModal(true), 500);
         }
       } catch (err) {
@@ -458,7 +474,6 @@ export default function ScanScreen() {
     inputRange: [0, 1],
     outputRange: [D.BORDER, D.PRIMARY],
   });
-  const totalBooks = totalBooksRef.current;
   const scannedBooks = totalBooks - pendingCount;
   const progressPct = totalBooks > 0 ? scannedBooks / totalBooks : 0;
 
@@ -565,16 +580,22 @@ export default function ScanScreen() {
                 </View>
               ) : (
                 <View style={s.statusOk}>
-                  <Text style={s.statusOkIcon}>✓</Text>
+                  <Text style={s.statusOkIcon}>{pendingCount > 0 ? '📋' : '✓'}</Text>
                   <View style={s.statusBody}>
-                    <Text style={s.statusOkTitle}>{t('scan.bannerInitialized')}</Text>
-                    <Text style={s.statusSub}>Ready for sales and close scans</Text>
+                    <Text style={s.statusOkTitle}>
+                      {pendingCount > 0
+                        ? `${pendingCount} book${pendingCount !== 1 ? 's' : ''} need close scans`
+                        : t('scan.bannerInitialized')}
+                    </Text>
+                    <Text style={s.statusSub}>
+                      {pendingCount > 0 ? 'Scan all books to close shift' : 'All books scanned — ready to close'}
+                    </Text>
                   </View>
                 </View>
               )}
 
-              {/* ── Progress Bar (not initialized) ────────────────────── */}
-              {!isInitialized && totalBooks > 0 && (
+              {/* ── Progress Bar (open and close phases) ─────────────── */}
+              {totalBooks > 0 && pendingCount > 0 && (
                 <View style={s.progressWrap}>
                   <Text style={s.progressLabel}>
                     {scannedBooks} / {totalBooks} books scanned
@@ -587,15 +608,6 @@ export default function ScanScreen() {
                       ]}
                     />
                   </View>
-                </View>
-              )}
-
-              {/* ── Close scan count (initialized) ────────────────────── */}
-              {isInitialized && pendingCount > 0 && (
-                <View style={s.closeCountWrap}>
-                  <Text style={s.closeCountText}>
-                    {pendingCount} close scan{pendingCount !== 1 ? 's' : ''} remaining
-                  </Text>
                 </View>
               )}
 
@@ -817,10 +829,10 @@ export default function ScanScreen() {
       {/* ── Close Shift Modal (auto-shown when all close scans done) ───────── */}
       <CloseShiftModal
         visible={showCloseModal}
-        shiftId={openSubId}
+        subshiftId={openSubId}
         shiftUuid={shiftUuidRef.current}
-        onClose={() => setShowCloseModal(false)}
-        onSubmit={() => {
+        onCancel={() => setShowCloseModal(false)}
+        onSubmit={async () => {
           setShowCloseModal(false);
           navigation.navigate('Home');
         }}

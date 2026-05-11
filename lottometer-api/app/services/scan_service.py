@@ -246,15 +246,40 @@ def get_running_totals(shift_id: int, store_id: int) -> dict:
     }
 
 
-def pending_scans_remaining(store_id: int, shift_id: int) -> int:
-    """Count active books that don't yet have an open scan in this sub-shift."""
-    active = (
+def pending_scans_remaining(store_id: int, shift_id: int) -> tuple[int, bool]:
+    """Return (pending_count, is_initialized) for the current scan phase.
+
+    Phase logic:
+    - Open phase  (not initialized): count slot-assigned active books missing an open scan
+    - Close phase (initialized):     count slot-assigned active books missing a close scan
+    """
+    active_with_slot = (
         Book.query
-        .filter_by(store_id=store_id, is_active=True, is_sold=False)
-        .all()
+        .filter(
+            Book.store_id == store_id,
+            Book.is_active == True,
+            Book.is_sold == False,
+            Book.slot_id.isnot(None),
+        )
+        .count()
     )
-    open_static_codes = {
-        s.static_code for s in
-        ShiftBooks.query.filter_by(shift_id=shift_id, store_id=store_id, scan_type="open").all()
-    }
-    return sum(1 for b in active if b.static_code not in open_static_codes)
+
+    books_with_open = (
+        ShiftBooks.query
+        .filter_by(shift_id=shift_id, store_id=store_id, scan_type="open")
+        .count()
+    )
+    books_pending_open = max(active_with_slot - books_with_open, 0)
+    is_initialized = books_pending_open == 0
+
+    if is_initialized:
+        books_with_close = (
+            ShiftBooks.query
+            .filter_by(shift_id=shift_id, store_id=store_id, scan_type="close")
+            .count()
+        )
+        pending = max(active_with_slot - books_with_close, 0)
+    else:
+        pending = books_pending_open
+
+    return pending, is_initialized
