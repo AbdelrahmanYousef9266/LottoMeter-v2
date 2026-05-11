@@ -273,12 +273,26 @@ def pending_scans_remaining(store_id: int, shift_id: int) -> tuple[int, bool]:
     is_initialized = books_pending_open == 0
 
     if is_initialized:
-        books_with_close = (
-            ShiftBooks.query
-            .filter_by(shift_id=shift_id, store_id=store_id, scan_type="close")
+        # Use subquery: count active, non-sold, slot-assigned books that have no close scan.
+        # Subtraction (active_with_slot - books_with_close) gives wrong results when a
+        # mark-sold book already had a close scan, inflating books_with_close vs active_with_slot.
+        pending = (
+            Book.query
+            .filter(
+                Book.store_id == store_id,
+                Book.is_active == True,
+                Book.is_sold == False,
+                Book.slot_id.isnot(None),
+                Book.static_code.notin_(
+                    db.session.query(ShiftBooks.static_code).filter(
+                        ShiftBooks.shift_id == shift_id,
+                        ShiftBooks.scan_type == "close",
+                        ShiftBooks.store_id == store_id,
+                    )
+                ),
+            )
             .count()
         )
-        pending = max(active_with_slot - books_with_close, 0)
     else:
         pending = books_pending_open
 

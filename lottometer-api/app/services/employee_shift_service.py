@@ -77,32 +77,33 @@ def _compute_shift_tickets_total(shift_id: int, store_id: int) -> Decimal:
 
 
 def _verify_all_active_books_have_close_scan(store_id: int, shift_id: int) -> None:
-    """BR-ES-04: every currently active book assigned to a slot must have a close scan."""
-    active_books = (
+    """BR-ES-04: every currently active book assigned to a slot must have a close scan.
+
+    Uses a single subquery to exclude mark-sold books (which have is_sold=True and
+    is_active=False) from the requirement regardless of whether they had a close scan.
+    """
+    missing_books = (
         Book.query
         .filter(
             Book.store_id == store_id,
             Book.is_active == True,
             Book.is_sold == False,
             Book.slot_id.isnot(None),
+            Book.static_code.notin_(
+                db.session.query(ShiftBooks.static_code).filter(
+                    ShiftBooks.shift_id == shift_id,
+                    ShiftBooks.scan_type == "close",
+                    ShiftBooks.store_id == store_id,
+                )
+            ),
         )
         .all()
     )
-    if not active_books:
-        return
-
-    closed_codes = {
-        s.static_code for s in
-        ShiftBooks.query
-        .filter_by(shift_id=shift_id, store_id=store_id, scan_type="close")
-        .all()
-    }
-    missing = [b.static_code for b in active_books if b.static_code not in closed_codes]
-    if missing:
+    if missing_books:
         raise BusinessRuleError(
-            f"{len(missing)} book(s) still need close scans.",
+            f"{len(missing_books)} book(s) still need close scans.",
             code="BOOKS_NOT_CLOSED",
-            details={"missing": missing},
+            details={"missing": [b.static_code for b in missing_books]},
         )
 
 

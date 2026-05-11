@@ -19,9 +19,13 @@ from app.errors import ValidationError, NotFoundError
 from app.auth_helpers import admin_required, current_store_id, current_user_id
 from app.models.book import Book
 from app.models.book_assignment_history import BookAssignmentHistory
+from app.models.employee_shift import EmployeeShift
+from app.models.shift_books import ShiftBooks
+from app.models.shift_extra_sales import ShiftExtraSales
 from app.models.slot import Slot
 from app.models.user import User
 from app.extensions import db
+from app.constants import LENGTH_BY_PRICE
 
 
 book_bp = Blueprint("book", __name__, url_prefix="/api")
@@ -186,7 +190,8 @@ def return_to_vendor(book_id):
 @book_bp.route("/books/<int:book_id>/mark-sold", methods=["POST"])
 @admin_required
 def mark_book_sold(book_id):
-    """Admin-only: manually mark a book as sold and vacate its slot."""
+    """Admin-only: manually mark a book as sold, vacate its slot, and record
+    the sale in the current open shift if one exists."""
     store_id = current_store_id()
     user_id = current_user_id()
 
@@ -211,15 +216,56 @@ def mark_book_sold(book_id):
         history.unassigned_by_user_id = user_id
         history.unassign_reason = "sold"
 
+    # Record sale in the current open shift if one exists
+    ticket_count = 0
+    value = 0
+
+    open_shift = EmployeeShift.query.filter_by(
+        store_id=store_id,
+        status="open",
+    ).first()
+
+    if open_shift and book.ticket_price is not None:
+        length = LENGTH_BY_PRICE.get(book.ticket_price)
+        if length:
+            open_scan = ShiftBooks.query.filter_by(
+                shift_id=open_shift.id,
+                static_code=book.static_code,
+                scan_type="open",
+                store_id=store_id,
+            ).first()
+
+            if open_scan is not None:
+                ticket_count = length - open_scan.start_at_scan
+            else:
+                ticket_count = length
+
+            if ticket_count > 0:
+                value = float(book.ticket_price) * ticket_count
+                extra_sale = ShiftExtraSales(
+                    shift_id=open_shift.id,
+                    store_id=store_id,
+                    sale_type="whole_book",
+                    scanned_barcode=book.barcode,
+                    ticket_price=book.ticket_price,
+                    ticket_count=ticket_count,
+                    value=str(value),
+                    created_by_user_id=user_id,
+                )
+                db.session.add(extra_sale)
+
     db.session.commit()
 
     log_action("book_mark_sold", user_id=user_id, store_id=store_id,
                entity_type="book", entity_id=book.book_id,
-               new_value="is_sold=True",
+               new_value=f"is_sold=True tickets={ticket_count} value={value}",
                ip_address=request.remote_addr,
                user_agent=(request.headers.get("User-Agent") or "")[:200])
 
     return jsonify({
         "message": "Book marked as sold successfully.",
         "book": serialize_book(book),
+        "sale_added": ticket_count > 0,
+        "tickets_counted": ticket_count,
+        "value_added": value,
     }), 200
