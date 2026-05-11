@@ -77,9 +77,16 @@ def _compute_shift_tickets_total(shift_id: int, store_id: int) -> Decimal:
 
 
 def _verify_all_active_books_have_close_scan(store_id: int, shift_id: int) -> None:
-    """BR-ES-04: every active book must have a close scan before the shift can close."""
-    active_books = _all_active_books(store_id)
-    if not active_books:
+    """BR-ES-04: every book that was opened in this shift must also have a close scan.
+
+    Books unassigned mid-shift have no open scan and are therefore not checked.
+    """
+    open_scans = ShiftBooks.query.filter_by(
+        shift_id=shift_id,
+        store_id=store_id,
+        scan_type="open",
+    ).all()
+    if not open_scans:
         return
 
     closed_codes = {
@@ -88,13 +95,12 @@ def _verify_all_active_books_have_close_scan(store_id: int, shift_id: int) -> No
         .filter_by(shift_id=shift_id, store_id=store_id, scan_type="close")
         .all()
     }
-    missing = [b for b in active_books if b.static_code not in closed_codes]
+    missing = [s.static_code for s in open_scans if s.static_code not in closed_codes]
     if missing:
-        names = [b.book_name or b.static_code for b in missing]
         raise BusinessRuleError(
-            f"{len(missing)} active book(s) have no close scan: {', '.join(names)}",
+            f"{len(missing)} book(s) still need close scans.",
             code="BOOKS_NOT_CLOSED",
-            details={"missing_book_ids": [b.book_id for b in missing]},
+            details={"missing": missing},
         )
 
 
