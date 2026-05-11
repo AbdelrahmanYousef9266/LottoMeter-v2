@@ -21,7 +21,8 @@ import { useTranslation } from 'react-i18next';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
 import { listSlots, createSlot, bulkDeleteSlots, unassignAllBooks } from '../api/slots';
-import { getBooksSummary } from '../api/books';
+import { getBooksSummary, markBookSold } from '../api/books';
+import { verifyAdminPin } from '../api/auth';
 import ActionPopupMenu from '../components/ActionPopupMenu';
 import BulkCreateSlotsModal from '../components/BulkCreateSlotsModal';
 import { getDb } from '../offline/db';
@@ -216,6 +217,49 @@ export default function BooksScreen() {
   }
 
   const [unassigning, setUnassigning] = useState(false);
+
+  // ── mark sold PIN modal ────────────────────────────────────────────────────
+  const [pinModalVisible, setPinModalVisible] = useState(false);
+  const [pinInput, setPinInput] = useState('');
+  const [pinBusy, setPinBusy] = useState(false);
+  const [pendingMarkSold, setPendingMarkSold] = useState(null);
+
+  const handleMarkSold = (book) => {
+    setPendingMarkSold(book);
+    setPinInput('');
+    setPinModalVisible(true);
+  };
+
+  const handleConfirmMarkSold = async () => {
+    if (!pinInput.trim()) return;
+    setPinBusy(true);
+    try {
+      await verifyAdminPin({
+        store_code: store?.store_code,
+        username: user?.username,
+        password: pinInput,
+      });
+      await markBookSold(pendingMarkSold.book_id);
+      const db = await getDb();
+      await db.runAsync(
+        `UPDATE local_books SET is_sold = 1, is_active = 0, slot_id = NULL WHERE static_code = ? AND store_id = ?`,
+        [pendingMarkSold.static_code, store?.store_id]
+      );
+      setPinModalVisible(false);
+      setPinInput('');
+      setPendingMarkSold(null);
+      Alert.alert('Done', 'Book marked as sold successfully.');
+      await Promise.all([loadSlots(), loadSummary()]);
+    } catch (err) {
+      if (err?.response?.status === 401 || err?.code === 'INVALID_CREDENTIALS') {
+        Alert.alert('Wrong Password', 'Incorrect admin password.');
+      } else {
+        Alert.alert('Error', err.message || 'Could not mark book as sold.');
+      }
+    } finally {
+      setPinBusy(false);
+    }
+  };
 
   async function handleUnassignAll() {
     const assignedCount = slots.filter((s) => s.current_book).length;
@@ -473,6 +517,7 @@ export default function BooksScreen() {
                   slotId: slot.slot_id,
                   autoAssign: true,
                 })}
+                onMarkSold={handleMarkSold}
               />
             ))}
           </>
@@ -517,6 +562,60 @@ export default function BooksScreen() {
           loadSlots();
         }}
       />
+
+      {/* ── Mark Sold PIN Modal ──────────────────────────────────────────── */}
+      <Modal
+        visible={pinModalVisible}
+        transparent
+        animationType="slide"
+        onRequestClose={() => {
+          setPinModalVisible(false);
+          setPinInput('');
+          setPendingMarkSold(null);
+        }}
+      >
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          style={s.modalBackdrop}
+        >
+          <View style={s.modalCard}>
+            <Text style={s.modalTitle}>Admin Verification</Text>
+            <Text style={s.label}>Enter admin password to mark book as sold</Text>
+            <TextInput
+              style={s.input}
+              value={pinInput}
+              onChangeText={setPinInput}
+              secureTextEntry
+              placeholder="Enter password"
+              placeholderTextColor={D.SUBTLE}
+              autoFocus
+            />
+            <View style={s.modalActions}>
+              <TouchableOpacity
+                style={[s.modalButton, s.modalCancel]}
+                onPress={() => {
+                  setPinModalVisible(false);
+                  setPinInput('');
+                  setPendingMarkSold(null);
+                }}
+                disabled={pinBusy}
+              >
+                <Text style={s.modalCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[s.modalButton, s.modalConfirm, pinBusy && s.disabled]}
+                onPress={handleConfirmMarkSold}
+                disabled={pinBusy}
+              >
+                {pinBusy
+                  ? <ActivityIndicator color="#fff" />
+                  : <Text style={s.modalConfirmText}>Confirm</Text>
+                }
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -547,7 +646,7 @@ function SkeletonCard() {
 
 // ── SlotCard ──────────────────────────────────────────────────────────────────
 
-function SlotCard({ slot, t, isAdmin, selectMode, selected, onPress, onLongPress, onAssign }) {
+function SlotCard({ slot, t, isAdmin, selectMode, selected, onPress, onLongPress, onAssign, onMarkSold }) {
   const hasBook = !!slot.current_book;
   const disabled = selectMode && hasBook;
   const assignedDate = hasBook
@@ -614,17 +713,28 @@ function SlotCard({ slot, t, isAdmin, selectMode, selected, onPress, onLongPress
               <View style={s.activePill}>
                 <Text style={s.activePillText}>Active</Text>
               </View>
+              {isAdmin && (
+                <TouchableOpacity
+                  style={s.markSoldBtn}
+                  onPress={(e) => { e.stopPropagation?.(); onMarkSold(slot.current_book); }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={s.markSoldBtnText}>Sold</Text>
+                </TouchableOpacity>
+              )}
               <Ionicons name="chevron-forward" size={16} color={D.SUBTLE} />
             </View>
           ) : (
             isAdmin && (
-              <TouchableOpacity
-                style={s.assignBtn}
-                onPress={onAssign}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-              >
-                <Text style={s.assignBtnText}>Assign</Text>
-              </TouchableOpacity>
+              <View style={s.slotRowRight}>
+                <TouchableOpacity
+                  style={s.assignBtn}
+                  onPress={onAssign}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                >
+                  <Text style={s.assignBtnText}>Assign</Text>
+                </TouchableOpacity>
+              </View>
             )
           )
         )}
@@ -980,6 +1090,17 @@ const s = StyleSheet.create({
     flexShrink: 0,
   },
   assignBtnText: { color: '#FFFFFF', fontWeight: FW.semibold, fontSize: FS.sm },
+
+  markSoldBtn: {
+    backgroundColor: '#FEF2F2',
+    borderWidth: 1,
+    borderColor: '#FECACA',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: BR.full,
+    flexShrink: 0,
+  },
+  markSoldBtnText: { color: D.ERROR, fontWeight: FW.semibold, fontSize: FS.xs },
 
   slotMeta: { marginTop: SP.sm, gap: 2 },
   metaText:  { fontSize: FS.xs, color: D.SUBTLE },

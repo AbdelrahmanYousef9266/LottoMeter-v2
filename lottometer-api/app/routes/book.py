@@ -1,5 +1,7 @@
 """Book routes — /api/books and /api/slots/{id}/assign-book."""
 
+from datetime import datetime, timezone
+
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from marshmallow import ValidationError as MarshmallowValidationError
@@ -13,10 +15,13 @@ from app.schemas.book_schema import (
 from app.schemas.slot_schema import serialize_slot
 from app.services import book_service
 from app.services.audit_service import log_action
-from app.errors import ValidationError
+from app.errors import ValidationError, NotFoundError
 from app.auth_helpers import admin_required, current_store_id, current_user_id
+from app.models.book import Book
+from app.models.book_assignment_history import BookAssignmentHistory
 from app.models.slot import Slot
 from app.models.user import User
+from app.extensions import db
 
 
 book_bp = Blueprint("book", __name__, url_prefix="/api")
@@ -175,4 +180,46 @@ def return_to_vendor(book_id):
         "book": serialize_book(book),
         "close_scan_recorded": close_scan_recorded,
         "position": position,
+    }), 200
+
+
+@book_bp.route("/books/<int:book_id>/mark-sold", methods=["POST"])
+@admin_required
+def mark_book_sold(book_id):
+    """Admin-only: manually mark a book as sold and vacate its slot."""
+    store_id = current_store_id()
+    user_id = current_user_id()
+
+    book = Book.query.filter_by(book_id=book_id, store_id=store_id).first()
+    if book is None:
+        raise NotFoundError("Book not found.", code="BOOK_NOT_FOUND")
+
+    now = datetime.now(timezone.utc)
+    book.is_sold = True
+    book.sold_at = now
+    book.is_active = False
+    book.slot_id = None
+
+    history = (
+        BookAssignmentHistory.query
+        .filter_by(book_id=book.book_id, unassigned_at=None)
+        .order_by(BookAssignmentHistory.assigned_at.desc())
+        .first()
+    )
+    if history is not None:
+        history.unassigned_at = now
+        history.unassigned_by_user_id = user_id
+        history.unassign_reason = "sold"
+
+    db.session.commit()
+
+    log_action("book_mark_sold", user_id=user_id, store_id=store_id,
+               entity_type="book", entity_id=book.book_id,
+               new_value="is_sold=True",
+               ip_address=request.remote_addr,
+               user_agent=(request.headers.get("User-Agent") or "")[:200])
+
+    return jsonify({
+        "message": "Book marked as sold successfully.",
+        "book": serialize_book(book),
     }), 200

@@ -19,3 +19,8 @@ export async function getBooks(filters = {}) {
   const { data } = await api.get(query ? `/books?${query}` : '/books');
   return data; // { books: [...] }
 }
+
+export async function markBookSold(bookId) {
+  const { data } = await api.post(`/books/${bookId}/mark-sold`);
+  return data; // { message, book }
+}

@@ -171,9 +171,6 @@ export default function ScanScreen() {
 
       // ONLINE PATH
       const shift = await getCurrentOpenShift();
-      console.error('[loadShift] shift keys:', Object.keys(shift || {}));
-      console.error('[loadShift] shift.uuid:', shift?.uuid);
-      console.error('[loadShift] shift.id:', shift?.id);
       if (!shift) {
         setShift(null);
         setOpenSubId(null);
@@ -373,17 +370,6 @@ export default function ScanScreen() {
             [{ text: t('common.ok') }]
           );
         }
-        console.error('[full result]', JSON.stringify(result));
-        console.error('[scan result] pending:', pending_scans_remaining);
-        console.error('[scan result] initialized:', is_initialized);
-        console.error('[scan result] scanType:', scanType);
-        console.error('[scan result] totalBooksRef:', totalBooksRef.current);
-        console.error('[modal check] will show modal:',
-          scanType === 'close' &&
-          pending_scans_remaining === 0 &&
-          is_initialized &&
-          totalBooksRef.current > 0
-        );
         if (scanType === 'close' && pending_scans_remaining === 0 && is_initialized && totalBooksRef.current > 0) {
           setTimeout(() => setShowCloseModal(true), 500);
         }
