@@ -462,18 +462,18 @@ export default function HomeScreen() {
           </Text>
           <View style={s.headerBottomRow}>
             <View style={s.headerDetailRow}>
-              <Ionicons name="storefront-outline" size={11} color={D.SUBTLE} />
+              <Ionicons name="storefront-outline" size={11} color="rgba(255,255,255,0.7)" />
               <Text style={s.headerDetailText}>{store?.store_code}</Text>
             </View>
             {store?.owner_name && (
               <View style={s.headerDetailRow}>
-                <Ionicons name="person-outline" size={11} color={D.SUBTLE} />
+                <Ionicons name="person-outline" size={11} color="rgba(255,255,255,0.7)" />
                 <Text style={s.headerDetailText}>{store.owner_name}</Text>
               </View>
             )}
             {storeAddress ? (
               <View style={s.headerDetailRow}>
-                <Ionicons name="location-outline" size={11} color={D.SUBTLE} />
+                <Ionicons name="location-outline" size={11} color="rgba(255,255,255,0.7)" />
                 <Text style={s.headerDetailText} numberOfLines={1}>
                   {storeAddress}
                 </Text>
@@ -484,7 +484,7 @@ export default function HomeScreen() {
 
         {/* Logo — right */}
         <Image
-          source={require('../../assets/icon1.png')}
+          source={require('../../assets/app-icon.png')}
           style={s.headerLogo}
           resizeMode="contain"
         />
@@ -750,9 +750,7 @@ const s = StyleSheet.create({
 
   // header
   header: {
-    backgroundColor: D.CARD,
-    borderBottomWidth: 1,
-    borderBottomColor: D.BORDER,
+    backgroundColor: D.PRIMARY,
     paddingHorizontal: SP.lg,
     paddingTop: SP.md,
     paddingBottom: SP.md,
@@ -767,7 +765,7 @@ const s = StyleSheet.create({
   headerStoreName: {
     fontSize: FS.lg,
     fontWeight: FW.bold,
-    color: D.TEXT,
+    color: '#FFFFFF',
     marginBottom: 4,
   },
   headerBottomRow: {
@@ -780,12 +778,12 @@ const s = StyleSheet.create({
   },
   headerDetailText: {
     fontSize: FS.xs,
-    color: D.SUBTLE,
+    color: 'rgba(255,255,255,0.75)',
   },
   headerLogo: {
-    width: 56,
-    height: 56,
-    borderRadius: 12,
+    width: 72,
+    height: 72,
+    borderRadius: 14,
     flexShrink: 0,
   },
 
