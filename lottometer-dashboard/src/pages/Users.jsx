@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { listUsers, createUser, updateUser, deleteUser } from '../api/users'
 import useApi from '../hooks/useApi'
 import Badge from '../components/UI/Badge'
+import StatCard from '../components/UI/StatCard'
 import Table from '../components/UI/Table'
 import Modal from '../components/UI/Modal'
 import Button from '../components/UI/Button'
@@ -132,8 +133,20 @@ export default function Users() {
   const columns = [
     {
       key: 'username',
-      label: 'Username',
-      render: (v) => <span style={{ fontWeight: 600 }}>{v}</span>,
+      label: 'User',
+      render: (v) => (
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: '50%',
+            background: 'var(--gradient)', color: '#fff',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            fontSize: 13, fontWeight: 700, flexShrink: 0,
+          }}>
+            {(v || '?').slice(0, 2).toUpperCase()}
+          </div>
+          <div style={{ fontWeight: 700 }}>{v}</div>
+        </div>
+      ),
     },
     {
       key: 'role',
@@ -197,13 +210,33 @@ export default function Users() {
         <div style={{ color: 'var(--red)', marginBottom: 16, fontSize: 14 }}>Error: {error}</div>
       )}
 
-      <div className="card" style={{ padding: 0 }}>
-        <Table
-          columns={columns}
-          data={users}
-          loading={loading}
-          emptyMessage="No users found."
-        />
+      {/* Stat Cards */}
+      {!loading && users.length > 0 && (() => {
+        const adminCount = users.filter(u => u.role === 'admin').length
+        const employeeCount = users.filter(u => u.role !== 'admin').length
+        return (
+          <div className="grid-stats">
+            <StatCard icon="👥" label="Total Users" value={users.length} />
+            <StatCard icon="✅" label="Active" value={users.length} />
+            <StatCard icon="⚙️" label="Admins" value={adminCount} />
+            <StatCard icon="👤" label="Employees" value={employeeCount} />
+          </div>
+        )
+      })()}
+
+      <div className="card" style={{ paddingBottom: 0 }}>
+        <div className="stack-row">
+          <h2 className="card-title">Team</h2>
+          <span className="muted">Click a row to edit</span>
+        </div>
+        <div style={{ margin: '0 -20px' }}>
+          <Table
+            columns={columns}
+            data={users}
+            loading={loading}
+            emptyMessage="No users found."
+          />
+        </div>
       </div>
 
       {/* Add User Modal */}

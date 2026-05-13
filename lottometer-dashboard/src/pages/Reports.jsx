@@ -4,6 +4,7 @@ import { listReports, getShiftReport } from '../api/reports'
 import { listBusinessDays } from '../api/businessDays'
 import { listUsers } from '../api/users'
 import Badge from '../components/UI/Badge'
+import StatCard from '../components/UI/StatCard'
 import Modal from '../components/UI/Modal'
 import Button from '../components/UI/Button'
 import { formatLocalTime, formatLocalDateTime, formatDate, formatBusinessDate, getDayLabel, formatDuration } from '../utils/dateTime'
@@ -232,6 +233,28 @@ export default function Reports() {
         )}
       </div>
 
+      {/* Stat cards */}
+      {!loading && shifts.length > 0 && (() => {
+        const totalSales = shifts.reduce((sum, s) => sum + parseFloat(s.tickets_total || 0), 0)
+        const totalCancels = shifts.reduce((sum, s) => sum + parseFloat(s.cancels || 0), 0)
+        const totalExpected = shifts.reduce((sum, s) => sum + parseFloat(s.expected_cash || 0), 0)
+        const totalVariance = shifts.reduce((sum, s) => sum + parseFloat(s.difference || 0), 0)
+        const varInfo = { text: (totalVariance >= 0 ? '+' : '') + `$${Math.abs(totalVariance).toFixed(2)}` }
+        return (
+          <div className="grid-stats">
+            <StatCard icon="💰" label="Gross Sales" value={formatCurrency(totalSales)} />
+            <StatCard icon="❌" label="Cancels" value={formatCurrency(totalCancels)} />
+            <StatCard icon="🏦" label="Expected Cash" value={formatCurrency(totalExpected)} />
+            <StatCard
+              icon={totalVariance >= 0 ? '📈' : '📉'}
+              label="Net Variance"
+              value={varInfo.text}
+              valueColor={totalVariance > 0 ? '#2DAE1A' : totalVariance < 0 ? '#EF4444' : undefined}
+            />
+          </div>
+        )
+      })()}
+
       {/* Grouped list */}
       {loading ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
@@ -250,19 +273,12 @@ export default function Reports() {
       ) : (
         groupedDates.map((date) => (
           <div key={date} style={{ marginBottom: 24 }}>
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: 10,
-                marginBottom: 12,
-              }}
-            >
-              <h2 style={{ fontSize: 15, fontWeight: 700 }}>{getDayLabel(date)}</h2>
-              <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>
-                {formatBusinessDate(date)}
-              </span>
-              <Badge variant="gray">{grouped[date].length} shift{grouped[date].length !== 1 ? 's' : ''}</Badge>
+            <div className="stack-row" style={{ marginBottom: 12 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <h2 className="card-title">{getDayLabel(date)}</h2>
+                <span className="muted">{formatBusinessDate(date)}</span>
+                <Badge variant="gray">{grouped[date].length} shift{grouped[date].length !== 1 ? 's' : ''}</Badge>
+              </div>
             </div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -372,32 +388,32 @@ export default function Reports() {
               <h4 style={{ fontSize: 13, fontWeight: 700, marginBottom: 10, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em' }}>
                 Summary
               </h4>
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '1fr 1fr',
-                  gap: 10,
-                  background: '#F8FAFF',
-                  borderRadius: 8,
-                  padding: 14,
-                }}
-              >
-                {[
-                  { label: 'Ticket Sales', value: formatCurrency(reportData.shift?.tickets_total) },
-                  { label: 'Expected', value: formatCurrency(reportData.shift?.expected_cash) },
-                  { label: 'Cash in Hand', value: formatCurrency(reportData.shift?.cash_in_hand) },
-                  { label: 'Difference', value: formatVariance(reportData.shift?.difference ?? 0).text },
-                  ...(reportData.shift?.cancels != null
-                    ? [{ label: 'Cancels', value: formatCurrency(reportData.shift.cancels) }]
-                    : []),
-                  { label: 'Whole Books', value: reportData.shift?.whole_book_sales?.length ?? '—' },
-                  { label: 'Returned', value: reportData.shift?.returned_books?.length ?? '—' },
-                ].map((item) => (
-                  <div key={item.label}>
-                    <div style={{ fontSize: 11, color: 'var(--text-secondary)', fontWeight: 600, textTransform: 'uppercase' }}>{item.label}</div>
-                    <div style={{ fontWeight: 700, fontSize: 15 }}>{item.value}</div>
-                  </div>
-                ))}
+              {[
+                { label: 'Ticket Sales', value: formatCurrency(reportData.shift?.tickets_total) },
+                ...(reportData.shift?.cancels != null
+                  ? [{ label: 'Cancels', value: formatCurrency(reportData.shift.cancels) }]
+                  : []),
+                { label: 'Expected Cash', value: formatCurrency(reportData.shift?.expected_cash) },
+                { label: 'Cash in Hand', value: formatCurrency(reportData.shift?.cash_in_hand) },
+                { label: 'Whole Books Sold', value: reportData.shift?.whole_book_sales?.length ?? '—' },
+                { label: 'Books Returned', value: reportData.shift?.returned_books?.length ?? '—' },
+              ].map((item) => (
+                <div key={item.label} className="tick-row">
+                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{item.label}</span>
+                  <span style={{ fontWeight: 700, fontSize: 13 }}>{item.value}</span>
+                </div>
+              ))}
+              <div className="tick-total-row">
+                <span style={{ fontWeight: 700 }}>Difference</span>
+                <span style={{
+                  fontWeight: 700,
+                  color: (() => {
+                    const diff = reportData.shift?.difference ?? 0
+                    return diff > 0 ? '#2DAE1A' : diff < 0 ? '#EF4444' : undefined
+                  })(),
+                }}>
+                  {formatVariance(reportData.shift?.difference ?? 0).text}
+                </span>
               </div>
             </div>
 

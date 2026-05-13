@@ -30,8 +30,8 @@ export default function Footer() {
           <div style={{ flex: '1 1 240px', minWidth: 200 }}>
             <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16 }}>
               <img src="/app-icon.png" alt="LottoMeter" style={{ width: 32, height: 32, borderRadius: 8 }} />
-              <span style={{ fontWeight: 800, fontSize: 18, background: 'linear-gradient(to right, #4DB8FF, #5CDE3A)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-                LottoMeter
+              <span className="lm-wordmark on-dark" style={{ fontSize: 18 }}>
+                <span>Lotto</span><span>Meter</span>
               </span>
             </Link>
             <p style={{ fontSize: 13, color: '#8EA8C3', lineHeight: 1.7, maxWidth: 260, margin: 0 }}>

@@ -227,7 +227,9 @@ export default function Subscription() {
 
       {/* Billing History */}
       <div className="card" style={{ marginBottom: 32 }}>
-        <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 16 }}>Billing History</h2>
+        <div className="stack-row">
+          <h2 className="card-title">Billing History</h2>
+        </div>
         <div style={{ overflowX: 'auto' }}>
           <table className="table">
             <thead>

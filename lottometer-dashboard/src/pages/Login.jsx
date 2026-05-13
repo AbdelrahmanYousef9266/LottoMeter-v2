@@ -68,12 +68,12 @@ export default function Login() {
 
   return (
     <div
+      className="lm-bg-splash"
       style={{
         minHeight: '100vh',
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: 'var(--bg-primary)',
         padding: 16,
       }}
     >
@@ -101,21 +101,10 @@ export default function Login() {
             />
           </div>
 
-          {/* Title */}
-          <h1
-            style={{
-              fontSize: 30,
-              fontWeight: 800,
-              background: 'var(--gradient)',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              backgroundClip: 'text',
-              letterSpacing: '-0.5px',
-              margin: 0,
-            }}
-          >
-            LottoMeter
-          </h1>
+          {/* Two-tone wordmark */}
+          <div className="lm-wordmark" style={{ fontSize: 30, justifyContent: 'center' }}>
+            <span>Lotto</span><span>Meter</span>
+          </div>
 
           {/* Subtitle row with decorative lines */}
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, margin: '8px 0 14px' }}>

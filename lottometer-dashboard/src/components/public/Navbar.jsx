@@ -33,8 +33,8 @@ export default function Navbar() {
         {/* Logo */}
         <Link to="/" style={{ textDecoration: 'none', display: 'flex', alignItems: 'center', gap: 10 }}>
           <img src="/app-icon.png" alt="LottoMeter" style={{ width: 32, height: 32, borderRadius: 8 }} />
-          <span style={{ fontWeight: 800, fontSize: 18, background: 'linear-gradient(to right, #0077CC, #2DAE1A)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-            LottoMeter
+          <span className="lm-wordmark" style={{ fontSize: 18 }}>
+            <span>Lotto</span><span>Meter</span>
           </span>
         </Link>
 

@@ -32,7 +32,7 @@ export default function TopBar() {
           <>
             <div style={{ textAlign: 'right' }}>
               <div className="topbar-user-name">{user.username || user.name || 'User'}</div>
-              <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>
+              <div className="topbar-user-meta">
                 {user.store_code || user.store?.store_name || ''}
               </div>
             </div>

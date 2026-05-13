@@ -7,6 +7,7 @@ import Badge from '../components/UI/Badge'
 import Table from '../components/UI/Table'
 import Modal from '../components/UI/Modal'
 import Button from '../components/UI/Button'
+import StatCard from '../components/UI/StatCard'
 import { formatBusinessDate, getDayLabel } from '../utils/dateTime'
 import { formatCurrency, formatVariance } from '../utils/currency'
 
@@ -156,8 +157,34 @@ export default function BusinessDays() {
         </div>
       )}
 
+      {/* Stat Cards */}
+      {!loading && rows.length > 0 && (() => {
+        const openCount = rows.filter(r => r.status === 'open').length
+        const closedCount = rows.filter(r => r.status === 'closed').length
+        const totalSales = rows.reduce((sum, r) => sum + parseFloat(r.total_sales || 0), 0)
+        const netVariance = rows.reduce((sum, r) => sum + parseFloat(r.total_variance || 0), 0)
+        return (
+          <div className="grid-stats">
+            <StatCard icon="🔄" label="Open Today" value={openCount} />
+            <StatCard icon="📅" label="Closed" value={closedCount} />
+            <StatCard icon="💰" label="Total Sales" value={formatCurrency(totalSales)} />
+            <StatCard
+              icon={netVariance >= 0 ? '📈' : '📉'}
+              label="Net Variance"
+              value={formatVariance(netVariance).text}
+              valueColor={netVariance > 0 ? '#2DAE1A' : netVariance < 0 ? '#EF4444' : undefined}
+            />
+          </div>
+        )
+      })()}
+
       {/* Table */}
-      <div className="card" style={{ padding: 0 }}>
+      <div className="card" style={{ paddingBottom: 0 }}>
+        <div className="stack-row" style={{ paddingLeft: 0, paddingRight: 0 }}>
+          <h2 className="card-title">Business Days</h2>
+          <span className="muted">Click a row to view its shifts</span>
+        </div>
+        <div style={{ margin: '0 -20px' }}>
         <table className="table">
           <thead>
             <tr>
@@ -282,6 +309,7 @@ export default function BusinessDays() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
 
       {/* Close Confirmation Modal */}

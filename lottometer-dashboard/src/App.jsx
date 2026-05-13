@@ -18,6 +18,7 @@ import HomePage from './pages/public/HomePage'
 import ContactPage from './pages/public/ContactPage'
 import PricingPage from './pages/public/PricingPage'
 import GetStartedPage from './pages/public/GetStartedPage'
+import SampleReportPreview from './pages/public/SampleReportPreview'
 
 import SuperAdminLayout from './pages/superadmin/SuperAdminLayout'
 import SuperAdminLogin from './pages/superadmin/SuperAdminLogin'
@@ -59,6 +60,7 @@ function AppRoutes() {
       <Route path="/contact" element={<ContactPage />} />
       <Route path="/apply" element={<Navigate to="/pricing" replace />} />
       <Route path="/get-started" element={<GetStartedPage />} />
+      <Route path="/sample-report" element={<SampleReportPreview />} />
 
       {/* Login */}
       <Route path="/login" element={<PublicRoute><Login /></PublicRoute>} />

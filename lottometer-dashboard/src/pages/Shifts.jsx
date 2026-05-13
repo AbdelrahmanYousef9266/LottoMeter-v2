@@ -5,9 +5,19 @@ import { listBusinessDays } from '../api/businessDays'
 import { listUsers } from '../api/users'
 import useApi from '../hooks/useApi'
 import Badge from '../components/UI/Badge'
+import StatCard from '../components/UI/StatCard'
 import Table from '../components/UI/Table'
 import { formatLocalTime, formatDuration } from '../utils/dateTime'
 import { formatCurrency, formatVariance } from '../utils/currency'
+
+const STATUS_PILLS = [
+  { value: '', label: 'All' },
+  { value: 'open', label: 'Open' },
+  { value: 'correct', label: 'Correct' },
+  { value: 'over', label: 'Over' },
+  { value: 'short', label: 'Short' },
+  { value: 'voided', label: 'Voided' },
+]
 
 function getStatusVariant(status) {
   switch (status) {
@@ -171,44 +181,46 @@ export default function Shifts() {
       </div>
 
       {/* Filter bar */}
-      <div
-        className="card"
-        style={{ marginBottom: 20, display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}
-      >
-        <div className="form-group" style={{ marginBottom: 0, minWidth: 200 }}>
-          <label className="form-label">Business Day</label>
-          <select
-            className="input-field"
-            value={filters.business_day_id}
-            onChange={(e) => setFilters((p) => ({ ...p, business_day_id: e.target.value }))}
-          >
-            <option value="">All Business Days</option>
-            {businessDays.map((bd) => (
-              <option key={bd.id || bd._id} value={bd.id || bd._id}>
-                {bd.date || bd.business_date} — {bd.status}
-              </option>
-            ))}
-          </select>
+      <div className="card" style={{ marginBottom: 20 }}>
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end', marginBottom: 14 }}>
+          <div className="form-group" style={{ marginBottom: 0, minWidth: 200 }}>
+            <label className="form-label">Business Day</label>
+            <select
+              className="input-field"
+              value={filters.business_day_id}
+              onChange={(e) => setFilters((p) => ({ ...p, business_day_id: e.target.value }))}
+            >
+              <option value="">All Business Days</option>
+              {businessDays.map((bd) => (
+                <option key={bd.id || bd._id} value={bd.id || bd._id}>
+                  {bd.date || bd.business_date} — {bd.status}
+                </option>
+              ))}
+            </select>
+          </div>
+          <button className="btn btn-primary btn-sm" onClick={handleFilter}>Apply</button>
+          {(activeFilters.business_day_id || activeFilters.status) && (
+            <button className="btn btn-secondary btn-sm" onClick={handleClear}>Clear</button>
+          )}
         </div>
-        <div className="form-group" style={{ marginBottom: 0, minWidth: 160 }}>
-          <label className="form-label">Status</label>
-          <select
-            className="input-field"
-            value={filters.status}
-            onChange={(e) => setFilters((p) => ({ ...p, status: e.target.value }))}
-          >
-            <option value="">All Statuses</option>
-            <option value="open">Open</option>
-            <option value="correct">Correct</option>
-            <option value="over">Over</option>
-            <option value="short">Short</option>
-            <option value="voided">Voided</option>
-          </select>
+        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+          {STATUS_PILLS.map((pill) => (
+            <button
+              key={pill.value}
+              className={`btn btn-sm${filters.status === pill.value ? ' btn-primary' : ' btn-secondary'}`}
+              style={{ borderRadius: 999 }}
+              onClick={() => {
+                setFilters((p) => ({ ...p, status: pill.value }))
+                const params = {}
+                if (filters.business_day_id) params.business_day_id = filters.business_day_id
+                if (pill.value) params.status = pill.value
+                setActiveFilters(params)
+              }}
+            >
+              {pill.label}
+            </button>
+          ))}
         </div>
-        <button className="btn btn-primary btn-sm" onClick={handleFilter}>Apply</button>
-        {(activeFilters.business_day_id || activeFilters.status) && (
-          <button className="btn btn-secondary btn-sm" onClick={handleClear}>Clear</button>
-        )}
       </div>
 
       {error && (
@@ -216,6 +228,32 @@ export default function Shifts() {
           Error: {error}
         </div>
       )}
+
+      {!loading && shifts.length > 0 && (() => {
+        const openCount = shifts.filter(s => s.status === 'open').length
+        const closedCount = shifts.filter(s => s.status !== 'open').length
+        const totalSales = shifts.reduce((sum, s) => sum + parseFloat(s.tickets_total || 0), 0)
+        const netVariance = shifts.reduce((sum, s) => sum + parseFloat(s.difference || 0), 0)
+        const varInfo = formatVariance(netVariance)
+        return (
+          <div className="grid-stats">
+            <StatCard icon="🔄" label="Total Shifts" value={shifts.length} />
+            <StatCard icon="🟢" label="Open" value={openCount} />
+            <StatCard icon="✅" label="Closed" value={closedCount} />
+            <StatCard
+              icon="💰"
+              label="Total Sales"
+              value={formatCurrency(totalSales)}
+            />
+            <StatCard
+              icon={netVariance >= 0 ? '📈' : '📉'}
+              label="Net Variance"
+              value={varInfo.text}
+              valueColor={netVariance > 0 ? '#2DAE1A' : netVariance < 0 ? '#EF4444' : undefined}
+            />
+          </div>
+        )
+      })()}
 
       <div className="card" style={{ padding: 0 }}>
         <Table

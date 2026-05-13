@@ -59,13 +59,21 @@ function Toast({ message, type, onDismiss }) {
   )
 }
 
-function SectionCard({ title, children, onSave, saving, saveLabel = 'Save Changes' }) {
+function SectionCard({ title, subtitle, children, onSave, saving, saveLabel = 'Save Changes' }) {
   return (
-    <div className="card">
-      <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 20, color: 'var(--text-primary)' }}>{title}</h2>
-      {children}
+    <div className="card" style={{ marginBottom: 20, padding: 0 }}>
+      <div style={{ padding: '20px 24px 8px' }}>
+        <h2 className="card-title" style={{ marginBottom: subtitle ? 4 : 12 }}>{title}</h2>
+        {subtitle && <div className="muted" style={{ marginBottom: 12 }}>{subtitle}</div>}
+      </div>
+      <div style={{ padding: '0 24px 16px' }}>{children}</div>
       {onSave && (
-        <div style={{ marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+        <div style={{
+          padding: '12px 24px',
+          background: 'var(--bg-primary)',
+          borderTop: '1px solid var(--border)',
+          display: 'flex', justifyContent: 'flex-end', gap: 8,
+        }}>
           <button className="btn btn-primary" onClick={onSave} disabled={saving}>
             {saving ? 'Saving…' : saveLabel}
           </button>
@@ -471,8 +479,11 @@ function SubscriptionSection() {
   }, [])
 
   return (
-    <div className="card">
-      <h2 style={{ fontSize: 17, fontWeight: 700, marginBottom: 20, color: 'var(--text-primary)' }}>Subscription</h2>
+    <div className="card" style={{ marginBottom: 20, padding: 0 }}>
+      <div style={{ padding: '20px 24px 8px' }}>
+        <h2 className="card-title" style={{ marginBottom: 12 }}>Subscription</h2>
+      </div>
+      <div style={{ padding: '0 24px 16px' }}>
 
       {loading ? (
         <LoadingSpinner />
@@ -521,6 +532,7 @@ function SubscriptionSection() {
           </div>
         </>
       )}
+      </div>
     </div>
   )
 }

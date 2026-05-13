@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { listBooks, getBooksSummary, getBookDetail } from '../api/books'
 import useApi from '../hooks/useApi'
 import Badge from '../components/UI/Badge'
+import StatCard from '../components/UI/StatCard'
 import Table from '../components/UI/Table'
 import Modal from '../components/UI/Modal'
 import { formatDate, formatLocalDateTime } from '../utils/dateTime'
@@ -136,36 +137,17 @@ export default function Books() {
         </div>
       </div>
 
-      {/* Summary chips */}
+      {/* Stat Cards */}
       {summaryData && (
-        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 20 }}>
-          {[
-            { label: 'Total', value: summaryData.total_count ?? summaryData.total, color: 'var(--text-primary)' },
-            { label: 'Active', value: summaryData.active_count ?? summaryData.active, color: 'var(--green)' },
-            { label: 'Sold', value: summaryData.sold_count ?? summaryData.sold, color: 'var(--text-secondary)' },
-            { label: 'Returned', value: summaryData.returned_count ?? summaryData.returned, color: 'var(--amber)' },
-          ].map((chip) => (
-            <div
-              key={chip.label}
-              style={{
-                background: 'var(--bg-card)',
-                border: '1px solid var(--border)',
-                borderRadius: 8,
-                padding: '8px 16px',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 8,
-                fontSize: 13,
-              }}
-            >
-              <span style={{ color: 'var(--text-secondary)' }}>{chip.label}:</span>
-              <span style={{ fontWeight: 700, color: chip.color }}>{chip.value ?? '—'}</span>
-            </div>
-          ))}
+        <div className="grid-stats">
+          <StatCard icon="📚" label="Total Books" value={summaryData.total_count ?? summaryData.total} />
+          <StatCard icon="✅" label="Active" value={summaryData.active_count ?? summaryData.active} />
+          <StatCard icon="💲" label="Sold" value={summaryData.sold_count ?? summaryData.sold} />
+          <StatCard icon="↩️" label="Returned" value={summaryData.returned_count ?? summaryData.returned} />
         </div>
       )}
 
-      {/* Search */}
+            {/* Search */}
       <div
         className="card"
         style={{ marginBottom: 20, display: 'flex', gap: 12, alignItems: 'flex-end', flexWrap: 'wrap' }}
@@ -190,14 +172,22 @@ export default function Books() {
         <div style={{ color: 'var(--red)', marginBottom: 16, fontSize: 14 }}>Error: {error}</div>
       )}
 
-      <div className="card" style={{ padding: 0 }}>
-        <Table
-          columns={columns}
-          data={books}
-          loading={loading}
-          emptyMessage="No books found. Books are created when scanned using the mobile app."
-          onRowClick={handleBookClick}
-        />
+      <div className="card" style={{ paddingBottom: 0 }}>
+        <div className="stack-row">
+          <h2 className="card-title">Book Inventory</h2>
+          {!loading && books.length > 0 && (
+            <span className="muted">{total} total</span>
+          )}
+        </div>
+        <div style={{ margin: '0 -20px' }}>
+          <Table
+            columns={columns}
+            data={books}
+            loading={loading}
+            emptyMessage="No books found. Books are created when scanned using the mobile app."
+            onRowClick={handleBookClick}
+          />
+        </div>
       </div>
 
       {/* Pagination */}

@@ -1,5 +1,5 @@
 :root {
-  /* Colors */
+  /* ── Dashboard tokens ──────────────────────────────── */
   --bg-primary: #F6FAFF;
   --bg-card: #FFFFFF;
   --text-primary: #0A1128;
@@ -11,17 +11,65 @@
   --border: #E2EAF4;
   --shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
   --radius: 12px;
-
-  /* Gradient */
   --gradient: linear-gradient(to right, #0077CC, #2DAE1A);
-
-  /* Typography */
-  --font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-
-  /* Transitions */
+  --font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --transition: 0.2s ease;
-
-  /* Layout */
   --sidebar-width: 240px;
   --topbar-height: 64px;
+
+  /* ── LottoMeter design-system aliases (--lm-*) ────── */
+  /* These mirror colors_and_type.css so that design-kit CSS works verbatim */
+  --lm-blue:          #0077CC;
+  --lm-blue-dark:     #005FA3;
+  --lm-blue-light:    #E6F2FF;
+  --lm-blue-lighter:  #EAF6FF;
+  --lm-blue-faint:    #F0F7FF;
+  --lm-green:         #2DAE1A;
+  --lm-green-dark:    #229113;
+  --lm-green-light:   #EDFBEA;
+  --lm-green-faint:   #DCFCE7;
+  --lm-gradient:      linear-gradient(to right, #0077CC, #2DAE1A);
+  --lm-gradient-light: linear-gradient(to right, #4DB8FF, #5CDE3A);
+  --lm-gradient-soft:  linear-gradient(135deg, #EAF6FF, #EAF9EA);
+  --lm-bg:            #F6FAFF;
+  --lm-bg-alt:        #F8FAFF;
+  --lm-surface:       #FFFFFF;
+  --lm-fg:            #0A1128;
+  --lm-fg-2:          #46627F;
+  --lm-fg-3:          #8FA3B8;
+  --lm-fg-faint:      #C8D8E8;
+  --lm-border:        #E2EAF4;
+  --lm-border-strong: #DDE6F0;
+  --lm-ink:           #0A1128;
+  --lm-success:       #2DAE1A;
+  --lm-success-bg:    #EDFBEA;
+  --lm-warning:       #D97706;
+  --lm-warning-bg:    #FFFBEB;
+  --lm-danger:        #EF4444;
+  --lm-danger-bg:     #FEF2F2;
+  --lm-badge-green-bg: rgba(45, 174, 26, 0.12);
+  --lm-badge-green-fg: #1a8c0e;
+  --lm-badge-red-bg:   rgba(239, 68, 68, 0.12);
+  --lm-badge-red-fg:   #c02020;
+  --lm-badge-amber-bg: rgba(217, 119, 6, 0.12);
+  --lm-badge-amber-fg: #b05a00;
+  --lm-badge-blue-bg:  rgba(0, 119, 204, 0.12);
+  --lm-badge-blue-fg:  #005a9e;
+  --lm-badge-gray-bg:  rgba(70, 98, 127, 0.12);
+  --lm-badge-gray-fg:  #46627F;
+  --lm-radius-sm:     8px;
+  --lm-radius-md:     12px;
+  --lm-radius-lg:     16px;
+  --lm-radius-xl:     20px;
+  --lm-radius-pill:   999px;
+  --lm-shadow-sm:     0 1px 4px rgba(10, 17, 40, 0.05);
+  --lm-shadow-card:   0 2px 12px rgba(0, 0, 0, 0.08);
+  --lm-shadow-lift:   0 8px 24px rgba(0, 119, 204, 0.12);
+  --lm-shadow-modal:  0 20px 60px rgba(0, 0, 0, 0.20);
+  --lm-shadow-glow:   0 4px 20px rgba(0, 119, 204, 0.30);
+  --lm-sidebar-width: 240px;
+  --lm-topbar-height: 64px;
+  --lm-transition:    0.2s ease;
+  --lm-transition-fast: 0.15s ease;
+  --lm-font-sans:     'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 }

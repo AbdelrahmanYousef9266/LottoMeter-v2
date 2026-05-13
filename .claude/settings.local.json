@@ -1,7 +1,10 @@
 {
   "permissions": {
     "allow": [
-      "Bash(flask db *)"
+      "Bash(flask db *)",
+      "Bash(node -e ' *)",
+      "Bash(ls /mnt/project/ 2>/dev/null || echo \"NOT FOUND\"; ls \"C:\\\\Users\\\\abodh\\\\.claude\\\\projects\\\\c--Users-abodh-LottoMeter-v2\\\\b49b35e7-4ba2-4a6a-a0bb-815e5e100958\\\\tool-results\\\\design2\\\\lottometer-design-system\\\\\" 2>/dev/null || echo \"Design bundle not found\")",
+      "Read(//mnt/**)"
     ]
   }
 }

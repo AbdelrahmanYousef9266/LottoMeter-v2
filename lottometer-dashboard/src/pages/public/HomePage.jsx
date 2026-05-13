@@ -1,62 +1,52 @@
 import { Link } from 'react-router-dom'
 import Navbar from '../../components/public/Navbar'
 import Footer from '../../components/public/Footer'
+import DarkHero from '../../components/public/DarkHero'
 
-const heroBadgeStyles = `
-  @keyframes badge-shimmer {
-    0%   { background-position: -200% center; }
-    100% { background-position:  200% center; }
+// ── Inline SVG icons for problem + feature cards ───────────────────────────
+function PubIcon({ name, size = 24 }) {
+  const s = { fill: 'none', stroke: '#0077CC', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }
+  const paths = {
+    clipboard:    <><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><path d="M16 4h2a2 2 0 012 2v14a2 2 0 01-2 2H6a2 2 0 01-2-2V6a2 2 0 012-2h2"/><path d="M9 12h6M9 16h4"/></>,
+    'dollar-sign': <><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 000 7h5a3.5 3.5 0 010 7H6"/></>,
+    'book-open':  <><path d="M2 3h6a4 4 0 014 4v14a3 3 0 00-3-3H2z"/><path d="M22 3h-6a4 4 0 00-4 4v14a3 3 0 013-3h7z"/></>,
+    clock:        <><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></>,
+    'bar-chart-3': <><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></>,
+    smartphone:   <><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></>,
+    'refresh-cw': <><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/></>,
+    calendar:     <><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></>,
+    users:        <><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></>,
   }
-  @keyframes dot-pulse {
-    0%, 100% { transform: scale(1);   opacity: 1; box-shadow: 0 0 0 0 rgba(0,119,204,0.6); }
-    50%       { transform: scale(1.3); opacity: 0.8; box-shadow: 0 0 0 5px rgba(0,119,204,0); }
-  }
-  .hero-badge {
-    background: linear-gradient(90deg, #EAF6FF 0%, #d6eeff 40%, #c5f0d6 60%, #EAF6FF 100%);
-    background-size: 200% auto;
-    animation: badge-shimmer 3s linear infinite;
-    border: 1px solid rgba(0,119,204,0.25);
-    border-radius: 999px;
-    padding: 7px 16px;
-    font-size: 13px;
-    font-weight: 700;
-    color: #0077CC;
-    margin-bottom: 28px;
-    display: inline-flex;
-    align-items: center;
-    gap: 8px;
-    letter-spacing: 0.01em;
-  }
-  .hero-badge-dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    background: #0077CC; display: inline-block; flex-shrink: 0;
-    animation: dot-pulse 1.8s ease-in-out infinite;
-  }
-`
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} {...s}>
+      {paths[name]}
+    </svg>
+  )
+}
 
 const PROBLEMS = [
-  { icon: '📋', title: 'Paper-Based Tracking', desc: 'Shift records are handwritten, lost, or inconsistent — making audits a nightmare.' },
-  { icon: '💸', title: 'Cash Variance Goes Unnoticed', desc: 'Overs and shorts are only discovered at end of day, with no clear accountability trail.' },
-  { icon: '📚', title: 'Book Inventory Chaos', desc: 'No visibility into which lottery books are active, sold, or assigned to which employee.' },
-  { icon: '⏱️', title: 'Slow Shift Handovers', desc: 'Opening and closing a shift takes too long without a standardized digital process.' },
-  { icon: '📊', title: 'Zero Business Insights', desc: 'Owners have no data on daily sales trends, top performers, or variance history.' },
+  { icon: 'clipboard',    title: 'Paper-Based Tracking',         desc: 'Shift records are handwritten, lost, or inconsistent — making audits a nightmare.' },
+  { icon: 'dollar-sign',  title: 'Cash Variance Goes Unnoticed', desc: 'Overs and shorts are only discovered at end of day, with no clear accountability trail.' },
+  { icon: 'book-open',    title: 'Book Inventory Chaos',         desc: 'No visibility into which lottery books are active, sold, or assigned to which employee.' },
+  { icon: 'clock',        title: 'Slow Shift Handovers',         desc: 'Opening and closing a shift takes too long without a standardized digital process.' },
+  { icon: 'bar-chart-3',  title: 'Zero Business Insights',       desc: 'Owners have no data on daily sales trends, top performers, or variance history.' },
 ]
 
 const FEATURES = [
-  { icon: '📱', title: 'Mobile Barcode Scanning', desc: 'Scan lottery book barcodes in seconds from any iPhone or Android device — no special hardware required.' },
-  { icon: '🔄', title: 'Digital Shift Management', desc: 'Open and close shifts digitally with automatic time tracking, cash reconciliation, and status badges.' },
-  { icon: '📚', title: 'Book Inventory Tracking', desc: 'Know exactly which books are active, sold, or returned at any given time, assigned to the right employee.' },
-  { icon: '📊', title: 'Real-Time Reports', desc: 'Instant shift reports show gross sales, expected cash, actual cash, and variance — down to the cent.' },
-  { icon: '📅', title: 'Business Day Control', desc: 'Group shifts by business day, close days with one tap, and keep a complete audit trail automatically.' },
-  { icon: '👥', title: 'Multi-Employee Support', desc: 'Manage your entire team from the dashboard — each employee has their own login and shift history.' },
+  { icon: 'smartphone',   title: 'Mobile Barcode Scanning',   desc: 'Scan lottery book barcodes in seconds from any iPhone or Android device — no special hardware required.' },
+  { icon: 'refresh-cw',   title: 'Digital Shift Management',  desc: 'Open and close shifts digitally with automatic time tracking, cash reconciliation, and status badges.' },
+  { icon: 'book-open',    title: 'Book Inventory Tracking',   desc: 'Know exactly which books are active, sold, or returned at any given time, assigned to the right employee.' },
+  { icon: 'bar-chart-3',  title: 'Real-Time Reports',          desc: 'Instant shift reports show gross sales, expected cash, actual cash, and variance — down to the cent.' },
+  { icon: 'calendar',     title: 'Business Day Control',       desc: 'Group shifts by business day, close days with one tap, and keep a complete audit trail automatically.' },
+  { icon: 'users',        title: 'Multi-Employee Support',     desc: 'Manage your entire team from the dashboard — each employee has their own login and shift history.' },
 ]
 
 const STEPS = [
-  { num: '01', title: 'Owner sets up the store', desc: 'Create your account, add your store, and invite employees via the web dashboard in minutes.' },
-  { num: '02', title: 'Employee opens a shift', desc: 'Each employee logs in on the mobile app and taps "Open Shift" to start their working day.' },
-  { num: '03', title: 'Scan books during the shift', desc: 'As lottery books are sold or activated, the employee scans the barcode — inventory updates instantly.' },
+  { num: '01', title: 'Owner sets up the store',         desc: 'Create your account, add your store, and invite employees via the web dashboard in minutes.' },
+  { num: '02', title: 'Employee opens a shift',          desc: 'Each employee logs in on the mobile app and taps "Open Shift" to start their working day.' },
+  { num: '03', title: 'Scan books during the shift',     desc: 'As lottery books are sold or activated, the employee scans the barcode — inventory updates instantly.' },
   { num: '04', title: 'Close the shift with cash count', desc: 'At end of shift, the employee enters their cash total. LottoMeter calculates variance automatically.' },
-  { num: '05', title: 'Owner reviews reports', desc: 'Log into the dashboard to see every shift report, daily sales totals, and team performance at a glance.' },
+  { num: '05', title: 'Owner reviews reports',           desc: 'Log into the dashboard to see every shift report, daily sales totals, and team performance at a glance.' },
 ]
 
 export default function HomePage() {
@@ -64,96 +54,7 @@ export default function HomePage() {
     <div style={{ fontFamily: "'Inter', system-ui, sans-serif", color: '#0A1128', background: '#fff' }}>
       <Navbar />
 
-      {/* Hero */}
-      <style>{heroBadgeStyles}</style>
-      <section style={{ background: 'linear-gradient(135deg, #F0F7FF 0%, #F8FFF4 100%)', padding: '96px 24px 80px', textAlign: 'center' }}>
-        <div style={{ maxWidth: 760, margin: '0 auto' }}>
-          <div className="hero-badge">
-            <span className="hero-badge-dot" />
-            Built for store owners
-          </div>
-          <h1 style={{ fontSize: 'clamp(36px, 5vw, 58px)', fontWeight: 900, lineHeight: 1.12, margin: '0 0 24px', letterSpacing: '-0.02em' }}>
-            The Fastest Way To{' '}
-            <span style={{ background: 'linear-gradient(to right, #0077CC, #2DAE1A)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text' }}>
-              Track Lottery Shifts
-            </span>
-          </h1>
-          <p style={{ color: '#46627F', fontSize: '18px', lineHeight: '1.8', marginBottom: '32px' }}>
-            LottoMeter replaces paper-based shift records with a computerized
-            system that the whole team can use from their own phone.
-            <br /><br />
-            <span style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
-              <span style={{
-                width: '10px', height: '10px', borderRadius: '50%',
-                backgroundColor: '#2DAE1A',
-                boxShadow: '0 0 6px #2DAE1A',
-                display: 'inline-block',
-                flexShrink: 0,
-              }}></span>
-              <span>Employees can scan books, track cash and close their shift in seconds.</span>
-            </span>
-            <span style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{
-                width: '10px', height: '10px', borderRadius: '50%',
-                backgroundColor: '#2DAE1A',
-                boxShadow: '0 0 6px #2DAE1A',
-                display: 'inline-block',
-                flexShrink: 0,
-              }}></span>
-              <span>Owners can keep track of cash-flow, view daily reports and monitor shifts.</span>
-            </span>
-          </p>
-          <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Link to="/get-started" style={{
-              textDecoration: 'none', fontSize: 15, fontWeight: 700, color: '#fff',
-              padding: '14px 28px', borderRadius: 10,
-              background: 'linear-gradient(to right, #0077CC, #2DAE1A)',
-              boxShadow: '0 4px 16px rgba(0,119,204,0.3)',
-            }}>
-              Get Started
-            </Link>
-            <a href="#how-it-works" style={{
-              textDecoration: 'none', fontSize: 15, fontWeight: 600, color: '#0077CC',
-              padding: '14px 28px', borderRadius: 10,
-              border: '2px solid #B3D9F5', background: '#fff',
-            }}>
-              See How It Works
-            </a>
-          </div>
-        </div>
-
-        {/* Dashboard mockup strip */}
-        <div style={{
-          maxWidth: 900, margin: '64px auto 0',
-          background: 'linear-gradient(135deg, #0A1128 0%, #0E2040 100%)',
-          borderRadius: 16, padding: '24px', boxShadow: '0 24px 80px rgba(0,77,140,0.18)',
-          border: '1px solid #1E3A5F',
-        }}>
-          <div style={{ display: 'flex', gap: 6, marginBottom: 16 }}>
-            {['#FF5F57', '#FEBC2E', '#28C840'].map((c) => (
-              <div key={c} style={{ width: 12, height: 12, borderRadius: '50%', background: c }} />
-            ))}
-          </div>
-          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
-            {[
-              { label: "Today's Sales", value: '$4,820', color: '#2DAE1A' },
-              { label: 'Active Shifts', value: '3', color: '#0077CC' },
-              { label: 'Books Scanned', value: '47', color: '#F59E0B' },
-              { label: 'Variance', value: '+$12.00', color: '#2DAE1A' },
-            ].map((stat) => (
-              <div key={stat.label} style={{
-                flex: '1 1 160px', background: '#0E2040', borderRadius: 10, padding: '16px 20px',
-                border: '1px solid #1E3A5F',
-              }}>
-                <div style={{ fontSize: 11, color: '#8EA8C3', fontWeight: 600, marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.06em' }}>
-                  {stat.label}
-                </div>
-                <div style={{ fontSize: 24, fontWeight: 800, color: stat.color }}>{stat.value}</div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </section>
+      <DarkHero />
 
       {/* Problems */}
       <section style={{ padding: '80px 24px', background: '#fff' }}>
@@ -163,7 +64,7 @@ export default function HomePage() {
               The Problem
             </p>
             <h2 style={{ fontSize: 'clamp(28px, 3vw, 40px)', fontWeight: 800, margin: '0 0 16px', letterSpacing: '-0.02em' }}>
-              Running a lottery store is harder than it needs to be
+              Running stores is harder than it needs to be
             </h2>
             <p style={{ fontSize: 16, color: '#46627F', maxWidth: 520, margin: '0 auto' }}>
               Most stores still rely on pen and paper. That leads to errors, disputes, and zero accountability.
@@ -176,7 +77,14 @@ export default function HomePage() {
                 background: '#F8FAFF', borderRadius: 12, padding: '24px',
                 border: '1px solid #E2EAF4',
               }}>
-                <div style={{ fontSize: 28, marginBottom: 12 }}>{p.icon}</div>
+                <div style={{
+                  width: 48, height: 48, borderRadius: 12,
+                  background: 'rgba(0,119,204,0.08)',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  marginBottom: 14,
+                }}>
+                  <PubIcon name={p.icon} size={24} />
+                </div>
                 <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 8 }}>{p.title}</div>
                 <div style={{ fontSize: 13, color: '#46627F', lineHeight: 1.6 }}>{p.desc}</div>
               </div>
@@ -210,12 +118,12 @@ export default function HomePage() {
                 onMouseLeave={(e) => { e.currentTarget.style.transform = 'none'; e.currentTarget.style.boxShadow = '0 2px 12px rgba(0,77,140,0.06)' }}
               >
                 <div style={{
-                  width: 44, height: 44, borderRadius: 12,
+                  width: 48, height: 48, borderRadius: 12,
                   background: 'linear-gradient(135deg, #EAF6FF, #EAF9EA)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  fontSize: 22, marginBottom: 16,
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                  marginBottom: 16,
                 }}>
-                  {f.icon}
+                  <PubIcon name={f.icon} size={22} />
                 </div>
                 <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 8 }}>{f.title}</div>
                 <div style={{ fontSize: 14, color: '#46627F', lineHeight: 1.65 }}>{f.desc}</div>
@@ -236,10 +144,9 @@ export default function HomePage() {
               Up and running in under 10 minutes
             </h2>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
             {STEPS.map((step, i) => (
-              <div key={step.num} style={{ display: 'flex', gap: 24, alignItems: 'flex-start', position: 'relative' }}>
-                {/* Line connector */}
+              <div key={step.num} style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', flexShrink: 0 }}>
                   <div style={{
                     width: 48, height: 48, borderRadius: '50%',
@@ -263,35 +170,25 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* CTA */}
-      <section style={{
-        padding: '80px 24px',
-        background: 'linear-gradient(135deg, #0A1128 0%, #0E2040 100%)',
-        textAlign: 'center',
-      }}>
-        <div style={{ maxWidth: 620, margin: '0 auto' }}>
+      {/* Final CTA */}
+      <section className="lm-bg-dark-hero" style={{ padding: '96px 24px', textAlign: 'center' }}>
+        <div style={{ maxWidth: 640, margin: '0 auto', position: 'relative', zIndex: 1 }}>
           <h2 style={{ fontSize: 'clamp(28px, 3vw, 40px)', fontWeight: 800, color: '#fff', margin: '0 0 16px', letterSpacing: '-0.02em' }}>
-            Ready to modernize your store?
+            Ready to{' '}
+            <span style={{
+              background: 'linear-gradient(to right, #4DB8FF, #5CDE3A)',
+              WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', backgroundClip: 'text',
+            }}>
+              modernize
+            </span>
+            {' '}your store?
           </h2>
-          <p style={{ fontSize: 16, color: '#8EA8C3', margin: '0 0 40px', lineHeight: 1.7 }}>
+          <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.7)', lineHeight: 1.7, margin: '0 0 40px' }}>
             Join lottery store owners already using LottoMeter to save time and reduce errors every single day.
           </p>
           <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Link to="/get-started" style={{
-              textDecoration: 'none', fontSize: 15, fontWeight: 700, color: '#0A1128',
-              padding: '14px 28px', borderRadius: 10,
-              background: 'linear-gradient(to right, #4DB8FF, #5CDE3A)',
-              boxShadow: '0 4px 20px rgba(77,184,255,0.25)',
-            }}>
-              Get Started
-            </Link>
-            <Link to="/contact" style={{
-              textDecoration: 'none', fontSize: 15, fontWeight: 600, color: '#C8D8E8',
-              padding: '14px 28px', borderRadius: 10,
-              border: '1.5px solid #1E3A5F',
-            }}>
-              Contact Us
-            </Link>
+            <Link to="/get-started" className="btn-gradient lg">Get Started</Link>
+            <Link to="/contact" className="btn-on-dark">Contact Us</Link>
           </div>
         </div>
       </section>

@@ -4,6 +4,7 @@ import useApi from '../hooks/useApi'
 import Modal from '../components/UI/Modal'
 import Button from '../components/UI/Button'
 import Badge from '../components/UI/Badge'
+import StatCard from '../components/UI/StatCard'
 import { useAuth } from '../context/AuthContext'
 import { formatCurrency } from '../utils/currency'
 
@@ -150,6 +151,21 @@ export default function Slots() {
       {error && (
         <div style={{ color: 'var(--red)', marginBottom: 16, fontSize: 14 }}>Error: {error}</div>
       )}
+
+      {/* Stat Cards */}
+      {!loading && slots.length > 0 && (() => {
+        const filled = slots.filter(s => s.current_book).length
+        const empty = slots.length - filled
+        const capacityPct = Math.round((filled / slots.length) * 100)
+        return (
+          <div className="grid-stats">
+            <StatCard icon="🎰" label="Total Slots" value={slots.length} />
+            <StatCard icon="✅" label="Filled" value={filled} />
+            <StatCard icon="⬜" label="Empty" value={empty} />
+            <StatCard icon="📊" label="Capacity Used" value={capacityPct + '%'} />
+          </div>
+        )
+      })()}
 
       {/* Slot Grid */}
       {loading ? (

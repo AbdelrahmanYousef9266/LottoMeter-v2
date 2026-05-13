@@ -151,14 +151,7 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Row */}
-      <div
-        style={{
-          display: 'grid',
-          gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-          gap: 16,
-          marginBottom: 24,
-        }}
-      >
+      <div className="grid-stats">
         <StatCard
           icon="📚"
           label="Active Books"
@@ -177,48 +170,24 @@ export default function Dashboard() {
         <StatCard
           icon={varianceInfo.isPositive ? '📈' : varianceInfo.isNegative ? '📉' : '➖'}
           label="Today's Variance"
-          value={
-            loading ? '...' : (
-              <div>
-                <span
-                  style={{
-                    color: variance >= 0 ? '#2DAE1A' : '#EF4444',
-                    fontSize: 22,
-                    fontWeight: 700,
-                    display: 'block',
-                  }}
-                >
-                  {varianceInfo.text}
-                </span>
-                <span style={{ fontSize: 11, color: 'var(--text-secondary)', marginTop: 4, display: 'block' }}>
-                  Over: {formatCurrency(totalOver)} | Short: {formatCurrency(totalShort)}
-                </span>
-              </div>
-            )
-          }
+          value={loading ? '...' : varianceInfo.text}
+          valueColor={variance > 0 ? '#2DAE1A' : variance < 0 ? '#EF4444' : undefined}
         />
       </div>
 
       {/* Sales Chart */}
       <div className="card" style={{ marginBottom: 24 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: 16,
-          }}
-        >
-          <h2 style={{ fontSize: 16, fontWeight: 700 }}>Sales — Last 7 Days</h2>
-          <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Daily revenue</span>
+        <div className="stack-row">
+          <h2 className="card-title">Sales — Last 7 Days</h2>
+          <span className="muted">Daily revenue</span>
         </div>
         <SalesChart data={MOCK_SALES_DATA} />
       </div>
 
       {/* Ticket Breakdown */}
       <div className="card" style={{ marginBottom: 24 }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
-          <h2 style={{ fontSize: 16, fontWeight: 700 }}>Tickets Sold Today</h2>
+        <div className="stack-row">
+          <h2 className="card-title">Tickets Sold Today</h2>
           {ticketBreakdown && !loading && (
             <span style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
               {ticketBreakdown.total_tickets} tickets &middot; {formatCurrency(parseFloat(ticketBreakdown.total_value))}
@@ -232,31 +201,15 @@ export default function Dashboard() {
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {ticketBreakdown.breakdown.map((row) => (
-              <div
-                key={row.ticket_price}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'space-between',
-                  padding: '10px 14px',
-                  background: 'var(--bg-secondary, #F8FAFC)',
-                  borderRadius: 8,
-                  border: '1px solid var(--border, #E2E8F0)',
-                }}
-              >
+              <div key={row.ticket_price} className="tick-row">
                 <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{
-                    fontWeight: 700,
-                    fontSize: 15,
-                    color: 'var(--text-primary)',
-                    minWidth: 52,
-                  }}>
+                  <span style={{ fontWeight: 700, fontSize: 15, minWidth: 52 }}>
                     {formatCurrency(parseFloat(row.ticket_price))}
                   </span>
-                  <span style={{ fontSize: 13, color: 'var(--text-secondary)' }}>tickets</span>
+                  <span className="muted">tickets</span>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                  <span style={{ fontWeight: 700, fontSize: 18, color: '#0A1128' }}>
+                  <span style={{ fontWeight: 700, fontSize: 18 }}>
                     {row.tickets_sold}
                     <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 4 }}>sold</span>
                   </span>
@@ -266,17 +219,10 @@ export default function Dashboard() {
                 </div>
               </div>
             ))}
-            <div style={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              padding: '10px 14px',
-              borderTop: '2px solid var(--border, #E2E8F0)',
-              marginTop: 4,
-            }}>
+            <div className="tick-total-row">
               <span style={{ fontWeight: 700, fontSize: 14 }}>Total</span>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-                <span style={{ fontWeight: 700, fontSize: 18, color: '#0A1128' }}>
+                <span style={{ fontWeight: 700, fontSize: 18 }}>
                   {ticketBreakdown.total_tickets}
                   <span style={{ fontSize: 12, fontWeight: 400, color: 'var(--text-secondary)', marginLeft: 4 }}>tickets</span>
                 </span>
@@ -291,15 +237,8 @@ export default function Dashboard() {
 
       {/* Recent Shifts */}
       <div className="card" style={{ marginBottom: 24 }}>
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginBottom: 16,
-          }}
-        >
-          <h2 style={{ fontSize: 16, fontWeight: 700 }}>Recent Shifts</h2>
+        <div className="stack-row">
+          <h2 className="card-title">Recent Shifts</h2>
           <button
             className="btn btn-secondary btn-sm"
             onClick={() => navigate('/dashboard/shifts')}
