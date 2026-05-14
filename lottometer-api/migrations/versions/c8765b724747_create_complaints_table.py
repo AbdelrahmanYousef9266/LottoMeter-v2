@@ -1,6 +1,6 @@
 """create complaints table
 
-Revision ID: a1b2c3d4e5f6
+Revision ID: c8765b724747
 Revises: 4a3c3faa8120
 Create Date: 2026-05-14 00:00:00.000000
 
@@ -10,7 +10,7 @@ import sqlalchemy as sa
 
 
 # revision identifiers, used by Alembic.
-revision = 'a1b2c3d4e5f6'
+revision = 'c8765b724747'
 down_revision = '4a3c3faa8120'
 branch_labels = None
 depends_on = None
