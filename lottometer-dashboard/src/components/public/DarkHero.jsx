@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useState, useEffect, useRef, useCallback } from 'react'
 
 const FEATURE_ICONS = {
   stopwatch: (
@@ -80,6 +81,26 @@ const HERO_COPY = {
   },
 }
 
+// Carousel slides: dashboard screenshot + 4 mobile screenshots
+const SLIDES = [
+  {
+    src: '/brand/mobile-shot.png',
+    label: 'Home',
+  },
+  {
+    src: '/brand/nav1.png',
+    label: 'Slots',
+  },
+  {
+    src: '/brand/nav2.png',
+    label: 'History',
+  },
+  {
+    src: '/brand/nav3.png',
+    label: 'Settings',
+  },
+]
+
 function BadgeIcon({ kind }) {
   const stroke = '#2DAE1A'
   const props = { fill: 'none', stroke, strokeWidth: 1.7, strokeLinecap: 'round', strokeLinejoin: 'round' }
@@ -90,6 +111,125 @@ function BadgeIcon({ kind }) {
   if (kind === 'trending')
     return <svg viewBox="0 0 24 24" width="22" height="22" {...props}><path d="M4 18V8M10 18v-5M16 18v-9"/><path d="M3 14l5-4 4 3 5-6 4 2"/></svg>
   return null
+}
+
+function PhoneCarousel() {
+  const [current, setCurrent] = useState(0)
+  const [enterDir, setEnterDir] = useState('right')
+  const touchStartX = useRef(null)
+  const autoplayRef = useRef(null)
+
+  const advance = useCallback((idx, dir) => {
+    setEnterDir(dir)
+    setCurrent(idx)
+  }, [])
+
+  const next = useCallback(() => {
+    advance((current + 1) % SLIDES.length, 'right')
+  }, [current, advance])
+
+  const prev = useCallback(() => {
+    advance((current - 1 + SLIDES.length) % SLIDES.length, 'left')
+  }, [current, advance])
+
+  useEffect(() => {
+    autoplayRef.current = setInterval(next, 3200)
+    return () => clearInterval(autoplayRef.current)
+  }, [next])
+
+  const resetAutoplay = () => {
+    clearInterval(autoplayRef.current)
+    autoplayRef.current = setInterval(next, 3200)
+  }
+
+  const handlePrev = () => { prev(); resetAutoplay() }
+  const handleNext = () => { next(); resetAutoplay() }
+  const handleDot = (i) => {
+    advance(i, i > current ? 'right' : 'left')
+    resetAutoplay()
+  }
+
+  const onTouchStart = (e) => { touchStartX.current = e.touches[0].clientX }
+  const onTouchEnd = (e) => {
+    if (touchStartX.current === null) return
+    const dx = e.changedTouches[0].clientX - touchStartX.current
+    if (Math.abs(dx) > 40) { dx < 0 ? handleNext() : handlePrev() }
+    touchStartX.current = null
+  }
+
+  const slide = SLIDES[current]
+
+  return (
+    <div className="phone-carousel">
+      {/* Phone bezel */}
+      <div className="phone-bezel" onTouchStart={onTouchStart} onTouchEnd={onTouchEnd}>
+        {/* Status bar */}
+        <div className="phone-status-bar">
+          <span className="phone-time">9:41</span>
+          <div className="phone-status-icons">
+            <svg viewBox="0 0 16 12" width="14" height="10" fill="rgba(255,255,255,0.9)">
+              <rect x="0" y="4" width="3" height="8" rx="0.5"/>
+              <rect x="4.5" y="2.5" width="3" height="9.5" rx="0.5"/>
+              <rect x="9" y="0.5" width="3" height="11.5" rx="0.5"/>
+              <rect x="13.5" y="0" width="2.5" height="12" rx="0.5" opacity="0.3"/>
+            </svg>
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="rgba(255,255,255,0.9)" strokeWidth="1.8">
+              <path d="M5 12.55a11 11 0 0 1 14.08 0M1.42 9a16 16 0 0 1 21.16 0M8.53 16.11a6 6 0 0 1 6.95 0M12 20h.01"/>
+            </svg>
+            <svg viewBox="0 0 24 12" width="22" height="12" fill="none">
+              <rect x="0.5" y="0.5" width="20" height="11" rx="2" stroke="rgba(255,255,255,0.6)" strokeWidth="1"/>
+              <rect x="2" y="2" width="14" height="8" rx="1" fill="rgba(255,255,255,0.9)"/>
+              <path d="M22 4v4a2 2 0 000-4z" fill="rgba(255,255,255,0.5)"/>
+            </svg>
+          </div>
+        </div>
+
+        {/* Screen — key forces remount → replays enter animation on every slide change */}
+        <div
+          key={`${current}-${enterDir}`}
+          className={`phone-screen phone-screen--enter-${enterDir}`}
+        >
+          <img
+            src={slide.src}
+            alt={slide.label}
+            className="phone-screen-img"
+            onError={(e) => { e.currentTarget.style.display = 'none' }}
+            draggable={false}
+          />
+        </div>
+
+        {/* Home indicator */}
+        <div className="phone-home-indicator" />
+      </div>
+
+      {/* Navigation dots */}
+      <div className="phone-dots">
+        {SLIDES.map((s, i) => (
+          <button
+            key={s.label}
+            className={`phone-dot${i === current ? ' active' : ''}`}
+            onClick={() => handleDot(i)}
+            aria-label={s.label}
+          />
+        ))}
+      </div>
+
+      {/* Prev / Next arrows */}
+      <button className="phone-arrow phone-arrow--prev" onClick={handlePrev} aria-label="Previous">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </button>
+      <button className="phone-arrow phone-arrow--next" onClick={handleNext} aria-label="Next">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <polyline points="9 18 15 12 9 6"/>
+        </svg>
+      </button>
+
+      {/* Label chip */}
+      <div className="phone-label">{slide.label}</div>
+    </div>
+  )
 }
 
 export default function DarkHero({ dashShot = 'shifts' }) {
@@ -138,9 +278,11 @@ export default function DarkHero({ dashShot = 'shifts' }) {
             </div>
           </div>
 
-          {/* ── Product mockup ───────────────────────── */}
+          {/* ── Product mockup: dashboard + phone carousel ── */}
           <div className="dark-hero-mockup" aria-hidden="true">
             <div className="dark-hero-mockup-glow" />
+
+            {/* Dashboard screenshot */}
             <div className="dark-hero-dashboard">
               <div className="dark-hero-dashboard-frame">
                 <span className="mac-dot" style={{ background: '#FF5F57' }} />
@@ -153,12 +295,10 @@ export default function DarkHero({ dashShot = 'shifts' }) {
                 onError={(e) => { e.currentTarget.style.display = 'none' }}
               />
             </div>
+
+            {/* Phone carousel (replaces static phone) */}
             <div className="dark-hero-phone">
-              <img
-                src="/brand/mobile-shot.png"
-                alt="Mobile preview"
-                onError={(e) => { e.currentTarget.parentElement.style.display = 'none' }}
-              />
+              <PhoneCarousel />
             </div>
           </div>
         </div>

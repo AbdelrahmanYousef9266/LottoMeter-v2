@@ -24,6 +24,24 @@ function PubIcon({ name, size = 24 }) {
   )
 }
 
+// ── Inline SVG icons for scanner section ──────────────────────────────────
+function ScannerIcon({ name }) {
+  const s = { fill: 'none', stroke: '#0077CC', strokeWidth: 1.8, strokeLinecap: 'round', strokeLinejoin: 'round' }
+  const paths = {
+    zap:    <><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></>,
+    target: <><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></>,
+    sun:    <><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></>,
+    shield: <><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></>,
+    layers: <><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></>,
+    check:  <><polyline points="20 6 9 17 4 12"/></>,
+  }
+  return (
+    <svg viewBox="0 0 24 24" width={20} height={20} {...s}>
+      {paths[name]}
+    </svg>
+  )
+}
+
 const PROBLEMS = [
   { icon: 'clipboard',    title: 'Paper-Based Tracking',         desc: 'Shift records are handwritten, lost, or inconsistent — making audits a nightmare.' },
   { icon: 'dollar-sign',  title: 'Cash Variance Goes Unnoticed', desc: 'Overs and shorts are only discovered at end of day, with no clear accountability trail.' },
@@ -170,6 +188,138 @@ export default function HomePage() {
         </div>
       </section>
 
+      {/* Scanner Device */}
+      <section style={{ padding: '96px 24px', background: '#F0F7FF', overflow: 'hidden' }}>
+        <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+
+          {/* Section label */}
+          <div style={{ textAlign: 'center', marginBottom: 56 }}>
+            <p style={{ fontSize: 13, fontWeight: 700, color: '#0077CC', textTransform: 'uppercase', letterSpacing: '0.1em', margin: '0 0 12px' }}>
+              Hardware Ecosystem
+            </p>
+            <h2 style={{ fontSize: 'clamp(28px, 3vw, 40px)', fontWeight: 800, margin: '0 0 16px', letterSpacing: '-0.02em' }}>
+              Built for Professional Lottery Scanning
+            </h2>
+            <p style={{ fontSize: 16, color: '#46627F', maxWidth: 560, margin: '0 auto' }}>
+              For the fastest and most reliable ticket scanning experience, we recommend pairing LottoMeter with a professional Android barcode scanner.
+            </p>
+          </div>
+
+          {/* Two-column layout: benefits left, device card right */}
+          <div className="scanner-layout">
+
+            {/* Left — benefits list */}
+            <div className="scanner-benefits">
+              {[
+                { icon: 'zap',      title: 'Instant Scanning',          desc: 'Hardware trigger scans barcodes in under 100ms — far faster than a camera tap.' },
+                { icon: 'target',   title: 'Superior Accuracy',         desc: 'Dedicated laser engine reads damaged, faded, or low-contrast lottery ticket barcodes reliably.' },
+                { icon: 'sun',      title: 'All-Day Endurance',         desc: 'Extended battery and rugged casing keep up with a full store shift without charging.' },
+                { icon: 'shield',   title: 'Rugged Build Quality',      desc: 'Drop-resistant, dust-proof hardware designed for high-traffic retail environments.' },
+                { icon: 'layers',   title: 'Dual Scan Modes',           desc: 'Supports both hardware trigger and camera scan — switch instantly in the app.' },
+                { icon: 'check',    title: 'LottoMeter Certified',      desc: "Tested and optimized with LottoMeter's scan engine for zero-configuration setup." },
+              ].map(({ icon, title, desc }) => (
+                <div key={title} className="scanner-benefit-row">
+                  <div className="scanner-benefit-icon">
+                    <ScannerIcon name={icon} />
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4, color: '#0A1128' }}>{title}</div>
+                    <div style={{ fontSize: 13, color: '#46627F', lineHeight: 1.65 }}>{desc}</div>
+                  </div>
+                </div>
+              ))}
+
+              {/* CTA */}
+              <div style={{ marginTop: 32 }}>
+                <Link
+                  to="/contact"
+                  style={{
+                    display: 'inline-flex', alignItems: 'center', gap: 8,
+                    background: 'linear-gradient(to right, #0077CC, #2DAE1A)',
+                    color: '#fff', textDecoration: 'none',
+                    fontWeight: 700, fontSize: 15,
+                    padding: '14px 28px', borderRadius: 10,
+                    boxShadow: '0 4px 16px rgba(0,119,204,0.28)',
+                    transition: 'opacity 0.15s',
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.opacity = '0.88'}
+                  onMouseLeave={(e) => e.currentTarget.style.opacity = '1'}
+                >
+                  Contact Us for Recommended Devices
+                  <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M5 12h14M13 6l6 6-6 6"/>
+                  </svg>
+                </Link>
+              </div>
+            </div>
+
+            {/* Right — device showcase card */}
+            <div className="scanner-device-card">
+
+              {/* Ambient glow */}
+              <div className="scanner-glow" />
+
+              {/* Badges */}
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 20, position: 'relative', zIndex: 1 }}>
+                {['Android 13 Compatible', 'Hardware Scanner Ready', 'High Volume Stores'].map((b) => (
+                  <span key={b} style={{
+                    fontSize: 11, fontWeight: 700,
+                    padding: '4px 10px', borderRadius: 999,
+                    background: 'rgba(0,119,204,0.12)', color: '#005a9e',
+                    letterSpacing: '0.04em',
+                  }}>{b}</span>
+                ))}
+              </div>
+
+              {/* Device image stage */}
+              <div className="scanner-device-img-wrap">
+                <img
+                  src="/brand/scanner.png"
+                  alt="Professional Android barcode scanner running LottoMeter"
+                  className="scanner-device-img"
+                />
+              </div>
+
+              {/* App status chip — below image, not overlapping */}
+              <div className="scanner-app-chip">
+                <img src="/app-icon.png" alt="" style={{ width: 22, height: 22, borderRadius: 5, flexShrink: 0 }} />
+                <div>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: '#0A1128', lineHeight: 1 }}>LottoMeter</div>
+                  <div style={{ fontSize: 10, color: '#46627F', marginTop: 1 }}>Running on device</div>
+                </div>
+                <div style={{ marginLeft: 'auto', display: 'flex', alignItems: 'center', gap: 4 }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: '#2DAE1A', display: 'inline-block' }} />
+                  <span style={{ fontSize: 10, color: '#2DAE1A', fontWeight: 700 }}>Compatible</span>
+                </div>
+              </div>
+
+              {/* Device description */}
+              <div style={{ marginTop: 20, position: 'relative', zIndex: 1 }}>
+                <div style={{ fontWeight: 800, fontSize: 17, color: '#0A1128', marginBottom: 6 }}>
+                  Professional Android Scanner
+                </div>
+                <div style={{ fontSize: 13, color: '#46627F', lineHeight: 1.7, marginBottom: 16 }}>
+                  A commercial-grade handheld with a dedicated 1D/2D barcode engine, pistol-grip ergonomics, and an all-day battery — purpose-built for retail lottery environments.
+                </div>
+                <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap', borderTop: '1px solid #E2EAF4', paddingTop: 16 }}>
+                  {[
+                    { label: 'Scan Speed', val: '< 100ms' },
+                    { label: 'Battery',    val: '10h+' },
+                    { label: 'OS',         val: 'Android 13' },
+                  ].map(({ label, val }) => (
+                    <div key={label}>
+                      <div style={{ fontSize: 18, fontWeight: 800, color: '#0077CC', lineHeight: 1 }}>{val}</div>
+                      <div style={{ fontSize: 11, color: '#46627F', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginTop: 3 }}>{label}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      </section>
+
       {/* Final CTA */}
       <section className="lm-bg-dark-hero" style={{ padding: '96px 24px', textAlign: 'center' }}>
         <div style={{ maxWidth: 640, margin: '0 auto', position: 'relative', zIndex: 1 }}>
@@ -184,7 +334,7 @@ export default function HomePage() {
             {' '}your store?
           </h2>
           <p style={{ fontSize: 17, color: 'rgba(255,255,255,0.7)', lineHeight: 1.7, margin: '0 0 40px' }}>
-            Join lottery store owners already using LottoMeter to save time and reduce errors every single day.
+            Join store owners already using LottoMeter to save time and reduce errors every single day.
           </p>
           <div style={{ display: 'flex', gap: 14, justifyContent: 'center', flexWrap: 'wrap' }}>
             <Link to="/get-started" className="btn-gradient lg">Get Started</Link>

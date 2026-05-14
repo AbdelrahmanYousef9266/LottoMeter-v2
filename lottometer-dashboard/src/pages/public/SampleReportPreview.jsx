@@ -199,7 +199,7 @@ export default function SampleReportPreview() {
               <Badge variant="green">Correct / Over</Badge>
             </div>
             {[
-              { label: 'Gross Sales',   note: 'From scans',       value: fmt(cashIn),         bold: false, color: undefined },
+              { label: 'Gross Sales',   note: 'Tickets Total + Lottery Machine Report', value: fmt(cashIn), bold: false, color: undefined },
               { label: 'Cancels',       note: 'Cancelled draws',  value: '-' + fmt(cancels),  bold: false, color: '#EF4444' },
               { label: 'Expected Cash', note: 'Sales − cancels',  value: fmt(expected),       bold: true,  color: undefined },
               { label: 'Cash Counted',  note: 'Entered at close', value: fmt(counted),        bold: true,  color: undefined },

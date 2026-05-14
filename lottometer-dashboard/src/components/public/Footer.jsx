@@ -35,7 +35,7 @@ export default function Footer() {
               </span>
             </Link>
             <p style={{ fontSize: 13, color: '#8EA8C3', lineHeight: 1.7, maxWidth: 260, margin: 0 }}>
-              The all-in-one platform for lottery store owners to track shifts, manage books, and stay compliant.
+              The all-in-one platform for store owners to track shifts, manage books, and stay compliant.
             </p>
           </div>
 
