@@ -11,11 +11,13 @@ import {
   getSubscription,
   setStorePin,
 } from '../api/account'
+import { submitComplaint } from '../api/complaints'
 
 const TABS = [
   { id: 'profile',   label: 'Profile & Store',     icon: '🏪' },
   { id: 'settings',  label: 'Hours & Reports',      icon: '⚙️' },
   { id: 'security',  label: 'Security',             icon: '🔒' },
+  { id: 'support',   label: 'Contact Support',      icon: '💬' },
   { id: 'subscription', label: 'Subscription',      icon: '💳' },
 ]
 
@@ -537,6 +539,209 @@ function SubscriptionSection() {
   )
 }
 
+// ─── Contact Support Section ──────────────────────────────────────────────────
+
+function ContactSupportSection() {
+  const [open, setOpen] = useState(false)
+  const [subject, setSubject] = useState('')
+  const [message, setMessage] = useState('')
+  const [sending, setSending] = useState(false)
+  const [success, setSuccess] = useState(false)
+  const [error, setError] = useState(null)
+
+  const canSend = subject.trim().length > 0 && message.trim().length > 0
+
+  const handleSend = async () => {
+    if (!canSend) return
+    setSending(true)
+    setError(null)
+    try {
+      await Promise.all([
+        submitComplaint({ subject: subject.trim(), message: message.trim() }),
+        new Promise(r => setTimeout(r, 900)),
+      ])
+      setSuccess(true)
+      setSubject('')
+      setMessage('')
+      setTimeout(() => setSuccess(false), 4000)
+    } catch (err) {
+      setError(err.response?.data?.error?.message || 'Failed to send message. Please try again.')
+    } finally {
+      setSending(false)
+    }
+  }
+
+  return (
+    <div className="card" style={{ marginBottom: 20, padding: 0 }}>
+      {/* Collapsible header */}
+      <button
+        onClick={() => setOpen(o => !o)}
+        style={{
+          width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '18px 24px', background: 'none', border: 'none', cursor: 'pointer',
+          borderBottom: open ? '1px solid var(--border)' : 'none',
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <div style={{
+            width: 36, height: 36, borderRadius: 8,
+            background: 'rgba(0,119,204,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+          }}>
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="var(--blue,#0077CC)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>
+            </svg>
+          </div>
+          <div style={{ textAlign: 'left' }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-primary)' }}>Contact Support</div>
+            <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 1 }}>Get help via email or Facebook</div>
+          </div>
+        </div>
+        <svg
+          viewBox="0 0 24 24" width="16" height="16" fill="none"
+          stroke="var(--text-secondary)" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"
+          style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.2s', flexShrink: 0 }}
+        >
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+
+      {open && (
+        <div style={{ padding: '20px 24px' }}>
+
+          {/* Channel cards */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14, marginBottom: 24 }}>
+
+            {/* Email card */}
+            <a
+              href="mailto:support@lottometer.com"
+              style={{ textDecoration: 'none' }}
+            >
+              <div style={{
+                border: '1.5px solid var(--border)', borderRadius: 10, padding: '16px 18px',
+                display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer',
+                transition: 'border-color 0.15s, box-shadow 0.15s',
+                background: 'var(--bg-primary)',
+              }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#0077CC'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(0,119,204,0.10)' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none' }}
+              >
+                <div style={{
+                  width: 40, height: 40, borderRadius: 10, background: 'rgba(0,119,204,0.10)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="#0077CC" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                    <polyline points="22,6 12,13 2,6"/>
+                  </svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Email</div>
+                  <div style={{ fontSize: 12, color: '#0077CC', marginTop: 2 }}>support@lottometer.com</div>
+                </div>
+              </div>
+            </a>
+
+            {/* Facebook card */}
+            <a
+              href="https://www.facebook.com/profile.php?id=61589356135499"
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{ textDecoration: 'none' }}
+            >
+              <div style={{
+                border: '1.5px solid var(--border)', borderRadius: 10, padding: '16px 18px',
+                display: 'flex', alignItems: 'center', gap: 14, cursor: 'pointer',
+                transition: 'border-color 0.15s, box-shadow 0.15s',
+                background: 'var(--bg-primary)',
+              }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = '#1877F2'; e.currentTarget.style.boxShadow = '0 0 0 3px rgba(24,119,242,0.10)' }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = 'var(--border)'; e.currentTarget.style.boxShadow = 'none' }}
+              >
+                <div style={{
+                  width: 40, height: 40, borderRadius: 10, background: 'rgba(24,119,242,0.10)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+                }}>
+                  <svg viewBox="0 0 24 24" width="22" height="22" fill="#1877F2">
+                    <path d="M24 12.073C24 5.405 18.627 0 12 0S0 5.405 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.41c0-3.025 1.792-4.697 4.533-4.697 1.312 0 2.686.236 2.686.236v2.97h-1.513c-1.491 0-1.956.93-1.956 1.886v2.268h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/>
+                  </svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--text-primary)' }}>Facebook</div>
+                  <div style={{ fontSize: 12, color: '#1877F2', marginTop: 2 }}>LottoMeter Page</div>
+                </div>
+              </div>
+            </a>
+
+          </div>
+
+          {/* Divider */}
+          <div style={{ borderTop: '1px solid var(--border)', paddingTop: 20, marginBottom: 16 }}>
+            <p style={{ fontSize: 12, fontWeight: 700, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 16 }}>
+              Send a message
+            </p>
+          </div>
+
+          {/* Success banner */}
+          {success && (
+            <div style={{
+              background: 'rgba(45,174,26,0.10)', border: '1px solid rgba(45,174,26,0.35)',
+              borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+              display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#1a6e0f', fontWeight: 600,
+            }}>
+              <span>✓</span> Message sent! We'll respond within 1 business day.
+            </div>
+          )}
+
+          {/* Error banner */}
+          {error && (
+            <div style={{
+              background: 'rgba(220,38,38,0.08)', border: '1px solid rgba(220,38,38,0.30)',
+              borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+              display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: '#b91c1c', fontWeight: 600,
+            }}>
+              <span>✗</span> {error}
+            </div>
+          )}
+
+          {/* Complaint form */}
+          <div className="form-group">
+            <label className="form-label">Subject</label>
+            <input
+              className="input-field"
+              placeholder="Brief description of your issue"
+              value={subject}
+              onChange={e => setSubject(e.target.value)}
+              disabled={sending}
+            />
+          </div>
+          <div className="form-group">
+            <label className="form-label">Message</label>
+            <textarea
+              className="input-field"
+              rows={4}
+              placeholder="Describe your issue in detail…"
+              value={message}
+              onChange={e => setMessage(e.target.value)}
+              disabled={sending}
+              style={{ resize: 'vertical', fontFamily: 'inherit', lineHeight: 1.6 }}
+            />
+          </div>
+          <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
+            <button
+              className="btn btn-primary btn-sm"
+              onClick={handleSend}
+              disabled={!canSend || sending}
+            >
+              {sending ? 'Sending…' : 'Send message'}
+            </button>
+          </div>
+
+        </div>
+      )}
+    </div>
+  )
+}
+
 // ─── Main Page ────────────────────────────────────────────────────────────────
 
 export default function AccountSettings() {
@@ -587,6 +792,7 @@ export default function AccountSettings() {
               <StorePinSection showToast={showToast} />
             </>
           )}
+          {activeTab === 'support'      && <ContactSupportSection />}
           {activeTab === 'subscription' && <SubscriptionSection />}
         </div>
       </div>

@@ -388,6 +388,26 @@ export default function SettingsScreen() {
           </TouchableOpacity>
         </View>
 
+        {/* ── SUPPORT ─────────────────────────────────────────────────────── */}
+        <Text style={s.sectionLabel}>SUPPORT</Text>
+        <View style={s.sectionCard}>
+          <TouchableOpacity
+            style={s.settingRow}
+            onPress={() => navigation.navigate('Support')}
+            activeOpacity={0.7}
+          >
+            <View style={s.rowLeft}>
+              <View style={[s.iconCircle, { backgroundColor: '#EFF6FF' }]}>
+                <Text style={s.iconText}>💬</Text>
+              </View>
+              <Text style={s.rowLabel}>Contact Support</Text>
+            </View>
+            <View style={s.rowRight}>
+              <Text style={s.chevron}>›</Text>
+            </View>
+          </TouchableOpacity>
+        </View>
+
         {/* ── DANGER ZONE ─────────────────────────────────────────────────── */}
         <Text style={s.sectionLabel}>DANGER ZONE</Text>
         <View style={s.sectionCard}>

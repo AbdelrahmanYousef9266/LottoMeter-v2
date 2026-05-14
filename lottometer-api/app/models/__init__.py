@@ -13,6 +13,7 @@ from app.models.contact_submission import ContactSubmission
 from app.models.subscription import Subscription
 from app.models.audit_log import AuditLog
 from app.models.store_settings import StoreSettings
+from app.models.complaint import Complaint
 
 
 __all__ = [
@@ -29,4 +30,5 @@ __all__ = [
     "Subscription",
     "AuditLog",
     "StoreSettings",
+    "Complaint",
 ]

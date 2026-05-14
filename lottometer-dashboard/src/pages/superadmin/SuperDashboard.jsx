@@ -1,6 +1,7 @@
-import { useCallback } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { getSuperStats } from '../../api/superadmin'
+import { getComplaintStats } from '../../api/complaints'
 import useApi from '../../hooks/useApi'
 
 const PURPLE = '#7C3AED'
@@ -30,13 +31,21 @@ export default function SuperDashboard() {
   const navigate = useNavigate()
   const apiFn = useCallback(() => getSuperStats(), [])
   const { data, loading } = useApi(apiFn)
+  const [openComplaints, setOpenComplaints] = useState(null)
+
+  useEffect(() => {
+    getComplaintStats()
+      .then(r => setOpenComplaints(r.data.open))
+      .catch(() => {})
+  }, [])
 
   const stats = [
-    { icon: '🏪', label: 'Total Stores', value: data?.total_stores, accent: PURPLE, onClick: () => navigate('/superadmin/stores') },
-    { icon: '✅', label: 'Active Stores', value: data?.active_stores, accent: '#0077CC', onClick: () => navigate('/superadmin/stores') },
-    { icon: '👥', label: 'Total Users', value: data?.total_users, accent: '#2DAE1A' },
+    { icon: '🏪', label: 'Total Stores',    value: data?.total_stores,   accent: PURPLE,    onClick: () => navigate('/superadmin/stores') },
+    { icon: '✅', label: 'Active Stores',   value: data?.active_stores,  accent: '#0077CC', onClick: () => navigate('/superadmin/stores') },
+    { icon: '👥', label: 'Total Users',     value: data?.total_users,    accent: '#2DAE1A' },
     { icon: '📬', label: 'New Submissions', value: data?.new_submissions, accent: '#F59E0B', onClick: () => navigate('/superadmin/submissions') },
-    { icon: '🔄', label: 'Shifts Today', value: data?.shifts_today, accent: '#0077CC' },
+    { icon: '🔄', label: 'Shifts Today',    value: data?.shifts_today,   accent: '#0077CC' },
+    { icon: '💬', label: 'Open Complaints', value: openComplaints,        accent: '#EF4444', onClick: () => navigate('/superadmin/complaints') },
   ]
 
   return (

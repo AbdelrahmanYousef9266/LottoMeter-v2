@@ -12,6 +12,7 @@ import ReportDetailScreen from '../screens/ReportDetailScreen';
 import UsersScreen from '../screens/UsersScreen';
 import BulkAssignScreen from '../screens/BulkAssignScreen';
 import BooksListScreen from '../screens/BooksListScreen';
+import SupportScreen from '../screens/SupportScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -33,6 +34,7 @@ export default function RootNavigator() {
               options={{ gestureEnabled: false }}
             />
             <Stack.Screen name="BooksList" component={BooksListScreen} />
+            <Stack.Screen name="Support" component={SupportScreen} />
             <Stack.Screen
               name="CameraScanner"
               component={CameraScannerScreen}

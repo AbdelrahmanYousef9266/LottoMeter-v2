@@ -26,6 +26,7 @@ import SuperDashboard from './pages/superadmin/SuperDashboard'
 import SuperStores from './pages/superadmin/SuperStores'
 import SuperSubmissions from './pages/superadmin/SuperSubmissions'
 import SuperCreateStore from './pages/superadmin/SuperCreateStore'
+import SuperComplaints from './pages/superadmin/SuperComplaints'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth()
@@ -77,6 +78,7 @@ function AppRoutes() {
         <Route path="stores" element={<SuperStores />} />
         <Route path="stores/create" element={<SuperCreateStore />} />
         <Route path="submissions" element={<SuperSubmissions />} />
+        <Route path="complaints" element={<SuperComplaints />} />
       </Route>
 
       {/* Protected dashboard */}

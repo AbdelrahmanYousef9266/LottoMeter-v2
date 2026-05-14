@@ -14,6 +14,7 @@ from app.routes.public import public_bp
 from app.routes.superadmin import superadmin_bp
 from app.routes.subscription import subscription_bp
 from app.routes.stripe_webhook import stripe_bp
+from app.routes.complaints import complaints_bp
 
 
 def register_blueprints(app):
@@ -32,5 +33,6 @@ def register_blueprints(app):
     app.register_blueprint(superadmin_bp)
     app.register_blueprint(subscription_bp)
     app.register_blueprint(stripe_bp)
+    app.register_blueprint(complaints_bp)
     if app.debug:
         app.register_blueprint(dev_bp)

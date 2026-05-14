@@ -1,10 +1,13 @@
+import { useState, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
+import { getComplaintStats } from '../../api/complaints'
 
-const NAV_ITEMS = [
-  { to: '/superadmin/dashboard', label: 'Overview', icon: '📊', exact: true },
-  { to: '/superadmin/stores', label: 'Stores', icon: '🏪' },
-  { to: '/superadmin/submissions', label: 'Submissions', icon: '📬' },
+const BASE_NAV = [
+  { to: '/superadmin/dashboard',     label: 'Overview',     icon: '📊', exact: true },
+  { to: '/superadmin/stores',        label: 'Stores',       icon: '🏪' },
+  { to: '/superadmin/submissions',   label: 'Submissions',  icon: '📬' },
+  { to: '/superadmin/complaints',    label: 'Complaints',   icon: '💬', badgeKey: 'complaints' },
   { to: '/superadmin/stores/create', label: 'Create Store', icon: '➕' },
 ]
 
@@ -14,6 +17,17 @@ const PURPLE_LIGHT = 'rgba(124,58,237,0.12)'
 export default function SuperSidebar() {
   const { logout } = useAuth()
   const navigate = useNavigate()
+  const [openComplaints, setOpenComplaints] = useState(0)
+
+  useEffect(() => {
+    getComplaintStats()
+      .then(r => setOpenComplaints(r.data.open ?? 0))
+      .catch(() => {})
+  }, [])
+
+  const NAV_ITEMS = BASE_NAV.map(item =>
+    item.badgeKey === 'complaints' ? { ...item, badge: openComplaints } : item
+  )
 
   const handleLogout = () => {
     logout()
@@ -52,7 +66,14 @@ export default function SuperSidebar() {
             } : {}}
           >
             <span className="nav-icon">{item.icon}</span>
-            <span>{item.label}</span>
+            <span style={{ flex: 1 }}>{item.label}</span>
+            {item.badge > 0 && (
+              <span style={{
+                background: '#EF4444', color: '#fff',
+                borderRadius: 999, fontSize: 10, fontWeight: 800,
+                padding: '1px 6px', lineHeight: 1.6, flexShrink: 0,
+              }}>{item.badge}</span>
+            )}
           </NavLink>
         ))}
       </nav>
