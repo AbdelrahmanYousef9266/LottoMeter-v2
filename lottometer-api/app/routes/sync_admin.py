@@ -46,7 +46,12 @@ def overview():
         )
         .join(Store, Store.store_id == SyncEvent.store_id)
         .filter(SyncEvent.created_at >= cutoff)
-        .group_by(SyncEvent.store_id)
+        .group_by(
+            SyncEvent.store_id,
+            Store.store_code,
+            Store.store_name,
+            Store.force_full_resync,
+        )
         .all()
     )
 
