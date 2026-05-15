@@ -1,5 +1,7 @@
 """Superadmin sync control — visibility and remediation for mobile sync health."""
 
+from datetime import datetime, timezone, timedelta
+
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
 from sqlalchemy import func, case
@@ -10,6 +12,16 @@ from app.errors import NotFoundError
 from app.models.sync_event import SyncEvent
 from app.models.store import Store
 
+
+def _iso(val):
+    """Safely serialise a datetime that may come back as a string from SQLite aggregates."""
+    if val is None:
+        return None
+    if isinstance(val, str):
+        return val.replace(" ", "T") + "Z"
+    return val.isoformat() + "Z"
+
+
 sync_admin_bp = Blueprint("sync_admin", __name__, url_prefix="/api/superadmin/sync")
 
 
@@ -18,6 +30,8 @@ sync_admin_bp = Blueprint("sync_admin", __name__, url_prefix="/api/superadmin/sy
 @superadmin_required
 def overview():
     """Per-store sync stats for the last 7 days, plus force_full_resync flags."""
+    cutoff = datetime.now(timezone.utc) - timedelta(days=7)
+
     rows = (
         db.session.query(
             SyncEvent.store_id,
@@ -31,7 +45,7 @@ def overview():
             func.max(SyncEvent.created_at).label("last_event_at"),
         )
         .join(Store, Store.store_id == SyncEvent.store_id)
-        .filter(SyncEvent.created_at >= func.datetime("now", "-7 days"))
+        .filter(SyncEvent.created_at >= cutoff)
         .group_by(SyncEvent.store_id)
         .all()
     )
@@ -45,7 +59,7 @@ def overview():
                 "force_full_resync": r.force_full_resync,
                 "total_events":      r.total,
                 "error_events":      r.errors or 0,
-                "last_event_at":     r.last_event_at.isoformat() + "Z" if r.last_event_at else None,
+                "last_event_at":     _iso(r.last_event_at),
             }
             for r in rows
         ]
