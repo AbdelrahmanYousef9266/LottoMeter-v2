@@ -233,3 +233,161 @@ export const saveLocalExtraSale = async (sale, shiftUuid, storeId, userId) => {
   } catch (e) {
   }
 };
+
+// ─── LOCAL READ HELPERS ───────────────────────────────────────────────────────
+
+export const getLocalSlots = async (storeId) => {
+  const db = await getDb();
+  const rows = await db.getAllAsync(
+    `SELECT
+       s.server_id        AS slot_id,
+       s.slot_name,
+       s.ticket_price,
+       b.server_id        AS book_id,
+       b.barcode,
+       b.static_code,
+       b.start_position,
+       b.ticket_price     AS book_ticket_price
+     FROM local_slots s
+     LEFT JOIN local_books b
+       ON b.slot_id  = s.server_id
+      AND b.store_id = s.store_id
+      AND b.is_active = 1
+      AND b.is_sold   = 0
+     WHERE s.store_id = ? AND s.is_deleted = 0
+     GROUP BY s.server_id`,
+    [storeId]
+  );
+  return rows.map(row => ({
+    slot_id:      row.slot_id,
+    slot_name:    row.slot_name,
+    ticket_price: String(row.ticket_price),
+    current_book: row.book_id ? {
+      book_id:        row.book_id,
+      barcode:        row.barcode,
+      static_code:    row.static_code,
+      start_position: row.start_position,
+      ticket_price:   String(row.book_ticket_price),
+    } : null,
+  }));
+};
+
+export const getLocalBooksSummary = async (storeId) => {
+  const db = await getDb();
+  const row = await db.getFirstAsync(
+    `SELECT
+       SUM(CASE WHEN is_active = 1 AND is_sold = 0 THEN 1 ELSE 0 END) AS active,
+       SUM(CASE WHEN is_sold  = 1                  THEN 1 ELSE 0 END) AS sold
+     FROM local_books WHERE store_id = ?`,
+    [storeId]
+  );
+  return { active: row?.active ?? 0, sold: row?.sold ?? 0 };
+};
+
+// ─── SYNC QUEUE STATE TRANSITIONS ────────────────────────────────────────────
+//
+// All writes to sync_queue.status flow through these helpers so status
+// transitions are never scattered as inline SQL across the codebase.
+
+// Returns the ISO timestamp at which the next retry should be attempted,
+// using exponential backoff capped at 5 minutes.
+const backoffAt = (retryCount) => {
+  const secs = Math.min(Math.pow(2, retryCount), 300);
+  return new Date(Date.now() + secs * 1000).toISOString();
+};
+
+export const markSyncItemSyncing = async (db, uuid) => {
+  await db.runAsync(
+    "UPDATE sync_queue SET status = 'syncing' WHERE uuid = ?",
+    [uuid]
+  );
+};
+
+export const markSyncItemSynced = async (db, uuid) => {
+  await db.runAsync(
+    "UPDATE sync_queue SET status = 'synced', synced_at = ? WHERE uuid = ?",
+    [new Date().toISOString(), uuid]
+  );
+};
+
+export const markSyncItemConflict = async (db, uuid, error) => {
+  await db.runAsync(
+    "UPDATE sync_queue SET status = 'conflict', last_error = ? WHERE uuid = ?",
+    [error, uuid]
+  );
+};
+
+// Called when an operation fails but has retries remaining.
+// newRetryCount is the already-incremented value (item.retry_count + 1).
+export const markSyncItemRetry = async (db, uuid, newRetryCount, error) => {
+  await db.runAsync(
+    `UPDATE sync_queue
+     SET status = 'pending', retry_count = ?, last_error = ?, next_retry_at = ?
+     WHERE uuid = ?`,
+    [newRetryCount, error, backoffAt(newRetryCount), uuid]
+  );
+};
+
+// Called when retry_count + 1 >= max_retries. Terminal — nothing auto-retries this row.
+export const markSyncItemFailed = async (db, uuid, retryCount, error) => {
+  await db.runAsync(
+    `UPDATE sync_queue
+     SET status = 'failed', retry_count = ?, last_error = ?
+     WHERE uuid = ?`,
+    [retryCount, error, uuid]
+  );
+};
+
+// ─── MANUAL RETRY / DISCARD ───────────────────────────────────────────────────
+
+// The only place retry_count is ever reset. Requires an explicit human action —
+// nothing in the sync engine calls this automatically.
+export const retryFailedSyncItem = async (uuid) => {
+  const db = await getDb();
+  await db.runAsync(
+    `UPDATE sync_queue
+     SET status = 'pending', retry_count = 0, last_error = NULL, next_retry_at = NULL
+     WHERE uuid = ? AND status = 'failed'`,
+    [uuid]
+  );
+  return db.getFirstAsync('SELECT * FROM sync_queue WHERE uuid = ?', [uuid]);
+};
+
+// Permanently removes a failed row the user has acknowledged as unrecoverable.
+export const discardFailedSyncItem = async (uuid) => {
+  const db = await getDb();
+  const item = await db.getFirstAsync(
+    'SELECT uuid, operation, entity_type, entity_uuid FROM sync_queue WHERE uuid = ?',
+    [uuid]
+  );
+  if (item) {
+    console.warn('[syncQueue] discarding failed item', {
+      uuid: item.uuid,
+      operation: item.operation,
+      entity_type: item.entity_type,
+      entity_uuid: item.entity_uuid,
+    });
+    await db.runAsync('DELETE FROM sync_queue WHERE uuid = ?', [uuid]);
+  }
+};
+
+// ─── BULK QUERY HELPERS ───────────────────────────────────────────────────────
+
+export const getFailedSyncItems = async () => {
+  const db = await getDb();
+  return db.getAllAsync(
+    "SELECT * FROM sync_queue WHERE status = 'failed' ORDER BY created_at DESC"
+  );
+};
+
+export const getSyncQueueStats = async () => {
+  const db = await getDb();
+  const rows = await db.getAllAsync(
+    'SELECT status, COUNT(*) as count FROM sync_queue GROUP BY status'
+  );
+  const stats = { pending: 0, syncing: 0, synced: 0, failed: 0, conflict: 0 };
+  for (const row of rows) {
+    if (row.status in stats) stats[row.status] = row.count;
+  }
+  return stats;
+};

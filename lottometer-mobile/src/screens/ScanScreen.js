@@ -19,7 +19,6 @@ import { useTranslation } from 'react-i18next';
 import { getCurrentOpenShift, getShiftSummary } from '../api/shifts';
 import { getBooksSummary } from '../api/books';
 import { recordScan } from '../api/scan';
-import { listSlots } from '../api/slots';
 import CloseShiftModal from '../components/CloseShiftModal';
 import { useAuth } from '../context/AuthContext';
 import { useFeedback } from '../hooks/useFeedback';
@@ -29,6 +28,7 @@ import { normalizeBarcode } from '../utils/barcodeUtils';
 import NetInfo from '@react-native-community/netinfo';
 import { getDb } from '../offline/db';
 import { recordOfflineScan, getOfflinePendingCounts } from '../offline';
+import { getLocalSlots, saveLocalScan, markLocalBookSold } from '../offline/localDb';
 
 // ── design tokens ──────────────────────────────────────────────────────────────
 const D = {
@@ -121,7 +121,7 @@ export default function ScanScreen() {
     let currentlyOffline = false;
     try {
       const netState = await NetInfo.fetch();
-      currentlyOffline = !netState.isConnected || netState.isInternetReachable === false;
+      currentlyOffline = !netState.isConnected || netState.isInternetReachable !== true;
 
       if (currentlyOffline) {
         // OFFLINE PATH — load from local SQLite
@@ -171,6 +171,7 @@ export default function ScanScreen() {
 
       // ONLINE PATH
       const shift = await getCurrentOpenShift();
+      console.log('[loadShift] getCurrentOpenShift response', { shift });
       if (!shift) {
         setShift(null);
         setOpenSubId(null);
@@ -182,6 +183,10 @@ export default function ScanScreen() {
       setShift(shift);
       setOpenSubId(shift.id);
       shiftUuidRef.current = shift.uuid || null;
+      console.log('[loadShift] shiftUuidRef set', { server_id: shift.id, uuid: shift.uuid, ref: shiftUuidRef.current });
+      if (!shift.uuid) {
+        console.error('[loadShift] Server returned shift with null UUID — backend bug. shift_id:', shift.id, '— offline features degraded until backend is fixed and backfill runs.');
+      }
 
       try {
         const summary = await getShiftSummary(shift.id);
@@ -225,11 +230,11 @@ export default function ScanScreen() {
 
   const loadSlots = useCallback(async () => {
     try {
-      const result = await listSlots();
-      setSlots(result.slots || []);
+      const data = await getLocalSlots(store?.store_id);
+      setSlots(data);
     } catch {
     }
-  }, []);
+  }, [store?.store_id]);
 
   useFocusEffect(
     useCallback(() => {
@@ -237,38 +242,43 @@ export default function ScanScreen() {
     }, [loadSlots])
   );
 
+  // Always computed from local SQLite — online scans are written through to
+  // local_shift_books synchronously before this is called, so the query is
+  // always current regardless of online/offline state.
   const loadPendingSlots = useCallback(async () => {
+    const shiftUuid = shiftUuidRef.current;
+    const sid = store?.store_id;
+    console.log('[loadPendingSlots] called', { shiftUuid, sid, scanType });
     try {
-      if (isOffline) {
-        const db = await getDb();
-        const shiftUuid = shiftUuidRef.current;
-        if (!shiftUuid) return;
-        const pending = await db.getAllAsync(
-          `SELECT lb.static_code, lb.ticket_price, lb.slot_id, ls.slot_name
-           FROM local_books lb
-           LEFT JOIN local_slots ls ON ls.server_id = lb.slot_id
-           WHERE lb.store_id = ?
-           AND lb.is_active = 1 AND lb.is_sold = 0
-           AND lb.slot_id IS NOT NULL
-           AND NOT EXISTS (
-             SELECT 1 FROM local_shift_books sb
-             WHERE sb.shift_uuid = ?
-             AND sb.static_code = lb.static_code
-             AND sb.scan_type = ?
-           )
-           ORDER BY CAST(ls.slot_name AS INTEGER) ASC`,
-          [store?.store_id, shiftUuid, scanType]
-        );
-        setPendingSlots(pending);
-      } else {
-        if (!openSubId) return;
-        const summary = await getShiftSummary(openSubId);
-        setPendingSlots(summary?.pending_scans || []);
+      const db = await getDb();
+      if (!shiftUuid || !sid) {
+        console.log('[loadPendingSlots] aborting — missing shiftUuid or store_id');
+        setPendingSlots([]);
+        return;
       }
-    } catch {
-      // silent fail — pending list is display-only
+      const pending = await db.getAllAsync(
+        `SELECT lb.static_code, lb.ticket_price, lb.slot_id, ls.slot_name
+         FROM local_books lb
+         LEFT JOIN local_slots ls ON ls.server_id = lb.slot_id
+         WHERE lb.store_id = ?
+         AND lb.is_active = 1 AND lb.is_sold = 0
+         AND lb.slot_id IS NOT NULL
+         AND NOT EXISTS (
+           SELECT 1 FROM local_shift_books sb
+           WHERE sb.shift_uuid = ?
+           AND sb.static_code = lb.static_code
+           AND sb.scan_type = ?
+         )
+         ORDER BY CAST(ls.slot_name AS INTEGER) ASC`,
+        [sid, shiftUuid, scanType]
+      );
+      console.log('[loadPendingSlots] query result', { count: pending.length, rows: pending });
+      setPendingSlots(pending);
+      console.log('[loadPendingSlots] state set');
+    } catch (err) {
+      console.error('[loadPendingSlots] FAILED', err, err?.stack);
     }
-  }, [isOffline, store, openSubId, scanType]);
+  }, [store, scanType]);
 
   // Load pending slots whenever the active shift or scan type changes
   useEffect(() => {
@@ -330,13 +340,31 @@ export default function ScanScreen() {
             force_sold,
           });
         } else {
-          // ── ONLINE PATH — unchanged ─────────────────────────────────────────
+          // ── ONLINE PATH ─────────────────────────────────────────────────────
           result = await recordScan({
             shift_id: openSubId,
             barcode: code,
             scan_type: scanType,
             force_sold,
           });
+          // Write scan to local SQLite synchronously before loadPendingSlots()
+          // runs. recordScan() also does this as fire-and-forget, but that races
+          // with the query below. INSERT OR REPLACE on uuid makes this idempotent.
+          if (result.scan && shiftUuidRef.current && store?.store_id && user?.user_id) {
+            try {
+              await saveLocalScan(
+                { ...result.scan, static_code: result.book?.static_code, id: null },
+                shiftUuidRef.current,
+                store.store_id,
+                user.user_id
+              );
+              if (result.book?.is_sold) {
+                await markLocalBookSold(result.book.static_code, store.store_id);
+              }
+            } catch {
+              // non-fatal — fire-and-forget in recordScan() is the backup
+            }
+          }
         }
 
         // Process result — identical for online and offline
@@ -455,6 +483,37 @@ export default function ScanScreen() {
       validate: !isOffline,
       onScanned: (data) => { submitScan(data); },
     });
+  }
+
+  // ── DEV: db state dump ──────────────────────────────────────────────────────
+
+  async function dumpDbState() {
+    try {
+      const db = await getDb();
+      const shifts = await db.getAllAsync(
+        'SELECT id, server_id, uuid, status, store_id FROM local_employee_shifts ORDER BY id DESC LIMIT 5'
+      );
+      const slots = await db.getAllAsync(
+        'SELECT id, server_id, slot_name, ticket_price FROM local_slots WHERE store_id = ?',
+        [store?.store_id]
+      );
+      const books = await db.getAllAsync(
+        'SELECT id, server_id, static_code, slot_id, is_active, is_sold FROM local_books WHERE store_id = ? AND is_active = 1',
+        [store?.store_id]
+      );
+      const scans = await db.getAllAsync(
+        'SELECT shift_uuid, static_code, scan_type, sync_status FROM local_shift_books WHERE shift_uuid = ?',
+        [shiftUuidRef.current]
+      );
+      console.log('[DB DUMP] shiftUuidRef.current =', shiftUuidRef.current);
+      console.log('[DB DUMP] shifts:', shifts);
+      console.log('[DB DUMP] slots (store_id=' + store?.store_id + '):', slots);
+      console.log('[DB DUMP] active books:', books);
+      console.log('[DB DUMP] scans for current shift:', scans);
+      console.log('[DB DUMP] pendingSlots state:', pendingSlots);
+    } catch (err) {
+      console.error('[DB DUMP] FAILED', err);
+    }
   }
 
   // ── render helpers ──────────────────────────────────────────────────────────
@@ -731,6 +790,11 @@ export default function ScanScreen() {
                 </Text>
               )}
 
+              {/* ── DEV: DB dump button ──────────────────────────────── */}
+              <TouchableOpacity onPress={dumpDbState} style={s.devBtn}>
+                <Text style={s.devBtnTxt}>DEV: Dump DB State</Text>
+              </TouchableOpacity>
+
               {/* ── Pending Slots ─────────────────────────────────────── */}
               {pendingSlots.length > 0 && (
                 <View style={s.pendingSlotsContainer}>
@@ -822,7 +886,8 @@ export default function ScanScreen() {
         subshiftId={openSubId}
         shiftUuid={shiftUuidRef.current}
         onCancel={() => setShowCloseModal(false)}
-        onSubmit={async () => {
+        onSubmit={async (result) => {
+          console.log('[ScanScreen] onSubmit START', { result });
           console.error('[close modal] shiftId:', openSubId);
           console.error('[close modal] shiftUuid:', shiftUuidRef.current);
           setShowCloseModal(false);
@@ -832,6 +897,7 @@ export default function ScanScreen() {
           setPendingCount(0);
           setScanType('open');
           navigation.navigate('Home', { refresh: true });
+          console.log('[ScanScreen] onSubmit END');
         }}
       />
 
@@ -1000,6 +1066,18 @@ const s = StyleSheet.create({
   submitBtnTxt: { fontSize: FS.md, fontWeight: FW.bold, color: '#fff' },
 
   dimmed: { opacity: 0.4 },
+
+  // dev dump button
+  devBtn: {
+    backgroundColor: '#F1F5F9',
+    borderWidth: 1,
+    borderColor: D.BORDER,
+    borderRadius: BR.sm,
+    padding: SP.sm,
+    alignItems: 'center',
+    marginBottom: SP.sm,
+  },
+  devBtnTxt: { fontSize: FS.xs, color: D.SUBTLE, fontFamily: 'monospace' },
 
   // scanner hint
   scannerHint: {

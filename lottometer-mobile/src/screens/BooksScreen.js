@@ -27,6 +27,13 @@ import ActionPopupMenu from '../components/ActionPopupMenu';
 import BulkCreateSlotsModal from '../components/BulkCreateSlotsModal';
 import { getDb } from '../offline/db';
 import { seedLocalDatabase } from '../offline/seed';
+import {
+  getLocalSlots,
+  getLocalBooksSummary,
+  saveLocalSlot,
+  saveLocalBook,
+  deleteLocalSlot,
+} from '../offline/localDb';
 
 // ── design tokens ──────────────────────────────────────────────────────────────
 const D = {
@@ -67,7 +74,7 @@ function formatShortDate(dateStr) {
 
 export default function BooksScreen() {
   const { t } = useTranslation();
-  const { user, store } = useAuth();
+  const { user, store, isOffline } = useAuth();
   const navigation = useNavigation();
   const isAdmin = user?.role === 'admin';
 
@@ -87,34 +94,57 @@ export default function BooksScreen() {
 
   // ── existing callbacks (unchanged) ─────────────────────────────────────────
 
+  // Always read from local SQLite — seeded on login, kept current by write-throughs and syncFromServer.
   const loadSlots = useCallback(async () => {
     try {
-      const data = await listSlots();
-      const sorted = (data.slots || []).sort((a, b) => {
+      const data = await getLocalSlots(store?.store_id);
+      const sorted = data.sort((a, b) => {
         const numA = parseInt(a.slot_name.replace(/\D/g, ''), 10) || 0;
         const numB = parseInt(b.slot_name.replace(/\D/g, ''), 10) || 0;
         return numA - numB;
       });
       setSlots(sorted);
     } catch (err) {
-      Alert.alert(t('books.errorLoadingSlots'), err.message || t('common.tryAgain'));
+      console.error('[BooksScreen] loadSlots failed:', err);
+      setSlots([]);
     }
-  }, [t]);
+  }, [store?.store_id]);
 
   const loadSummary = useCallback(async () => {
     try {
-      const data = await getBooksSummary();
+      const data = await getLocalBooksSummary(store?.store_id);
       setSummary(data);
     } catch {
       setSummary(null);
     }
-  }, []);
+  }, [store?.store_id]);
+
+  // Pull fresh data from server and persist to local SQLite. No-op when offline.
+  const syncFromServer = useCallback(async () => {
+    if (isOffline) return;
+    try {
+      const data = await listSlots();
+      for (const slot of data.slots || []) {
+        await saveLocalSlot(slot, store?.store_id);
+        if (slot.current_book) {
+          await saveLocalBook(
+            { ...slot.current_book, slot_id: slot.slot_id, is_active: 1, is_sold: 0 },
+            store?.store_id
+          );
+        }
+      }
+    } catch {
+      // non-fatal — local data is still usable
+    }
+  }, [isOffline, store?.store_id]);
 
   useFocusEffect(
     useCallback(() => {
       setLoading(true);
-      Promise.all([loadSlots(), loadSummary()]).finally(() => setLoading(false));
-    }, [loadSlots, loadSummary])
+      syncFromServer()
+        .then(() => Promise.all([loadSlots(), loadSummary()]))
+        .finally(() => setLoading(false));
+    }, [loadSlots, loadSummary, syncFromServer])
   );
 
   useFocusEffect(
@@ -128,6 +158,7 @@ export default function BooksScreen() {
 
   async function handleRefresh() {
     setRefreshing(true);
+    await syncFromServer();
     await Promise.all([loadSlots(), loadSummary()]);
     setRefreshing(false);
   }
@@ -200,6 +231,10 @@ export default function BooksScreen() {
     setDeleting(true);
     try {
       const result = await bulkDeleteSlots(ids);
+      // Write-through: mark deleted in local SQLite so local reads reflect the change immediately
+      for (const id of ids) {
+        await deleteLocalSlot(id);
+      }
       Alert.alert(
         t('books.deleteResultTitle'),
         t('books.deleteResultMessage', {
@@ -550,7 +585,7 @@ export default function BooksScreen() {
         onClose={() => setCreateOpen(false)}
         onCreated={() => {
           setCreateOpen(false);
-          loadSlots();
+          handleRefresh();
         }}
       />
 
@@ -559,7 +594,7 @@ export default function BooksScreen() {
         onClose={() => setBulkOpen(false)}
         onCreated={() => {
           setBulkOpen(false);
-          loadSlots();
+          handleRefresh();
         }}
       />
 

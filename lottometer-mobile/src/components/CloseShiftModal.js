@@ -86,34 +86,46 @@ export default function CloseShiftModal({
     if (!subshiftId && !shiftUuid) return;
     setSummaryLoading(true);
     try {
-      if (isOffline) {
-        // OFFLINE PATH — resolve shift UUID then query local DB
-        let resolvedUuid = shiftUuid;
-        if (!resolvedUuid) {
-          const db = await getDb();
-          const row = subshiftId
-            ? await db.getFirstAsync(
-                'SELECT uuid FROM local_employee_shifts WHERE server_id = ?',
-                [subshiftId]
-              )
-            : await db.getFirstAsync(
-                `SELECT uuid FROM local_employee_shifts
-                 WHERE store_id = ? AND status = 'open'
-                 ORDER BY id DESC LIMIT 1`,
-                [store?.store_id]
-              );
-          resolvedUuid = row?.uuid;
-        }
-        if (resolvedUuid) {
-          const data = await getOfflineShiftSummary(resolvedUuid, store?.store_id);
+      // Always resolve the local UUID first — needed as a fallback for both
+      // the offline path and the online-but-API-unavailable path.
+      let resolvedUuid = shiftUuid;
+      if (!resolvedUuid) {
+        const db = await getDb();
+        const row = subshiftId
+          ? await db.getFirstAsync(
+              'SELECT uuid FROM local_employee_shifts WHERE server_id = ?',
+              [subshiftId]
+            )
+          : await db.getFirstAsync(
+              `SELECT uuid FROM local_employee_shifts
+               WHERE store_id = ? AND status = 'open'
+               ORDER BY id DESC LIMIT 1`,
+              [store?.store_id]
+            );
+        resolvedUuid = row?.uuid;
+      }
+
+      // Online path: try the API summary, fall back to local on any failure.
+      // subshiftId must be a server id (non-null, positive) — if the shift was
+      // opened offline its id is a local row id that won't exist on the server.
+      if (!isOffline && subshiftId) {
+        try {
+          const data = await getSubshiftSummary(subshiftId);
           setSummary(data);
+          return;
+        } catch {
+          // 404 (offline-created shift id sent to server), network error, etc.
+          // Fall through to local computation below.
         }
-      } else {
-        // ONLINE PATH — unchanged
-        const data = await getSubshiftSummary(subshiftId);
+      }
+
+      // Offline path, or online fallback when the API isn't reachable
+      if (resolvedUuid) {
+        const data = await getOfflineShiftSummary(resolvedUuid, store?.store_id);
         setSummary(data);
       }
-    } catch {
+    } catch (err) {
+      console.error('[close modal] loadSummary FAILED:', err, err?.stack);
       setSummary(null);
     } finally {
       setSummaryLoading(false);
@@ -203,6 +215,14 @@ export default function CloseShiftModal({
               );
           resolvedUuid = row?.uuid;
         }
+        console.error('[close modal] doClose inputs:', {
+          isOffline,
+          shiftUuidProp: shiftUuid,
+          resolvedUuid,
+          subshiftId,
+          store_id: store?.store_id,
+          user_id: user?.user_id,
+        });
         const result = await closeOfflineShift({
           store_id: store?.store_id,
           shift_uuid: resolvedUuid,
@@ -227,6 +247,7 @@ export default function CloseShiftModal({
         fireFeedback('shift_closed');
       }
     } catch (err) {
+      console.error('[close modal] CLOSE FAILED:', err, err?.stack);
       fireFeedback('error');
     } finally {
       setBusy(false);

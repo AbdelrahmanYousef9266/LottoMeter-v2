@@ -28,7 +28,7 @@ export default function SlotDetailScreen({ route }) {
   const { t } = useTranslation();
   const { slotId, autoAssign } = route.params;
   const navigation = useNavigation();
-  const { user, store, scanMode } = useAuth();
+  const { user, store, scanMode, isOffline } = useAuth();
   const isAdmin = user?.role === 'admin';
 
   const fireFeedback = useFeedback();
@@ -51,13 +51,47 @@ export default function SlotDetailScreen({ route }) {
   }, [loading, autoAssign, slot]);
 
   const loadSlot = useCallback(async () => {
+    if (isOffline) {
+      try {
+        const db = await getDb();
+        const row = await db.getFirstAsync(
+          `SELECT s.server_id AS slot_id, s.slot_name, s.ticket_price,
+                  b.server_id AS book_id, b.barcode, b.static_code, b.start_position
+           FROM local_slots s
+           LEFT JOIN local_books b
+             ON b.slot_id  = s.server_id
+            AND b.store_id = s.store_id
+            AND b.is_active = 1
+            AND b.is_sold   = 0
+           WHERE s.server_id = ? AND s.store_id = ?`,
+          [slotId, store?.store_id]
+        );
+        if (row) {
+          setSlot({
+            slot_id:      row.slot_id,
+            slot_name:    row.slot_name,
+            ticket_price: String(row.ticket_price),
+            current_book: row.book_id ? {
+              book_id:        row.book_id,
+              barcode:        row.barcode,
+              static_code:    row.static_code,
+              start_position: row.start_position,
+              book_name:      null,
+            } : null,
+          });
+        }
+      } catch (err) {
+        console.error('[SlotDetailScreen] offline loadSlot failed:', err);
+      }
+      return;
+    }
     try {
       const data = await getSlot(slotId);
       setSlot(data);
     } catch (err) {
       Alert.alert(t('common.error'), err.message || t('common.tryAgain'));
     }
-  }, [slotId, t]);
+  }, [slotId, t, isOffline, store?.store_id]);
 
   useFocusEffect(
     useCallback(() => {

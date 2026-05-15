@@ -1,5 +1,6 @@
 """EmployeeShift service — open, close, void, and carry-forward logic."""
 
+import uuid as uuid_lib
 from decimal import Decimal
 from datetime import datetime, timezone
 
@@ -195,6 +196,7 @@ def open_employee_shift(
     shift_number = (last_shift.shift_number + 1) if last_shift else 1
 
     new_shift = EmployeeShift(
+        uuid=str(uuid_lib.uuid4()),
         business_day_id=business_day.id,
         store_id=store_id,
         employee_id=user_id,

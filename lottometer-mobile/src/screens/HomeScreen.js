@@ -20,7 +20,7 @@ import NetInfo from '@react-native-community/netinfo';
 import { useAuth } from '../context/AuthContext';
 import { getDb } from '../offline/db';
 import { openOfflineShift, syncPendingItems } from '../offline';
-import { openShift, listShifts, closeShift, getShiftSummary, getCurrentOpenShift } from '../api/shifts';
+import { openShift, listShifts, closeShift, getShiftSummary } from '../api/shifts';
 import { getBooksSummary } from '../api/books';
 import { getSubscription } from '../api/subscription';
 import TrialBannerComponent from './TrialBannerComponent';
@@ -137,10 +137,39 @@ export default function HomeScreen() {
   }, []);
 
   const loadData = useCallback(async () => {
-    // Read connectivity directly — avoids race where context isOffline
-    // hasn't propagated yet when loadData first runs after navigation.
     const netState = await NetInfo.fetch();
-    const currentlyOffline = !netState.isConnected || netState.isInternetReachable === false;
+    // null means indeterminate (e.g. WiFi with no gateway reachable) — treat as
+    // offline so we never hit the API when connectivity isn't confirmed.
+    const currentlyOffline = !netState.isConnected || netState.isInternetReachable !== true;
+
+    // ── Active shift: always from local SQLite ──────────────────────────────
+    // openShift() and closeShift() both write-through to local_employee_shifts,
+    // so this table reflects the true state even after an offline close that
+    // hasn't synced yet. Never read this value from the API — it races with
+    // pending sync writes and can show a shift as open after it's been closed.
+    let resolvedActiveShift = null;
+    try {
+      const db = await getDb();
+      const row = await db.getFirstAsync(
+        `SELECT * FROM local_employee_shifts
+         WHERE store_id = ? AND status = 'open'
+         ORDER BY id DESC LIMIT 1`,
+        [store?.store_id]
+      );
+      if (row) {
+        resolvedActiveShift = {
+          id: row.server_id,
+          uuid: row.uuid,
+          shift_number: row.shift_number,
+          status: row.status,
+          opened_at: row.opened_at,
+          employee_id: row.employee_id,
+        };
+      }
+    } catch (err) {
+      console.error('[HomeScreen] active shift lookup failed:', err);
+    }
+    setActiveShift(resolvedActiveShift);
 
     if (currentlyOffline) {
       try {
@@ -149,15 +178,6 @@ export default function HomeScreen() {
         if (!db) return;
         const today = new Date().toISOString().split('T')[0];
 
-        const allShifts = await db.getAllAsync(
-          'SELECT server_id, uuid, status, store_id FROM local_employee_shifts'
-        );
-        const localShift = await db.getFirstAsync(
-          `SELECT * FROM local_employee_shifts
-           WHERE store_id = ? AND status = 'open'
-           ORDER BY id DESC LIMIT 1`,
-          [store?.store_id]
-        );
         const localDay = await db.getFirstAsync(
           `SELECT * FROM local_business_days WHERE store_id = ? AND business_date = ?`,
           [store?.store_id, today]
@@ -183,23 +203,11 @@ export default function HomeScreen() {
             voided: false,
           })));
 
-          // Prefer shift found via business_day_uuid; fall back to localShift
-          // (found by store_id) to handle business_day_uuid mismatch cases.
-          const activeShiftRow = localShifts.find(s => s.status === 'open') || localShift || null;
-          if (activeShiftRow) {
-            setActiveShift({
-              id: activeShiftRow.server_id,
-              uuid: activeShiftRow.uuid,
-              shift_number: activeShiftRow.shift_number,
-              status: activeShiftRow.status,
-              opened_at: activeShiftRow.opened_at,
-              employee_id: activeShiftRow.employee_id,
-            });
-
+          if (resolvedActiveShift) {
             const closeCount = await db.getFirstAsync(
               `SELECT COUNT(*) as count FROM local_shift_books
                WHERE shift_uuid = ? AND scan_type = 'close'`,
-              [activeShiftRow.uuid]
+              [resolvedActiveShift.uuid]
             );
             const totalActive = await db.getFirstAsync(
               `SELECT COUNT(*) as count FROM local_books
@@ -211,21 +219,20 @@ export default function HomeScreen() {
               books_pending_close: (totalActive?.count || 0) - (closeCount?.count || 0),
             });
           } else {
-            setActiveShift(null);
             setSummary(null);
           }
         } else {
           setBusinessDay(null);
           setTodayShifts([]);
-          setActiveShift(null);
           setSummary(null);
         }
-      } catch {
+      } catch (err) {
+        console.error('[HomeScreen] offline loadData failed:', err);
       }
       return;
     }
 
-    // ONLINE PATH — unchanged
+    // ONLINE PATH
     try {
       const subRes = await getSubscription().catch(() => null);
       if (subRes) setSubscription(subRes.data);
@@ -235,18 +242,13 @@ export default function HomeScreen() {
       const bd = await getTodaysBusinessDay();
       setBusinessDay(bd);
 
-      const [shiftsResult, open] = await Promise.all([
-        listShifts({ business_day_id: bd.id }),
-        getCurrentOpenShift(),
-      ]);
-
+      const shiftsResult = await listShifts({ business_day_id: bd.id });
       const shifts = shiftsResult?.shifts ?? shiftsResult ?? [];
       setTodayShifts(shifts);
-      setActiveShift(open);
 
-      if (open) {
+      if (resolvedActiveShift?.id) {
         try {
-          const s = await getShiftSummary(open.id);
+          const s = await getShiftSummary(resolvedActiveShift.id);
           setSummary(s);
         } catch {
           setSummary(null);
@@ -264,7 +266,7 @@ export default function HomeScreen() {
     } catch (err) {
       Alert.alert(t('home.errorLoadingShift'), err.message || t('common.networkError'));
     }
-  }, [t, isOffline, store]);
+  }, [t, store]);
 
   useFocusEffect(
     useCallback(() => {

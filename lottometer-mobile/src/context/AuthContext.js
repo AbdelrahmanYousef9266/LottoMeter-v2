@@ -24,7 +24,7 @@ export function AuthProvider({ children }) {
         // indefinitely on Android (axios timeout unreliable with no connectivity),
         // which would keep loading=true and block RootNavigator forever.
         const netState = await NetInfo.fetch();
-        if (!netState.isConnected || netState.isInternetReachable === false) {
+        if (!netState.isConnected || netState.isInternetReachable !== true) {
           // Restore JWT from offline session so API calls work when internet returns
           const session = await getOfflineSession();
           if (session?.token) {
@@ -58,12 +58,14 @@ export function AuthProvider({ children }) {
   }, []);
 
   // NetInfo listener for offline detection
+  // isInternetReachable === null means indeterminate (e.g. WiFi with no gateway) —
+  // treat as offline so we don't make API calls when reachability is unconfirmed.
   useEffect(() => {
     const unsubscribe = NetInfo.addEventListener(state => {
-      setIsOffline(!state.isConnected || state.isInternetReachable === false);
+      setIsOffline(!state.isConnected || state.isInternetReachable !== true);
     });
     NetInfo.fetch().then(state => {
-      setIsOffline(!state.isConnected || state.isInternetReachable === false);
+      setIsOffline(!state.isConnected || state.isInternetReachable !== true);
     });
     return () => unsubscribe();
   }, []);

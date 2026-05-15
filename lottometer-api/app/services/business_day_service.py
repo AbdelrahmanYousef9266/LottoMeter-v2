@@ -1,5 +1,6 @@
 """BusinessDay service — auto-management of the store's daily work container."""
 
+import uuid as uuid_lib
 from datetime import datetime, timezone, date
 from decimal import Decimal
 from collections import defaultdict
@@ -46,6 +47,7 @@ def get_or_create_business_day(store_id: int) -> BusinessDay:
         return day
 
     day = BusinessDay(
+        uuid=str(uuid_lib.uuid4()),
         store_id=store_id,
         business_date=today,
         opened_at=datetime.now(timezone.utc),

@@ -5,6 +5,7 @@ from marshmallow import Schema, fields
 
 class BusinessDaySchema(Schema):
     id            = fields.Int()
+    uuid          = fields.Str(dump_default=None, allow_none=True)
     store_id      = fields.Int()
     business_date = fields.Date(format="iso")
     opened_at     = fields.DateTime(format="iso")

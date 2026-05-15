@@ -1,5 +1,13 @@
 import NetInfo from '@react-native-community/netinfo';
+import * as Sentry from '@sentry/react-native';
 import { getDb } from './db';
+import {
+  markSyncItemSyncing,
+  markSyncItemSynced,
+  markSyncItemConflict,
+  markSyncItemRetry,
+  markSyncItemFailed,
+} from './localDb';
 import { openShift, closeShift } from '../api/shifts';
 import { recordScan } from '../api/scan';
 import { getTodaysBusinessDay } from '../api/businessDays';
@@ -11,7 +19,6 @@ let isSyncing = false;
 const syncBusinessDay = async (db, item) => {
   const payload = JSON.parse(item.payload);
   try {
-    // getTodaysBusinessDay already returns the day object directly
     const serverDay = await getTodaysBusinessDay();
     if (serverDay) {
       await db.runAsync(
@@ -160,19 +167,16 @@ export const syncPendingItems = async (onProgress) => {
   try {
     const db = await getDb();
 
-    // Unlock items exhausted by previous failures so they get another chance
-    await db.runAsync(
-      `UPDATE sync_queue
-       SET retry_count = 0, status = 'pending'
-       WHERE status = 'pending' AND retry_count >= max_retries`
-    );
-
+    // Select only pending items whose backoff window has elapsed.
+    // Failed items (status = 'failed') are never selected — they require
+    // an explicit retryFailedSyncItem() call to re-enter the queue.
     const pendingItems = await db.getAllAsync(
       `SELECT * FROM sync_queue
-       WHERE status = 'pending' AND retry_count < max_retries
+       WHERE status = 'pending'
+         AND (next_retry_at IS NULL OR next_retry_at <= datetime('now'))
        ORDER BY
          CASE operation
-           WHEN 'create_business_day'  THEN 1
+           WHEN 'create_business_day'   THEN 1
            WHEN 'create_employee_shift' THEN 2
            WHEN 'create_scan'           THEN 3
            WHEN 'close_employee_shift'  THEN 4
@@ -182,10 +186,7 @@ export const syncPendingItems = async (onProgress) => {
     );
 
     for (const item of pendingItems) {
-      await db.runAsync(
-        "UPDATE sync_queue SET status = 'syncing' WHERE uuid = ?",
-        [item.uuid]
-      );
+      await markSyncItemSyncing(db, item.uuid);
 
       let result;
       switch (item.operation) {
@@ -202,28 +203,40 @@ export const syncPendingItems = async (onProgress) => {
           result = await syncCloseShift(db, item);
           break;
         default:
-          result = { success: false, error: 'Unknown operation' };
+          result = { success: false, error: `Unknown operation: ${item.operation}` };
       }
 
       if (result.success) {
-        await db.runAsync(
-          `UPDATE sync_queue SET status = 'synced', synced_at = ? WHERE uuid = ?`,
-          [new Date().toISOString(), item.uuid]
-        );
+        await markSyncItemSynced(db, item.uuid);
         synced++;
       } else if (result.conflict) {
-        await db.runAsync(
-          `UPDATE sync_queue SET status = 'conflict', last_error = ? WHERE uuid = ?`,
-          [result.error, item.uuid]
-        );
+        await markSyncItemConflict(db, item.uuid, result.error);
         conflicts++;
       } else {
-        await db.runAsync(
-          `UPDATE sync_queue
-           SET status = 'pending', retry_count = retry_count + 1, last_error = ?
-           WHERE uuid = ?`,
-          [result.error, item.uuid]
-        );
+        const newRetryCount = item.retry_count + 1;
+
+        if (newRetryCount >= item.max_retries) {
+          // Retry budget exhausted — move to terminal failed state.
+          await markSyncItemFailed(db, item.uuid, newRetryCount, result.error);
+
+          Sentry.withScope(scope => {
+            scope.setTag('operation', item.operation);
+            scope.setTag('entity_type', item.entity_type);
+            scope.setContext('sync_queue', {
+              entity_uuid: item.entity_uuid,
+              retry_count: newRetryCount,
+              last_error: result.error,
+            });
+            Sentry.captureMessage(
+              `sync_queue item permanently failed: ${item.operation}`,
+              'error'
+            );
+          });
+        } else {
+          // Retries remaining — re-queue with exponential backoff.
+          await markSyncItemRetry(db, item.uuid, newRetryCount, result.error);
+        }
+
         failed++;
       }
 
@@ -271,9 +284,7 @@ export const getFailedSyncCount = async () => {
   try {
     const db = await getDb();
     const result = await db.getFirstAsync(
-      `SELECT COUNT(*) as count FROM sync_queue
-       WHERE status = 'failed'
-          OR (status = 'pending' AND retry_count >= max_retries)`
+      "SELECT COUNT(*) as count FROM sync_queue WHERE status = 'failed'"
     );
     return result?.count || 0;
   } catch {

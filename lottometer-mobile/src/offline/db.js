@@ -1,36 +1,35 @@
 import * as SQLite from 'expo-sqlite';
 
 let _db = null;
-let _initializing = false;
+let _initPromise = null;
 
 export const getDb = async () => {
   if (_db) return _db;
-  if (_initializing) {
-    await new Promise(resolve => setTimeout(resolve, 100));
-    return _db;
+  // Cache the Promise so concurrent callers all await the same initialization
+  // rather than each getting a 100ms sleep and returning null.
+  if (!_initPromise) {
+    _initPromise = (async () => {
+      const db = await SQLite.openDatabaseAsync('lottometer.db');
+      await db.execAsync('PRAGMA journal_mode = WAL;');
+      await db.execAsync('PRAGMA foreign_keys = ON;');
+      await createTables(db);
+      await migrateSchema(db);
+      _db = db;
+      return db;
+    })().catch(e => {
+      _initPromise = null; // allow retry on next call
+      console.error('[db] Failed to open database:', e.message);
+      throw e;
+    });
   }
-
-  _initializing = true;
-  try {
-    const db = await SQLite.openDatabaseAsync('lottometer.db');
-    await db.execAsync('PRAGMA journal_mode = WAL;');
-    await db.execAsync('PRAGMA foreign_keys = ON;');
-    await createTables(db);
-    _db = db;
-    return _db;
-  } catch (e) {
-    console.error('[db] Failed to open database:', e.message);
-    _db = null;
-    throw e;
-  } finally {
-    _initializing = false;
-  }
+  return _initPromise;
 };
 
 export const closeDb = async () => {
   if (_db) {
     await _db.closeAsync();
     _db = null;
+    _initPromise = null;
   }
 };
 
@@ -160,6 +159,9 @@ const createTables = async (db) => {
       synced_at TEXT
     );
 
+    -- status lifecycle: pending → syncing → synced | failed | conflict
+    -- Only retryFailedSyncItem() may reset a failed row back to pending.
+    -- Nothing automatically resets retry_count.
     CREATE TABLE IF NOT EXISTS sync_queue (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       uuid TEXT NOT NULL UNIQUE,
@@ -172,6 +174,7 @@ const createTables = async (db) => {
       max_retries INTEGER NOT NULL DEFAULT 10,
       last_error TEXT,
       conflict_data TEXT,
+      next_retry_at TEXT,
       created_at TEXT NOT NULL,
       synced_at TEXT
     );
@@ -189,6 +192,16 @@ const createTables = async (db) => {
     CREATE INDEX IF NOT EXISTS idx_local_shifts_store
       ON local_employee_shifts(store_id, status);
   `);
+};
+
+// Idempotent column additions for users upgrading from older app versions.
+// Each ALTER TABLE is wrapped in try/catch — "duplicate column" errors are safe to ignore.
+const migrateSchema = async (db) => {
+  try {
+    await db.execAsync('ALTER TABLE sync_queue ADD COLUMN next_retry_at TEXT');
+  } catch {
+    // column already exists on installs that have run this before
+  }
 };
 
 export default getDb;

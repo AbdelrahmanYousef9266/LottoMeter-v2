@@ -27,6 +27,21 @@ export {
   closeLocalEmployeeShift,
   saveLocalScan,
   saveLocalExtraSale,
+  // sync queue state transitions
+  markSyncItemSyncing,
+  markSyncItemSynced,
+  markSyncItemConflict,
+  markSyncItemRetry,
+  markSyncItemFailed,
+  // manual retry / discard
+  retryFailedSyncItem,
+  discardFailedSyncItem,
+  // bulk queries
+  getFailedSyncItems,
+  getSyncQueueStats,
+  // local read helpers
+  getLocalSlots,
+  getLocalBooksSummary,
 } from './localDb';
 export { setSessionContext, getSessionContext } from './sessionStore';
 export {
