@@ -37,10 +37,15 @@ class SyncEvent(db.Model):
 
 def log_sync_event(store_id: int, operation: str, status: str, **kwargs) -> None:
     """Fire-and-forget telemetry helper — never raises, never blocks the caller."""
+    import logging
     try:
         db.session.add(SyncEvent(
             store_id=store_id, operation=operation, status=status, **kwargs
         ))
         db.session.commit()
-    except Exception:
+    except Exception as exc:
         db.session.rollback()
+        logging.getLogger(__name__).error(
+            "[sync_event] log_sync_event failed (store=%s op=%s): %s",
+            store_id, operation, exc,
+        )

@@ -14,6 +14,7 @@ from app.models.subscription import Subscription
 from app.models.audit_log import AuditLog
 from app.models.store_settings import StoreSettings
 from app.models.complaint import Complaint
+from app.models.sync_event import SyncEvent
 
 
 __all__ = [
@@ -31,4 +32,5 @@ __all__ = [
     "AuditLog",
     "StoreSettings",
     "Complaint",
+    "SyncEvent",
 ]
