@@ -49,6 +49,9 @@ class Store(db.Model):
         nullable=True,
     )
     notes = db.Column(db.Text, nullable=True)
+    force_full_resync = db.Column(
+        db.Boolean, nullable=False, default=False, server_default="false"
+    )
     created_at = db.Column(
         db.DateTime,
         nullable=False,

@@ -1,4 +1,5 @@
 import NetInfo from '@react-native-community/netinfo';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
 import { getDb } from './db';
 import {
@@ -11,6 +12,14 @@ import {
 import { openShift, closeShift } from '../api/shifts';
 import { recordScan } from '../api/scan';
 import { getTodaysBusinessDay } from '../api/businessDays';
+import api from '../api/client';
+
+// Error codes that indicate the item can never succeed — skip retries.
+const TERMINAL_SCAN_ERRORS = new Set([
+  'BOOK_NOT_FOUND',
+  'BOOK_NOT_ACTIVE',
+  'BOOK_NOT_IN_SLOT',
+]);
 
 let isSyncing = false;
 
@@ -102,6 +111,10 @@ const syncScan = async (db, item) => {
       );
       return { success: true, duplicate: true };
     }
+    // Terminal errors — permanently fail instead of burning retries.
+    if (TERMINAL_SCAN_ERRORS.has(e.code)) {
+      return { success: false, terminal: true, error: e.message };
+    }
     return { success: false, error: e.message || 'Scan sync failed' };
   }
 };
@@ -144,6 +157,22 @@ const syncCloseShift = async (db, item) => {
       return { success: true, duplicate: true };
     }
     return { success: false, error: e.message };
+  }
+};
+
+// ─── SERVER FLAG CHECK ────────────────────────────────────
+
+const checkServerFlags = async () => {
+  try {
+    const { data } = await api.get('/sync/status');
+    if (data.force_full_resync) {
+      // Signal the app to wipe and re-seed on next launch/focus.
+      await AsyncStorage.setItem('force_full_resync', 'true');
+      // Acknowledge so the server clears the flag.
+      await api.post('/sync/ack');
+    }
+  } catch {
+    // Non-fatal — will retry on next sync run.
   }
 };
 
@@ -212,6 +241,15 @@ export const syncPendingItems = async (onProgress) => {
       } else if (result.conflict) {
         await markSyncItemConflict(db, item.uuid, result.error);
         conflicts++;
+      } else if (result.terminal) {
+        // Terminal error — exhaust retries immediately to prevent infinite loops.
+        await markSyncItemFailed(db, item.uuid, item.max_retries, result.error);
+        Sentry.withScope(scope => {
+          scope.setTag('operation', item.operation);
+          scope.setContext('sync_queue', { entity_uuid: item.entity_uuid, last_error: result.error });
+          Sentry.captureMessage(`sync_queue terminal failure: ${item.operation}`, 'error');
+        });
+        failed++;
       } else {
         const newRetryCount = item.retry_count + 1;
 
@@ -247,6 +285,11 @@ export const syncPendingItems = async (onProgress) => {
           current: item.operation,
         });
       }
+    }
+
+    // After draining the queue, check for server-side flags (force_full_resync).
+    if (pendingItems.length > 0) {
+      await checkServerFlags();
     }
 
   } finally {
@@ -289,5 +332,26 @@ export const getFailedSyncCount = async () => {
     return result?.count || 0;
   } catch {
     return 0;
+  }
+};
+
+/**
+ * Returns true if the server has requested a full resync for this device.
+ * Callers should wipe local tables, re-seed, then call clearForceResyncFlag().
+ */
+export const shouldForceFullResync = async () => {
+  try {
+    const val = await AsyncStorage.getItem('force_full_resync');
+    return val === 'true';
+  } catch {
+    return false;
+  }
+};
+
+export const clearForceResyncFlag = async () => {
+  try {
+    await AsyncStorage.removeItem('force_full_resync');
+  } catch {
+    // no-op
   }
 };

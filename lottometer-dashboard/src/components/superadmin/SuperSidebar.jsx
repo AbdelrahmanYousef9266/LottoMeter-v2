@@ -2,12 +2,14 @@ import { useState, useEffect } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { getComplaintStats } from '../../api/complaints'
+import { getSyncFailures } from '../../api/sync'
 
 const BASE_NAV = [
   { to: '/superadmin/dashboard',     label: 'Overview',     icon: '📊', exact: true },
   { to: '/superadmin/stores',        label: 'Stores',       icon: '🏪' },
   { to: '/superadmin/submissions',   label: 'Submissions',  icon: '📬' },
   { to: '/superadmin/complaints',    label: 'Complaints',   icon: '💬', badgeKey: 'complaints' },
+  { to: '/superadmin/sync',          label: 'Sync Health',  icon: '🔄', badgeKey: 'sync_failures' },
   { to: '/superadmin/stores/create', label: 'Create Store', icon: '➕' },
 ]
 
@@ -18,16 +20,22 @@ export default function SuperSidebar() {
   const { logout } = useAuth()
   const navigate = useNavigate()
   const [openComplaints, setOpenComplaints] = useState(0)
+  const [syncFailures, setSyncFailures]     = useState(0)
 
   useEffect(() => {
     getComplaintStats()
       .then(r => setOpenComplaints(r.data.open ?? 0))
       .catch(() => {})
+    getSyncFailures()
+      .then(r => setSyncFailures(r.data.failures.length))
+      .catch(() => {})
   }, [])
 
-  const NAV_ITEMS = BASE_NAV.map(item =>
-    item.badgeKey === 'complaints' ? { ...item, badge: openComplaints } : item
-  )
+  const NAV_ITEMS = BASE_NAV.map(item => {
+    if (item.badgeKey === 'complaints')    return { ...item, badge: openComplaints }
+    if (item.badgeKey === 'sync_failures') return { ...item, badge: syncFailures }
+    return item
+  })
 
   const handleLogout = () => {
     logout()

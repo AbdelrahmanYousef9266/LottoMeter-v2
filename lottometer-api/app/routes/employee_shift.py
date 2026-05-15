@@ -11,6 +11,7 @@ from app.services import employee_shift_service
 from app.services.report_service import get_shift_report
 from app.services.audit_service import log_action
 from app.models.employee_shift import EmployeeShift
+from app.models.sync_event import log_sync_event
 from app.errors import NotFoundError, ValidationError
 from app.auth_helpers import admin_required, current_store_id, current_user_id
 
@@ -35,6 +36,7 @@ def open_shift():
                entity_type="shift", entity_id=shift.id,
                ip_address=request.remote_addr,
                user_agent=(request.headers.get("User-Agent") or "")[:200])
+    log_sync_event(store_id, operation="open_shift", status="ok")
     return jsonify({
         "employee_shift": _schema.dump(shift),
         "carried_forward_count": carried_forward_count,
@@ -126,6 +128,7 @@ def close_shift(shift_id):
                entity_type="shift", entity_id=shift.id,
                ip_address=request.remote_addr,
                user_agent=(request.headers.get("User-Agent") or "")[:200])
+    log_sync_event(store_id, operation="close_shift", status="ok")
     return jsonify({
         "shift":  _schema.dump(shift),
         "report": report,
