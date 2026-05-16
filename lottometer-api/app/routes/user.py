@@ -6,6 +6,7 @@ from marshmallow import ValidationError as MarshmallowValidationError
 
 from app.errors import ValidationError
 from app.routes.auth import admin_required, current_store_id
+from app.auth_helpers import blocks_impersonation
 from app.schemas.user import (
     CreateUserSchema,
     UpdateUserSchema,
@@ -47,6 +48,7 @@ def list_active_users_route():
 @user_bp.post("")
 @jwt_required()
 @admin_required
+@blocks_impersonation
 def create_user_route():
     """POST /api/users — admin creates a new user."""
     store_id = current_store_id()
@@ -93,6 +95,7 @@ def update_user_route(user_id):
 @user_bp.delete("/<int:user_id>")
 @jwt_required()
 @admin_required
+@blocks_impersonation
 def delete_user_route(user_id):
     """DELETE /api/users/{id} — soft delete."""
     store_id = current_store_id()

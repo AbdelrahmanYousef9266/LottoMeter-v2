@@ -541,6 +541,16 @@
   padding: 28px;
 }
 
+/* ─── Impersonation layout offsets ────────────────────────────────── */
+/* When the red banner is visible (44px fixed), shift fixed chrome down */
+.layout--impersonating .topbar {
+  top: 44px;
+}
+
+.layout--impersonating .sidebar {
+  top: 44px;
+}
+
 /* ─── Skeleton Loading ──────────────────────────────── */
 @keyframes shimmer {
   0% { background-position: -400px 0; }

@@ -11,6 +11,7 @@ from app.token_blocklist import add_to_blocklist
 from app.models.store import Store
 from app.auth_helpers import (
     admin_required,
+    blocks_impersonation,
     current_user_id,
     current_store_id,
     current_role,
@@ -85,6 +86,7 @@ def me():
 
 @auth_bp.route("/change-password", methods=["PUT"])
 @jwt_required()
+@blocks_impersonation
 def change_password():
     """Change the authenticated user's password."""
     body = request.get_json() or {}

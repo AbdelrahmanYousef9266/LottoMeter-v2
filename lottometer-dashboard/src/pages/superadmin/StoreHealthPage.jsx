@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
   LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, ReferenceLine,
 } from 'recharts'
-import { getStoreHealth, suspendStore, activateStore } from '../../api/superadmin'
+import { getStoreHealth, suspendStore, activateStore, startImpersonationApi } from '../../api/superadmin'
+import { useAuth } from '../../context/AuthContext'
 import Badge from '../../components/UI/Badge'
 import Button from '../../components/UI/Button'
 
@@ -60,11 +61,19 @@ function fmtDateShort(iso) {
 
 export default function StoreHealthPage() {
   const { storeId } = useParams()
-  const navigate = useNavigate()
-  const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState('')
+  const navigate    = useNavigate()
+  const { startImpersonation } = useAuth()
+  const [data, setData]             = useState(null)
+  const [loading, setLoading]       = useState(true)
+  const [error, setError]           = useState('')
   const [actionLoading, setActionLoading] = useState(false)
+
+  // Impersonation modal state
+  const [impModal, setImpModal]         = useState(false)
+  const [impText, setImpText]           = useState('')
+  const [impLoading, setImpLoading]     = useState(false)
+  const [impError, setImpError]         = useState('')
+  const impInputRef = useRef(null)
 
   const load = useCallback(() => {
     setLoading(true)
@@ -86,6 +95,31 @@ export default function StoreHealthPage() {
       load()
     } catch {}
     finally { setActionLoading(false) }
+  }
+
+  const openImpModal = () => {
+    setImpText('')
+    setImpError('')
+    setImpModal(true)
+    // Focus the input after the modal renders
+    setTimeout(() => impInputRef.current?.focus(), 50)
+  }
+
+  const handleImpersonate = async () => {
+    if (impText !== 'IMPERSONATE') {
+      setImpError('Type IMPERSONATE (all caps) to confirm.')
+      return
+    }
+    setImpLoading(true)
+    setImpError('')
+    try {
+      const res = await startImpersonationApi(storeId)
+      // startImpersonation does a hard redirect to /dashboard — no state to clean up
+      startImpersonation(res.data)
+    } catch (err) {
+      setImpError(err?.response?.data?.error?.message || 'Impersonation failed. Try again.')
+      setImpLoading(false)
+    }
   }
 
   if (loading) {
@@ -145,14 +179,25 @@ export default function StoreHealthPage() {
             {active_shift && <Badge variant="amber">Shift Open</Badge>}
           </div>
         </div>
-        <button
-          className="btn btn-secondary btn-sm"
-          style={{ color: store.suspended ? '#2DAE1A' : 'var(--red)', borderColor: store.suspended ? '#2DAE1A' : 'var(--red)' }}
-          onClick={handleSuspendToggle}
-          disabled={actionLoading}
-        >
-          {store.suspended ? 'Activate' : 'Suspend'}
-        </button>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button
+            className="btn btn-secondary btn-sm"
+            style={{ color: store.suspended ? '#2DAE1A' : 'var(--red)', borderColor: store.suspended ? '#2DAE1A' : 'var(--red)' }}
+            onClick={handleSuspendToggle}
+            disabled={actionLoading}
+          >
+            {store.suspended ? 'Activate' : 'Suspend'}
+          </button>
+          {!store.suspended && (
+            <button
+              className="btn btn-secondary btn-sm"
+              style={{ color: '#7C3AED', borderColor: '#7C3AED' }}
+              onClick={openImpModal}
+            >
+              🔴 Impersonate
+            </button>
+          )}
+        </div>
       </div>
 
       {/* ── Stat Cards ── */}
@@ -378,6 +423,81 @@ export default function StoreHealthPage() {
           )}
         </SectionCard>
       </div>
+
+      {/* ── Impersonation Confirmation Modal ── */}
+      {impModal && (
+        <div
+          style={{
+            position: 'fixed', inset: 0, zIndex: 10000,
+            background: 'rgba(0,0,0,0.55)',
+            display: 'flex', alignItems: 'center', justifyContent: 'center',
+            padding: 20,
+          }}
+          onClick={(e) => { if (e.target === e.currentTarget && !impLoading) { setImpModal(false) } }}
+        >
+          <div style={{
+            background: 'var(--bg-card)',
+            borderRadius: 12,
+            padding: 28,
+            maxWidth: 480,
+            width: '100%',
+            boxShadow: '0 20px 60px rgba(0,0,0,0.3)',
+          }}>
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 12, color: '#B91C1C' }}>
+              🔴 Impersonate {store.store_name}
+            </div>
+            <p style={{ fontSize: 13, color: 'var(--text-secondary)', lineHeight: 1.6, marginBottom: 16 }}>
+              You will be logged in as the admin of{' '}
+              <strong>{store.store_name}</strong> (
+              <code style={{ fontSize: 12, background: 'var(--bg-secondary)', padding: '1px 5px', borderRadius: 3 }}>
+                {store.store_code}
+              </code>
+              ). All actions you take will appear to come from them. This session expires in{' '}
+              <strong>1 hour</strong> and is audit-logged.
+            </p>
+            <p style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>
+              Type <code style={{ background: 'var(--bg-secondary)', padding: '1px 6px', borderRadius: 3 }}>IMPERSONATE</code> to continue:
+            </p>
+            <input
+              ref={impInputRef}
+              className="input-field"
+              value={impText}
+              onChange={(e) => setImpText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && !impLoading && handleImpersonate()}
+              placeholder="IMPERSONATE"
+              disabled={impLoading}
+              style={{ marginBottom: 12, fontFamily: 'monospace', letterSpacing: '0.05em' }}
+            />
+            {impError && (
+              <p style={{ fontSize: 13, color: 'var(--red)', marginBottom: 12 }}>{impError}</p>
+            )}
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                className="btn btn-secondary btn-sm"
+                onClick={() => setImpModal(false)}
+                disabled={impLoading}
+              >
+                Cancel
+              </button>
+              <button
+                className="btn btn-sm"
+                style={{
+                  background: impText === 'IMPERSONATE' ? '#B91C1C' : 'var(--bg-secondary)',
+                  color: impText === 'IMPERSONATE' ? '#fff' : 'var(--text-secondary)',
+                  border: 'none',
+                  fontWeight: 700,
+                  cursor: impText === 'IMPERSONATE' && !impLoading ? 'pointer' : 'not-allowed',
+                  transition: 'background 0.15s',
+                }}
+                onClick={handleImpersonate}
+                disabled={impLoading}
+              >
+                {impLoading ? 'Starting…' : 'Start Impersonation'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

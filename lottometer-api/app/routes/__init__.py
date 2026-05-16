@@ -17,6 +17,7 @@ from app.routes.stripe_webhook import stripe_bp
 from app.routes.complaints import complaints_bp
 from app.routes.sync_admin import sync_admin_bp
 from app.routes.sync_status import sync_status_bp
+from app.routes.impersonation import impersonation_bp
 
 
 def register_blueprints(app):
@@ -38,5 +39,6 @@ def register_blueprints(app):
     app.register_blueprint(complaints_bp)
     app.register_blueprint(sync_admin_bp)
     app.register_blueprint(sync_status_bp)
+    app.register_blueprint(impersonation_bp)
     if app.debug:
         app.register_blueprint(dev_bp)

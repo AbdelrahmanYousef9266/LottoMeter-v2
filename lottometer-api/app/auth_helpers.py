@@ -61,3 +61,31 @@ def superadmin_required(fn):
         return fn(*args, **kwargs)
 
     return wrapper
+
+
+def blocks_impersonation(fn):
+    """Decorator: block destructive mutations during superadmin impersonation sessions.
+
+    Apply to any route that makes permanent changes a debugging superadmin should
+    not be able to make on behalf of the real store owner:
+      - User creation / deletion
+      - Password changes
+      - Store PIN changes
+
+    The impersonation JWT carries is_impersonation=True in its additional claims.
+    All other store-scoped reads and non-destructive writes are allowed — the point
+    of impersonation is to see what the owner sees, not to be fully read-only.
+    """
+    @wraps(fn)
+    def wrapper(*args, **kwargs):
+        if get_jwt().get("is_impersonation"):
+            from flask import jsonify as _jsonify
+            return _jsonify({
+                "error": {
+                    "code":    "BLOCKED_DURING_IMPERSONATION",
+                    "message": "This action is not allowed during an impersonation session.",
+                }
+            }), 403
+        return fn(*args, **kwargs)
+
+    return wrapper

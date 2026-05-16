@@ -696,6 +696,12 @@ def _audit_item(row, store_map, users_map):
     elif action == "trial_extended":
         title    = f"Trial extended for {code or sname}"
         severity = "info"
+    elif action == "superadmin_impersonation_started":
+        title    = f"{actor} impersonated {code or sname}"
+        severity = "warning"
+    elif action == "superadmin_impersonation_ended":
+        title    = f"Impersonation ended for {code or sname}"
+        severity = "info"
     else:
         title    = action.replace("_", " ").capitalize()
         severity = _AUDIT_SEVERITY.get(action, "info")

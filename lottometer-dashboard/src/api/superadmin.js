@@ -21,3 +21,6 @@ export const extendStoreTrial = (id, data) => api.post(`/superadmin/stores/${id}
 export const getStoreHealth = (storeId) => api.get(`/superadmin/stores/${storeId}/health`)
 
 export const getActivity = (params) => api.get('/superadmin/activity', { params })
+
+export const startImpersonationApi = (storeId) => api.post(`/superadmin/stores/${storeId}/impersonate`)
+export const endImpersonationApi   = ()         => api.post('/impersonation/end')

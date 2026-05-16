@@ -8,7 +8,7 @@ from app.schemas.store_schema import ChangePinSchema, ChangeScanModeSchema, SetS
 from app.services import store_service
 from app.services.store_settings_service import get_settings, update_settings, serialize_settings
 from app.errors import ValidationError
-from app.auth_helpers import admin_required, current_store_id
+from app.auth_helpers import admin_required, blocks_impersonation, current_store_id
 
 
 store_bp = Blueprint("store", __name__, url_prefix="/api/store")
@@ -16,6 +16,7 @@ store_bp = Blueprint("store", __name__, url_prefix="/api/store")
 
 @store_bp.route("/pin", methods=["PUT"])
 @admin_required
+@blocks_impersonation
 def set_store_pin():
     """Admin-only: set (or reset) the store PIN without requiring the old PIN."""
     try:
@@ -46,6 +47,7 @@ def verify_store_pin():
 
 @store_bp.route("/settings/pin", methods=["PUT"])
 @admin_required
+@blocks_impersonation
 def change_pin():
     """Admin-only: change the store's 4-digit PIN."""
     try:

@@ -33,11 +33,19 @@ export default function SuperDashboard() {
   const apiFn = useCallback(() => getSuperStats(), [])
   const { data, loading } = useApi(apiFn)
   const [openComplaints, setOpenComplaints] = useState(null)
+  const [expiredBanner, setExpiredBanner]   = useState(false)
 
   useEffect(() => {
     getComplaintStats()
       .then(r => setOpenComplaints(r.data.open))
       .catch(() => {})
+    // Show toast if redirected here after impersonation session expiry
+    if (sessionStorage.getItem('lm_imp_expired')) {
+      sessionStorage.removeItem('lm_imp_expired')
+      setExpiredBanner(true)
+      const t = setTimeout(() => setExpiredBanner(false), 6000)
+      return () => clearTimeout(t)
+    }
   }, [])
 
   const stats = [
@@ -51,6 +59,16 @@ export default function SuperDashboard() {
 
   return (
     <div>
+      {expiredBanner && (
+        <div style={{
+          background: '#FEF3C7', border: '1px solid #F59E0B', borderRadius: 8,
+          padding: '12px 16px', marginBottom: 20, fontSize: 13, fontWeight: 600,
+          color: '#92400E', display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+        }}>
+          Impersonation session ended — token expired. You are back as superadmin.
+          <button onClick={() => setExpiredBanner(false)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, color: '#92400E' }}>×</button>
+        </div>
+      )}
       <div className="page-header">
         <div>
           <h1 style={{ color: PURPLE }}>⚡ Super Admin Overview</h1>

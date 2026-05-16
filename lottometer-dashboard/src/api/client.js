@@ -25,9 +25,20 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
+      const impToken = localStorage.getItem('lm_impersonation_token')
+      if (impToken) {
+        // Impersonation session expired — restore the superadmin token and redirect
+        const saToken = localStorage.getItem('lm_superadmin_token') || ''
+        localStorage.setItem('lm_token', saToken)
+        ;['lm_impersonation_token', 'lm_superadmin_token', 'lm_imp_meta']
+          .forEach((k) => localStorage.removeItem(k))
+        window.dispatchEvent(new CustomEvent('lm:impersonation-expired'))
+        sessionStorage.setItem('lm_imp_expired', '1')
+        window.location.href = '/superadmin/dashboard'
+        return Promise.reject(error)
+      }
       localStorage.removeItem('lm_token')
       localStorage.removeItem('lm_user')
-      // Redirect to login only if not already there
       if (window.location.pathname !== '/login') {
         window.location.href = '/login'
       }
