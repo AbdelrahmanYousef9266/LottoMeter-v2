@@ -24,3 +24,5 @@ export const getActivity = (params) => api.get('/superadmin/activity', { params 
 
 export const startImpersonationApi = (storeId) => api.post(`/superadmin/stores/${storeId}/impersonate`)
 export const endImpersonationApi   = ()         => api.post('/impersonation/end')
+
+export const getRevenueOverview = () => api.get('/superadmin/revenue/overview')

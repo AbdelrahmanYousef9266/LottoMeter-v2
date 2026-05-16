@@ -7,6 +7,7 @@ import { getSyncFailures } from '../../api/sync'
 const BASE_NAV = [
   { to: '/superadmin/dashboard',     label: 'Overview',     icon: '📊', exact: true },
   { to: '/superadmin/stores',        label: 'Stores',       icon: '🏪' },
+  { to: '/superadmin/revenue',       label: 'Revenue',      icon: '💰' },
   { to: '/superadmin/submissions',   label: 'Submissions',  icon: '📬' },
   { to: '/superadmin/complaints',    label: 'Complaints',   icon: '💬', badgeKey: 'complaints' },
   { to: '/superadmin/sync',          label: 'Sync Health',  icon: '🔄', badgeKey: 'sync_failures' },
