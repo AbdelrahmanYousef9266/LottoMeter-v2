@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { getSuperStats } from '../../api/superadmin'
 import { getComplaintStats } from '../../api/complaints'
 import useApi from '../../hooks/useApi'
+import ActivityFeed from './ActivityFeed'
 
 const PURPLE = '#7C3AED'
 
@@ -63,7 +64,7 @@ export default function SuperDashboard() {
         ))}
       </div>
 
-      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginBottom: 28 }}>
         <button className="btn btn-primary" onClick={() => navigate('/superadmin/stores/create')}>
           ➕ Create New Store
         </button>
@@ -74,6 +75,8 @@ export default function SuperDashboard() {
           🏪 Manage Stores
         </button>
       </div>
+
+      <ActivityFeed />
     </div>
   )
 }

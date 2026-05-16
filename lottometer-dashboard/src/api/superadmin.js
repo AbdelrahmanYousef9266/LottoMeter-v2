@@ -19,3 +19,5 @@ export const reactivateStoreSubscription = (id) => api.post(`/superadmin/stores/
 export const extendStoreTrial = (id, data) => api.post(`/superadmin/stores/${id}/extend-trial`, data)
 
 export const getStoreHealth = (storeId) => api.get(`/superadmin/stores/${storeId}/health`)
+
+export const getActivity = (params) => api.get('/superadmin/activity', { params })

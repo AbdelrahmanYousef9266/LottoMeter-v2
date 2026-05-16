@@ -1,10 +1,11 @@
 """Superadmin routes — cross-store management for LottoMeter staff."""
 
-from datetime import datetime, timezone, date
+from datetime import datetime, timezone, date, timedelta
 
 import bcrypt
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required
+from sqlalchemy import func
 
 from app.auth_helpers import superadmin_required, current_user_id
 from app.extensions import db
@@ -644,3 +645,227 @@ def get_store_health(store_id):
             for l in audit_rows
         ],
     }), 200
+
+
+# ── unified activity feed ──────────────────────────────────────────────────────
+
+# Severity thresholds for shift variance (absolute cash difference in dollars)
+_VARIANCE_WARN_THRESHOLD = 50
+_VARIANCE_CRIT_THRESHOLD = 200
+
+# Audit actions and their fixed severity (everything else is "info")
+_AUDIT_SEVERITY = {
+    "store_suspended": "critical",
+    "store_deleted":   "critical",
+    "subscription_cancelled": "warning",
+}
+
+
+def _activity_iso(dt):
+    if dt is None:
+        return None
+    if isinstance(dt, str):
+        return dt.replace(" ", "T") + "Z"
+    if dt.tzinfo is None:
+        return dt.isoformat() + "Z"
+    return dt.isoformat()
+
+
+def _audit_item(row, store_map, users_map):
+    s = store_map.get(row.store_id) if row.store_id else None
+    code  = s["code"]  if s else None
+    sname = s["name"]  if s else None
+    actor = users_map.get(row.user_id, "system") if row.user_id else "system"
+    action = row.action
+
+    if action == "store_created":
+        title    = f"Store {code or sname} created"
+        severity = "info"
+    elif action == "store_suspended":
+        title    = f"Store {code or sname} suspended"
+        severity = "critical"
+    elif action in ("store_activated", "store_reactivated"):
+        title    = f"Store {code or sname} reactivated"
+        severity = "info"
+    elif action == "subscription_cancelled":
+        title    = f"Subscription cancelled for {code or sname}"
+        severity = "warning"
+    elif action == "subscription_reactivated":
+        title    = f"Subscription reactivated for {code or sname}"
+        severity = "info"
+    elif action == "trial_extended":
+        title    = f"Trial extended for {code or sname}"
+        severity = "info"
+    else:
+        title    = action.replace("_", " ").capitalize()
+        severity = _AUDIT_SEVERITY.get(action, "info")
+
+    return {
+        "id":         f"audit_{row.id}",
+        "type":       "store",
+        "timestamp":  _activity_iso(row.created_at),
+        "title":      title,
+        "subtitle":   f"by {actor}",
+        "severity":   severity,
+        "store_id":   row.store_id,
+        "store_code": code,
+        "link":       f"/superadmin/stores/{row.store_id}" if row.store_id else None,
+    }
+
+
+@superadmin_bp.get("/activity")
+@jwt_required()
+@superadmin_required
+def get_activity():
+    from app.models.audit_log import AuditLog
+    from app.models.complaint import Complaint
+    from app.models.sync_event import SyncEvent
+
+    limit     = min(int(request.args.get("limit", 50)), 200)
+    feed_type = request.args.get("type", "all")
+    cutoff    = datetime.now(timezone.utc) - timedelta(days=7)
+
+    # ── shared store lookup (one query) ───────────────────────────────────
+    store_rows = Store.query.with_entities(
+        Store.store_id, Store.store_code, Store.store_name
+    ).all()
+    store_map = {r.store_id: {"code": r.store_code, "name": r.store_name} for r in store_rows}
+
+    items = []
+
+    # ── audit log → "store" feed items ────────────────────────────────────
+    if feed_type in ("all", "stores"):
+        audit_rows = (
+            AuditLog.query
+            .filter(AuditLog.created_at >= cutoff)
+            .order_by(AuditLog.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        actor_ids = list({r.user_id for r in audit_rows if r.user_id})
+        users_map = {}
+        if actor_ids:
+            urows = User.query.filter(User.user_id.in_(actor_ids)).with_entities(
+                User.user_id, User.username
+            ).all()
+            users_map = {u.user_id: u.username for u in urows}
+
+        for row in audit_rows:
+            items.append(_audit_item(row, store_map, users_map))
+
+    # ── complaints ────────────────────────────────────────────────────────
+    if feed_type in ("all", "complaints"):
+        complaint_rows = (
+            Complaint.query
+            .filter(Complaint.created_at >= cutoff)
+            .order_by(Complaint.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        for c in complaint_rows:
+            s    = store_map.get(c.store_id) if c.store_id else None
+            code = s["code"] if s else None
+            items.append({
+                "id":         f"complaint_{c.id}",
+                "type":       "complaint",
+                "timestamp":  _activity_iso(c.created_at),
+                "title":      (c.subject or "New complaint")[:80],
+                "subtitle":   f"Priority: {c.priority}" if c.priority else "",
+                "severity":   "warning" if c.priority == "high" else "info",
+                "store_id":   c.store_id,
+                "store_code": code,
+                "link":       "/superadmin/complaints",
+            })
+
+    # ── contact submissions ───────────────────────────────────────────────
+    if feed_type in ("all", "submissions"):
+        sub_rows = (
+            ContactSubmission.query
+            .filter(ContactSubmission.created_at >= cutoff)
+            .order_by(ContactSubmission.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        for s in sub_rows:
+            name = s.business_name or s.full_name or "Unknown"
+            items.append({
+                "id":         f"submission_{s.id}",
+                "type":       "submission",
+                "timestamp":  _activity_iso(s.created_at),
+                "title":      f"New {s.submission_type} from {name}",
+                "subtitle":   s.email or "",
+                "severity":   "info",
+                "store_id":   None,
+                "store_code": None,
+                "link":       "/superadmin/submissions",
+            })
+
+    # ── sync errors ───────────────────────────────────────────────────────
+    if feed_type in ("all", "sync"):
+        one_hour_ago = datetime.now(timezone.utc) - timedelta(hours=1)
+        high_error_ids = {
+            r.store_id
+            for r in (
+                db.session.query(SyncEvent.store_id, func.count(SyncEvent.id).label("n"))
+                .filter(SyncEvent.status == "failed", SyncEvent.created_at >= one_hour_ago)
+                .group_by(SyncEvent.store_id)
+                .having(func.count(SyncEvent.id) > 10)
+                .all()
+            )
+        }
+        sync_rows = (
+            SyncEvent.query
+            .filter(SyncEvent.status == "failed", SyncEvent.created_at >= cutoff)
+            .order_by(SyncEvent.created_at.desc())
+            .limit(limit)
+            .all()
+        )
+        for ev in sync_rows:
+            s    = store_map.get(ev.store_id) if ev.store_id else None
+            code = s["code"] if s else None
+            items.append({
+                "id":         f"sync_{ev.id}",
+                "type":       "sync",
+                "timestamp":  _activity_iso(ev.created_at),
+                "title":      f"Sync error: {ev.operation}" if ev.operation else "Sync error",
+                "subtitle":   f"Store {code}" if code else (f"Store #{ev.store_id}" if ev.store_id else ""),
+                "severity":   "critical" if ev.store_id in high_error_ids else "warning",
+                "store_id":   ev.store_id,
+                "store_code": code,
+                "link":       f"/superadmin/stores/{ev.store_id}" if ev.store_id else None,
+            })
+
+    # ── notable shift variance ────────────────────────────────────────────
+    if feed_type in ("all", "variance"):
+        variance_rows = (
+            EmployeeShift.query
+            .filter(
+                EmployeeShift.closed_at >= cutoff,
+                EmployeeShift.shift_status.in_(["short", "over"]),
+                EmployeeShift.voided == False,  # noqa: E712
+                func.abs(EmployeeShift.difference) > _VARIANCE_WARN_THRESHOLD,
+            )
+            .order_by(EmployeeShift.closed_at.desc())
+            .limit(limit)
+            .all()
+        )
+        for sh in variance_rows:
+            s    = store_map.get(sh.store_id) if sh.store_id else None
+            code = s["code"] if s else None
+            diff = float(sh.difference) if sh.difference is not None else 0
+            direction = "over" if diff > 0 else "short"
+            items.append({
+                "id":         f"variance_{sh.id}",
+                "type":       "variance",
+                "timestamp":  _activity_iso(sh.closed_at),
+                "title":      f"Shift #{sh.shift_number} {direction} by ${abs(diff):.2f}",
+                "subtitle":   f"Store {code}" if code else "",
+                "severity":   "critical" if abs(diff) > _VARIANCE_CRIT_THRESHOLD else "warning",
+                "store_id":   sh.store_id,
+                "store_code": code,
+                "link":       f"/superadmin/stores/{sh.store_id}" if sh.store_id else None,
+            })
+
+    # ── merge, sort DESC, trim ─────────────────────────────────────────────
+    items.sort(key=lambda x: x["timestamp"] or "", reverse=True)
+    return jsonify({"activity": items[:limit], "count": len(items[:limit])}), 200
