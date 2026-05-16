@@ -28,6 +28,7 @@ import SuperSubmissions from './pages/superadmin/SuperSubmissions'
 import SuperCreateStore from './pages/superadmin/SuperCreateStore'
 import SuperComplaints from './pages/superadmin/SuperComplaints'
 import SyncControlPanel from './pages/superadmin/SyncControlPanel'
+import StoreHealthPage from './pages/superadmin/StoreHealthPage'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth()
@@ -78,6 +79,7 @@ function AppRoutes() {
         <Route path="dashboard" element={<SuperDashboard />} />
         <Route path="stores" element={<SuperStores />} />
         <Route path="stores/create" element={<SuperCreateStore />} />
+        <Route path="stores/:storeId" element={<StoreHealthPage />} />
         <Route path="submissions" element={<SuperSubmissions />} />
         <Route path="complaints" element={<SuperComplaints />} />
         <Route path="sync" element={<SyncControlPanel />} />

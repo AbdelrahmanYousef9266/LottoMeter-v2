@@ -179,7 +179,7 @@ export default function SuperStores() {
                 No stores found.
               </td></tr>
             ) : filtered.map((s) => (
-              <tr key={s.store_id} className="clickable" onClick={() => openDetail(s)}>
+              <tr key={s.store_id} className="clickable" onClick={() => navigate(`/superadmin/stores/${s.store_id}`)}>
                 <td><span style={{ fontWeight: 600 }}>{s.store_name}</span></td>
                 <td>
                   <code style={{ fontSize: 12, background: 'var(--bg-secondary)', padding: '2px 6px', borderRadius: 4 }}>

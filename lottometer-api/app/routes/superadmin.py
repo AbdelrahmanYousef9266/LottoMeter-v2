@@ -488,3 +488,159 @@ def extend_store_trial(store_id):
                ip_address=request.remote_addr,
                user_agent=(request.headers.get("User-Agent") or "")[:200])
     return jsonify({"subscription": _serialize_subscription(sub)}), 200
+
+
+# ── per-store health ───────────────────────────────────────────────────────────
+
+@superadmin_bp.get("/stores/<int:store_id>/health")
+@jwt_required()
+@superadmin_required
+def get_store_health(store_id):
+    from app.models.subscription import Subscription
+    from app.models.audit_log import AuditLog
+    from app.models.complaint import Complaint
+    from app.models.sync_event import SyncEvent
+
+    store = Store.query.get(store_id)
+    if not store:
+        raise NotFoundError("Store not found.")
+
+    def _iso_dt(dt):
+        if dt is None:
+            return None
+        if isinstance(dt, str):
+            return dt.replace(" ", "T") + "Z"
+        if dt.tzinfo is None:
+            return dt.isoformat() + "Z"
+        return dt.isoformat()
+
+    # ── store ──────────────────────────────────────────────────────────────
+    store_data = _serialize_store(store, stats=True)
+    store_data["store_pin_set"] = bool(getattr(store, "store_pin_hash", None))
+    store_users = User.query.filter_by(store_id=store_id).order_by(User.created_at.asc()).all()
+    store_data["users"] = [_serialize_user(u) for u in store_users]
+
+    # ── subscription ───────────────────────────────────────────────────────
+    sub = (
+        Subscription.query
+        .filter_by(store_id=store_id)
+        .order_by(Subscription.created_at.desc())
+        .first()
+    )
+    subscription_data = _serialize_subscription(sub) if sub else None
+
+    # ── sync health ────────────────────────────────────────────────────────
+    last_event = (
+        SyncEvent.query
+        .filter_by(store_id=store_id)
+        .order_by(SyncEvent.created_at.desc())
+        .first()
+    )
+    failed_count = SyncEvent.query.filter_by(store_id=store_id, status="failed").count()
+
+    if last_event is None:
+        sync_status = "no_data"
+        last_event_ts = None
+    elif failed_count > 0:
+        sync_status = "errors"
+        last_event_ts = last_event.created_at
+    else:
+        ts = last_event.created_at
+        if isinstance(ts, str):
+            from datetime import datetime as _dt
+            ts = _dt.fromisoformat(ts.replace("Z", "+00:00"))
+        if ts.tzinfo is None:
+            ts = ts.replace(tzinfo=timezone.utc)
+        age_minutes = (datetime.now(timezone.utc) - ts).total_seconds() / 60
+        sync_status = "ok" if age_minutes < 60 else "stale"
+        last_event_ts = last_event.created_at
+
+    sync_health = {
+        "status": sync_status,
+        "failed_count": failed_count,
+        "last_event_at": _iso_dt(last_event_ts),
+    }
+
+    # ── complaints ─────────────────────────────────────────────────────────
+    complaints_open = Complaint.query.filter_by(store_id=store_id, status="open").count()
+
+    # ── shifts ─────────────────────────────────────────────────────────────
+    recent_shifts_q = (
+        EmployeeShift.query
+        .filter_by(store_id=store_id)
+        .order_by(EmployeeShift.opened_at.desc())
+        .limit(10)
+        .all()
+    )
+    trend_q = (
+        EmployeeShift.query
+        .filter_by(store_id=store_id)
+        .filter(EmployeeShift.status == "closed", EmployeeShift.voided == False)  # noqa: E712
+        .order_by(EmployeeShift.opened_at.desc())
+        .limit(30)
+        .all()
+    )
+    active_shift = EmployeeShift.query.filter_by(store_id=store_id, status="open").first()
+
+    all_emp_ids = list({
+        sh.employee_id
+        for sh in list(recent_shifts_q) + list(trend_q) + ([active_shift] if active_shift else [])
+        if sh.employee_id
+    })
+    users_map = {}
+    if all_emp_ids:
+        emp_users = User.query.filter(User.user_id.in_(all_emp_ids)).all()
+        users_map = {u.user_id: u.username for u in emp_users}
+
+    def _shift_dict(sh):
+        return {
+            "id":            sh.id,
+            "shift_number":  sh.shift_number,
+            "employee_name": users_map.get(sh.employee_id, "—"),
+            "opened_at":     _iso_dt(sh.opened_at),
+            "closed_at":     _iso_dt(sh.closed_at),
+            "status":        sh.status,
+            "difference":    float(sh.difference) if sh.difference is not None else None,
+            "shift_status":  sh.shift_status,
+            "voided":        bool(sh.voided),
+        }
+
+    variance_trend = [
+        {
+            "shift_number": sh.shift_number,
+            "difference":   float(sh.difference) if sh.difference is not None else 0,
+            "shift_status": sh.shift_status,
+            "date":         _iso_dt(sh.closed_at or sh.opened_at),
+        }
+        for sh in reversed(trend_q)
+    ]
+
+    # ── recent audit log ──────────────────────────────────────────────────
+    audit_rows = (
+        AuditLog.query
+        .filter_by(store_id=store_id)
+        .order_by(AuditLog.created_at.desc())
+        .limit(20)
+        .all()
+    )
+
+    return jsonify({
+        "store":           store_data,
+        "subscription":    subscription_data,
+        "sync_health":     sync_health,
+        "complaints_open": complaints_open,
+        "active_shift":    _shift_dict(active_shift) if active_shift else None,
+        "recent_shifts":   [_shift_dict(sh) for sh in recent_shifts_q],
+        "variance_trend":  variance_trend,
+        "recent_audit":    [
+            {
+                "id":          l.id,
+                "user_id":     l.user_id,
+                "action":      l.action,
+                "entity_type": l.entity_type,
+                "entity_id":   l.entity_id,
+                "created_at":  _iso_dt(l.created_at),
+            }
+            for l in audit_rows
+        ],
+    }), 200

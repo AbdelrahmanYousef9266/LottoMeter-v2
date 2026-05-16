@@ -17,3 +17,5 @@ export const listSubscriptions = (params) => api.get('/superadmin/subscriptions'
 export const cancelStoreSubscription = (id, data) => api.post(`/superadmin/stores/${id}/cancel-subscription`, data)
 export const reactivateStoreSubscription = (id) => api.post(`/superadmin/stores/${id}/reactivate-subscription`)
 export const extendStoreTrial = (id, data) => api.post(`/superadmin/stores/${id}/extend-trial`, data)
+
+export const getStoreHealth = (storeId) => api.get(`/superadmin/stores/${storeId}/health`)
