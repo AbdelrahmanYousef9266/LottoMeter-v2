@@ -523,6 +523,17 @@
     "empty": "No books found."
   },
 
+  "sync": {
+    "indicator": {
+      "syncedTitle":   "All synced",
+      "failedTitle":   "Sync issue",
+      "failedMessage": "{{count}} actions failed to sync. Tell your manager to contact support.",
+      "syncedA11y":    "Sync status: all synced",
+      "syncingA11y":   "Sync status: syncing",
+      "failedA11y":    "Sync status: {{count}} failed items"
+    }
+  },
+
   "camera": {
     "permissionRequired": "Camera permission required",
     "permissionHint": "We need camera access to scan barcodes.",

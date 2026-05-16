@@ -171,7 +171,6 @@ export default function ScanScreen() {
 
       // ONLINE PATH
       const shift = await getCurrentOpenShift();
-      console.log('[loadShift] getCurrentOpenShift response', { shift });
       if (!shift) {
         setShift(null);
         setOpenSubId(null);

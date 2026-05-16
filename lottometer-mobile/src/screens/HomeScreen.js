@@ -29,6 +29,7 @@ import CloseShiftModal from '../components/CloseShiftModal';
 import WholeBookSaleModal from '../components/WholeBookSaleModal';
 import ReturnBookModal from '../components/ReturnBookModal';
 import BooksDashboard from '../components/BooksDashboard';
+import SyncStatusIndicator from '../components/SyncStatusIndicator';
 import { formatBusinessDate, formatLocalTime } from '../utils/dateTime';
 
 // ── design tokens ──────────────────────────────────────────────────────────────
@@ -484,12 +485,15 @@ export default function HomeScreen() {
           </View>
         </View>
 
-        {/* Logo — right */}
-        <Image
-          source={require('../../assets/app-icon.png')}
-          style={s.headerLogo}
-          resizeMode="contain"
-        />
+        {/* Logo + sync indicator — right */}
+        <View style={{ alignItems: 'center', gap: 6, paddingRight: 0 }}>
+          <Image
+            source={require('../../assets/app-icon.png')}
+            style={s.headerLogo}
+            resizeMode="contain"
+          />
+          <SyncStatusIndicator />
+        </View>
 
       </View>
 
