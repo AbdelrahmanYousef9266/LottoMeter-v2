@@ -62,7 +62,7 @@ function AppRoutes() {
       <Route path="/" element={<HomePage />} />
       <Route path="/pricing" element={<PricingPage />} />
       <Route path="/contact" element={<ContactPage />} />
-      <Route path="/apply" element={<Navigate to="/pricing" replace />} />
+      <Route path="/apply" element={<Navigate to="/get-started" replace />} />
       <Route path="/get-started" element={<GetStartedPage />} />
       <Route path="/sample-report" element={<SampleReportPreview />} />
 

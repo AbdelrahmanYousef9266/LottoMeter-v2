@@ -1,3 +1,5 @@
+import json
+
 from flask import Blueprint, request, jsonify
 from marshmallow import ValidationError as MarshmallowValidationError
 
@@ -11,6 +13,7 @@ public_bp = Blueprint("public", __name__, url_prefix="/api")
 def _save_contact(submission_type: str, data: dict):
     """Persist a validated contact/apply submission. Returns a Flask response."""
     try:
+        extra = data.get("extra_data")
         sub = ContactSubmission(
             submission_type=submission_type,
             full_name=data["full_name"],
@@ -18,9 +21,11 @@ def _save_contact(submission_type: str, data: dict):
             business_name=data.get("business_name"),
             phone=data.get("phone"),
             city=data.get("city"),
+            state=data.get("state"),
             num_employees=data.get("num_employees"),
             how_heard=data.get("how_heard"),
             message=data.get("message"),
+            extra_data=json.dumps(extra) if extra else None,
         )
         db.session.add(sub)
         db.session.commit()

@@ -1,6 +1,6 @@
 """Marshmallow schemas for public-facing form endpoints."""
 
-from marshmallow import Schema, fields, validate
+from marshmallow import Schema, fields, validate, EXCLUDE
 
 # Accepts international formats: +1 (555) 000-0000, 07911123456, etc.
 _PHONE_RE = r"^\+?[\d\s\-\(\)]{7,20}$"
@@ -9,6 +9,10 @@ _PHONE_MSG = "Phone must be 7-20 characters containing only digits, spaces, +, -
 
 class PublicContactSchema(Schema):
     """Validates POST /api/contact and POST /api/apply."""
+
+    class Meta:
+        # Silently drop unknown fields (honeypot, extended apply fields, etc.)
+        unknown = EXCLUDE
 
     full_name = fields.Str(
         required=True,
@@ -27,6 +31,10 @@ class PublicContactSchema(Schema):
         load_default=None, allow_none=True,
         validate=validate.Length(max=100),
     )
+    state = fields.Str(
+        load_default=None, allow_none=True,
+        validate=validate.Length(max=50),
+    )
     num_employees = fields.Str(
         load_default=None, allow_none=True,
         validate=validate.Length(max=50),
@@ -39,10 +47,20 @@ class PublicContactSchema(Schema):
         load_default=None, allow_none=True,
         validate=validate.Length(max=2000),
     )
+    # Flexible JSON blob for extended apply-form fields (shipping address,
+    # confirmation flags, etc.) that don't map 1-to-1 to model columns.
+    extra_data = fields.Dict(
+        keys=fields.Str(),
+        load_default=None,
+        allow_none=True,
+    )
 
 
 class PublicWaitlistSchema(Schema):
     """Validates POST /api/waitlist."""
+
+    class Meta:
+        unknown = EXCLUDE
 
     name = fields.Str(
         required=True,

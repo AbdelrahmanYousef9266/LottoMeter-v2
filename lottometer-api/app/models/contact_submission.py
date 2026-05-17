@@ -20,6 +20,7 @@ class ContactSubmission(db.Model):
     current_process = db.Column(db.Text, nullable=True)
     status = db.Column(db.String(20), nullable=False, default="new", server_default="new")  # new | reviewed | approved
     notes = db.Column(db.Text, nullable=True)
+    extra_data = db.Column(db.Text, nullable=True)  # JSON blob for extended apply form fields
     reviewed_at = db.Column(db.DateTime, nullable=True)
     created_at = db.Column(db.DateTime, nullable=False, default=lambda: datetime.now(timezone.utc))
 
