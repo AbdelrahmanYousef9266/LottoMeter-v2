@@ -26,3 +26,5 @@ export const startImpersonationApi = (storeId) => api.post(`/superadmin/stores/$
 export const endImpersonationApi   = ()         => api.post('/impersonation/end')
 
 export const getRevenueOverview = () => api.get('/superadmin/revenue/overview')
+
+export const searchSuperadmin = (q, limit = 10) => api.get('/superadmin/search', { params: { q, limit } })

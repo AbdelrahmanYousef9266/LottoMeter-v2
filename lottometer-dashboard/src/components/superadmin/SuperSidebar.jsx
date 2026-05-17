@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { getComplaintStats } from '../../api/complaints'
 import { getSyncFailures } from '../../api/sync'
+import SuperSearch from './SuperSearch'
 
 const BASE_NAV = [
   { to: '/superadmin/dashboard',     label: 'Overview',     icon: '📊', exact: true },
@@ -58,6 +59,8 @@ export default function SuperSidebar() {
         <div className="sidebar-logo-title">LottoMeter</div>
         <div className="sidebar-logo-sub">Platform Management</div>
       </div>
+
+      <SuperSearch />
 
       <nav className="sidebar-nav">
         {NAV_ITEMS.map((item) => (

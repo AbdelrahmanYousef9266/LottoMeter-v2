@@ -19,6 +19,7 @@ from app.routes.sync_admin import sync_admin_bp
 from app.routes.sync_status import sync_status_bp
 from app.routes.impersonation import impersonation_bp
 from app.routes.revenue import revenue_bp
+from app.routes.search import search_bp
 
 
 def register_blueprints(app):
@@ -42,5 +43,6 @@ def register_blueprints(app):
     app.register_blueprint(sync_status_bp)
     app.register_blueprint(impersonation_bp)
     app.register_blueprint(revenue_bp)
+    app.register_blueprint(search_bp)
     if app.debug:
         app.register_blueprint(dev_bp)
