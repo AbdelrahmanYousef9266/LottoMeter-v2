@@ -5,7 +5,7 @@ from flask import Blueprint, request, jsonify
 
 from app.extensions import db
 from app.auth_helpers import superadmin_required, current_user_id
-from app.audit_service import log_action
+from app.services.audit_service import log_action
 from app.models.fulfillment_order import FulfillmentOrder, VALID_STATES, ALLOWED_TRANSITIONS
 
 fulfillment_bp = Blueprint('fulfillment', __name__, url_prefix='/api/superadmin/fulfillment')
