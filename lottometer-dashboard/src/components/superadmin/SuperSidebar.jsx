@@ -3,6 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { getComplaintStats } from '../../api/complaints'
 import { getSyncFailures } from '../../api/sync'
+import { getFulfillmentSummary } from '../../api/superadmin'
 import SuperSearch from './SuperSearch'
 
 const BASE_NAV = [
@@ -10,6 +11,7 @@ const BASE_NAV = [
   { to: '/superadmin/stores',        label: 'Stores',       icon: '🏪' },
   { to: '/superadmin/revenue',       label: 'Revenue',      icon: '💰' },
   { to: '/superadmin/submissions',   label: 'Submissions',  icon: '📬' },
+  { to: '/superadmin/fulfillment',   label: 'Fulfillment',  icon: '📦', badgeKey: 'fulfillment' },
   { to: '/superadmin/complaints',    label: 'Complaints',   icon: '💬', badgeKey: 'complaints' },
   { to: '/superadmin/sync',          label: 'Sync Health',  icon: '🔄', badgeKey: 'sync_failures' },
   { to: '/superadmin/stores/create', label: 'Create Store', icon: '➕' },
@@ -21,8 +23,9 @@ const PURPLE_LIGHT = 'rgba(124,58,237,0.12)'
 export default function SuperSidebar() {
   const { logout } = useAuth()
   const navigate = useNavigate()
-  const [openComplaints, setOpenComplaints] = useState(0)
-  const [syncFailures, setSyncFailures]     = useState(0)
+  const [openComplaints, setOpenComplaints]   = useState(0)
+  const [syncFailures, setSyncFailures]       = useState(0)
+  const [fulfillmentActive, setFulfillmentActive] = useState(0)
 
   useEffect(() => {
     getComplaintStats()
@@ -31,11 +34,15 @@ export default function SuperSidebar() {
     getSyncFailures()
       .then(r => setSyncFailures(r.data.failures.length))
       .catch(() => {})
+    getFulfillmentSummary()
+      .then(r => setFulfillmentActive(r.data.active_total ?? 0))
+      .catch(() => {})
   }, [])
 
   const NAV_ITEMS = BASE_NAV.map(item => {
-    if (item.badgeKey === 'complaints')    return { ...item, badge: openComplaints }
-    if (item.badgeKey === 'sync_failures') return { ...item, badge: syncFailures }
+    if (item.badgeKey === 'complaints')   return { ...item, badge: openComplaints }
+    if (item.badgeKey === 'sync_failures')return { ...item, badge: syncFailures }
+    if (item.badgeKey === 'fulfillment')  return { ...item, badge: fulfillmentActive }
     return item
   })
 

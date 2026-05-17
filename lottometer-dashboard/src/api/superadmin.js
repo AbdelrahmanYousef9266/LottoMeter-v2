@@ -28,3 +28,9 @@ export const endImpersonationApi   = ()         => api.post('/impersonation/end'
 export const getRevenueOverview = () => api.get('/superadmin/revenue/overview')
 
 export const searchSuperadmin = (q, limit = 10) => api.get('/superadmin/search', { params: { q, limit } })
+
+export const getFulfillmentSummary = ()             => api.get('/superadmin/fulfillment')
+export const listFulfillmentOrders  = (params)      => api.get('/superadmin/fulfillment/all', { params })
+export const getFulfillmentOrder    = (id)          => api.get(`/superadmin/fulfillment/${id}`)
+export const updateFulfillmentOrder = (id, data)    => api.patch(`/superadmin/fulfillment/${id}`, data)
+export const addFulfillmentNote     = (id, text)    => api.post(`/superadmin/fulfillment/${id}/note`, { text })

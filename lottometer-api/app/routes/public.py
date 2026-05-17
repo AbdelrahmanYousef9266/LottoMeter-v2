@@ -5,6 +5,7 @@ from marshmallow import ValidationError as MarshmallowValidationError
 
 from app.extensions import db, limiter
 from app.models.contact_submission import ContactSubmission
+from app.models.fulfillment_order import FulfillmentOrder
 from app.schemas.public_schema import PublicContactSchema, PublicWaitlistSchema
 
 public_bp = Blueprint("public", __name__, url_prefix="/api")
@@ -28,6 +29,27 @@ def _save_contact(submission_type: str, data: dict):
             extra_data=json.dumps(extra) if extra else None,
         )
         db.session.add(sub)
+        db.session.flush()  # get sub.id before committing
+
+        # Auto-create a fulfillment order for every apply submission
+        if submission_type == "apply":
+            shipping = extra or {}
+            order = FulfillmentOrder(
+                submission_id    = sub.id,
+                full_name        = sub.full_name,
+                email            = sub.email,
+                business_name    = sub.business_name,
+                phone            = sub.phone,
+                state_abbr       = sub.state,
+                shipping_name    = shipping.get("shipping_name") or sub.full_name,
+                shipping_address = shipping.get("shipping_address"),
+                shipping_address2= shipping.get("shipping_address2"),
+                shipping_city    = shipping.get("shipping_city"),
+                shipping_state   = shipping.get("shipping_state"),
+                shipping_zip     = shipping.get("shipping_zip"),
+            )
+            db.session.add(order)
+
         db.session.commit()
         return jsonify({"message": "Submission received. We will be in touch soon!"}), 201
     except Exception:
